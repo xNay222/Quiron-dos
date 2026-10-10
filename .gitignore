@@ -1,0 +1,8 @@
+# Copias de los datos (pacientes, usuarios): se guardan en la carpeta, nunca en el repositorio
+copias de seguridad/
+
+# Índice de historias con nombres y cédulas de pacientes
+datos privados/
+
+# Documentos subidos (historias y consentimientos firmados): datos de pacientes
+archivos/
