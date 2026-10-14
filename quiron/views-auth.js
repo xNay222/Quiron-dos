@@ -31,17 +31,19 @@ function readSession() {
     const s = JSON.parse(raw); if (s.exp && s.exp < Date.now()) { endSession(); return null; } return s; } catch (e) { return null; }
 }
 function startSession(u, remember) {
+  idleMark(true);
   const s = { uid: u.id, exp: remember ? Date.now() + 30 * DAY : null };
   try { localStorage.removeItem(SESSION_KEY); sessionStorage.removeItem(SESSION_KEY); (remember ? localStorage : sessionStorage).setItem(SESSION_KEY, JSON.stringify(s)); } catch (e) {}
   applyUser(u);
 }
-function endSession() { try { localStorage.removeItem(SESSION_KEY); sessionStorage.removeItem(SESSION_KEY); } catch (e) {} S.session = null; }
+function endSession() { try { localStorage.removeItem(SESSION_KEY); sessionStorage.removeItem(SESSION_KEY); } catch (e) {} S.session = null; if (typeof forgetBackupKey === 'function') forgetBackupKey(); }
 const applyUser = u => { S.session = { uid: u.id, role: u.role, doc: u.doc || null, name: u.name }; };
 // Al abrir: si hay una sesión válida, entra directo; si no, pantalla de acceso (o creación del administrador)
 function authBoot() {
   S.users = S.users || [];
   const s = readSession(); const u = s && S.users.find(x => x.id === s.uid && x.status === 'activo');
-  if (u) { applyUser(u); if (u.mustChange) { showAuth('cambiar'); return false; } return true; }
+  if (u && idleExpired()) { log('Sesión cerrada por inactividad', u.email || u.name); endSession(); showAuth('login', IDLE_MSG); return false; }
+  if (u) { idleMark(true); applyUser(u); if (u.mustChange) { showAuth('cambiar'); return false; } return true; }
   // Sin administrador activo: si hay uno pendiente de activar (contraseña restablecida), se pide su código; nunca se ofrece crear otro
   const pendingAdmin = S.users.some(x => x.role === 'admin' && x.status === 'invitado');
   endSession(); showAuth(activeAdmins().length ? 'login' : pendingAdmin ? 'invite' : 'setup'); return false;
@@ -351,4 +353,28 @@ function credsBlockSign() {
   toast('Antes de firmar, registre su N.º MPPS y su Colegio de Médicos en Mi cuenta.');
   setTimeout(() => ACTIONS.switchUser(), 400);
   return true;
+}
+
+// ---------- Cierre de sesión por inactividad ----------
+// La sesión sigue abierta mientras se usa el programa. Tras 1 hora sin tocarlo (ratón, teclado o pantalla) se cierra
+// y hay que volver a entrar con la contraseña. Vale también entre pestañas y si se cerró el navegador. Las consultas y
+// evoluciones ya se guardan solas como borrador, así que no se pierde lo escrito.
+const IDLE_MS = 60 * 60 * 1000, IDLE_KEY = 'quiron-ultima-actividad';
+const IDLE_MSG = 'Su sesión se cerró tras 1 hora sin uso. Vuelva a entrar.';
+let idleWrote = 0;
+function idleMark(force) {
+  const now = Date.now(); if (!force && now - idleWrote < 15000) return;   // como mucho una escritura cada 15 s
+  idleWrote = now; try { localStorage.setItem(IDLE_KEY, String(now)); } catch (e) {}
+}
+// Sin registro previo (primera vez tras la actualización) no se considera vencida
+const idleExpired = () => { let last = 0; try { last = +(localStorage.getItem(IDLE_KEY) || 0); } catch (e) {} return !!last && Date.now() - last > IDLE_MS; };
+function idleCheck() {
+  if (!S?.session?.uid || !idleExpired()) return;
+  const u = meUser(); if (u) { log('Sesión cerrada por inactividad', u.email || u.name); save(); }
+  endSession(); showAuth('login', IDLE_MSG);
+}
+if (typeof addEventListener === 'function') {
+  ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(ev => addEventListener(ev, () => { if (S?.session?.uid) idleMark(); }, { passive: true, capture: true }));
+  document.addEventListener?.('visibilitychange', () => { if (!document.hidden) idleCheck(); });
+  setInterval(idleCheck, 30000);
 }

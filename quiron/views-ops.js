@@ -212,7 +212,7 @@ ACTIONS.delPatientDo = async el => { if (!can('*')) return; const p = pat(el.dat
   // Copia de seguridad previa: en la carpeta del servidor local; si no hay servidor, se descarga
   const name = `Antes de eliminar ${safeName(p.name)} ${dAt(0)} ${Date.now().toString().slice(-5)}.json`; let saved = false;
   try { saved = (await fetch('/__copia?nombre=' + encodeURIComponent(name), { method: 'PUT', body: backupPayload() })).ok; } catch (e) {}
-  if (!saved) saved = await saveFile(name, backupPayload());
+  if (!saved) { const enc = await backupBlob(); saved = !!enc && await saveFile(name.replace(/\.json$/, ' (cifrada).json'), enc); }
   if (!saved) { msg.textContent = 'No se pudo guardar la copia previa; no se eliminó nada.'; return; }
   if (ret) L.served.forEach(({ o, it, n }) => returnUnits(o, it, n, 'Devolución por paciente eliminado'));
   const ids = k => new Set(L[k].map(x => x.id)); const inv = ids('invoices'), ord = new Set(L.orders.map(o => o.id)), adm = new Set(L.adm);
