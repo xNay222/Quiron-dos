@@ -164,6 +164,13 @@ ACTIONS.guideNext = () => {
     return;
   }
   const list = guidedSteps(c);
+  const flow = GUIDE.init(c).templateFlow;
+  const at = flow ? flow.indexOf(s.key) : -1;
+  if (at >= 0) {
+    const next = flow.slice(at + 1).find(key => list.some(x => x.key === key)) || 'review';
+    guidedGo(c, next);
+    return;
+  }
   GUIDE.move(c, list, 1);
   guidedSavePosition(c);
   guidedRenderNavigation();
@@ -1032,6 +1039,8 @@ consultView = function(c) {
     '<fieldset class="cc-editor" ' + (editable ? '' : 'disabled') + '><div class="guide-choices">' +
     '<button class="card" data-act="guideStart" data-mode="quick"><b>Consulta rápida</b><p>Valoración dirigida, control o seguimiento.</p></button>' +
     '<button class="card" data-act="guideStart" data-mode="complete"><b>Consulta completa</b><p>Incluye antecedentes, sistemas y examen por regiones.</p></button>' +
+    '</div><h2 style="margin-top:22px">O use una plantilla</h2><p class="small muted">Rellena lo habitual de ese tipo de visita; usted toma los signos vitales, revisa todo y cambia lo que sea distinto antes de firmar.</p>' +
+    '<div class="guide-choices">' + QUICK_TEMPLATES.map(t => '<button class="card" data-act="guideTemplate" data-id="' + t.id + '"><b>' + esc(t.name) + '</b><p>' + esc(t.desc) + '</p></button>').join('') +
     '</div></fieldset></section></div>';
   return guidedShell(c, 'Consulta ' + (c.mode === 'quick' ? 'rápida' : 'completa'), guidedSteps(c), guidedConsultBody(c), editable);
 };
@@ -1649,8 +1658,9 @@ function guidedDxOptions(query) {
   // Sin búsqueda: arriba lo que coincide con el motivo de consulta y lo que el paciente ya tenía diagnosticado
   const reasonWords = c ? c.reasons.map(r => normQ(r.label)) : [];
   const previous = c ? (S.consults || []).filter(x => x.pid === c.pid && x.id !== c.id && x.status === 'firmada').flatMap(x => x.dx || []).map(d => normQ(d.label)) : [];
+  const fav = doctorFavorites(c?.doc).dx;
   const rank = d => { const t = normQ([d.label, ...(d.synonyms || [])].join(' '));
-    return reasonWords.some(w => w && (t.includes(w) || w.includes(normQ(d.label)))) ? 0 : previous.includes(normQ(d.label)) ? 1 : 2; };
+    return reasonWords.some(w => w && (t.includes(w) || w.includes(normQ(d.label)))) ? 0 : previous.includes(normQ(d.label)) ? 1 : fav[normQ(d.label)] ? 2 : 3; };
   return CONSULT.diagnoses.map((d, i) => ({ d, i }))
     .filter(({ d }) => normQ([d.label, d.code, ...(d.synonyms || [])].join(' ')).includes(q))
     .sort((a, b) => q ? 0 : rank(a.d) - rank(b.d))
@@ -1717,10 +1727,12 @@ function guidedRxButton(c, drug, attrs, label = drug, productId) {
 }
 
 function guidedRxOptions(query) {
-  const c = guidedCurrent(), q = normQ(query || '').trim();
-  return S.products.filter(p => normQ(p.cat) === 'medicamento' && normQ(p.name).includes(q))
-    .sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })).slice(0, 40)
-    .map(p => guidedRxButton(c, p.name, 'data-id="' + esc(p.id) + '"', p.name, p.id)).join('') +
+  const c = guidedCurrent(), q = normQ(query || '').trim(), fav = doctorFavorites(c?.doc).rx;
+  const previous = !q && c ? lastPatientRx(c) : [];
+  return (previous.length ? ccButton('guideRxRepeat', '↻ Repetir el tratamiento anterior: ' + esc(previous.map(r => r.drug).join(', ')), '', 'primary') : '') +
+    S.products.filter(p => normQ(p.cat) === 'medicamento' && normQ(p.name).includes(q))
+    .sort((a, b) => (fav[normQ(b.name)] || 0) - (fav[normQ(a.name)] || 0) || a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })).slice(0, 40)
+    .map(p => guidedRxButton(c, p.name, 'data-id="' + esc(p.id) + '"', (fav[normQ(p.name)] ? '★ ' : '') + p.name, p.id)).join('') +
     (q ? guidedRxButton(c, query.trim(), 'data-label="' + esc(query.trim()) + '"', 'Indicar: ' + query.trim()) : '');
 }
 ACTIONS.guideRxSearch = el => {
@@ -1749,10 +1761,10 @@ function guidedOrderOptions(query) {
   const c = ccCurrent();
   const chosen = new Set((c ? guidedOrderDrafts(c) : []).filter(Boolean).map(d => d.label));
   const opts = labTestNames().map(label => ({ label, category: 'lab' })).concat(IMG_TESTS.map(label => ({ label, category: 'imagen' })));
-  const q = normQ(query || '');
-  return opts.filter(o => normQ(o.label).includes(q)).slice(0, q ? 40 : 24).map(o => {
+  const q = normQ(query || ''), fav = doctorFavorites(c?.doc).orders;
+  return opts.filter(o => normQ(o.label).includes(q)).sort((a, b) => (fav[normQ(b.label)] || 0) - (fav[normQ(a.label)] || 0)).slice(0, q ? 40 : 24).map(o => {
     const on = chosen.has(o.label);
-    return ccButton('guideOrderPick', (on ? '✓ ' : '') + esc(o.label),
+    return ccButton('guideOrderPick', (on ? '✓ ' : fav[normQ(o.label)] ? '★ ' : '') + esc(o.label),
       'data-label="' + esc(o.label) + '" data-category="' + o.category + '" aria-pressed="' + on + '"', on ? 'on' : '');
   }).join('') +
     (query?.trim() && !chosen.has(query.trim()) ? ccButton('guideOrderPick', 'Solicitar: ' + esc(query), 'data-label="' + esc(query.trim()) + '" data-category="otro"') : '');
@@ -1862,6 +1874,12 @@ function guidedIndications(c) {
 }
 
 function guidedReview(c) {
+  const usedTemplate = QUICK_TEMPLATES.find(t => t.id === c.guide?.template);
+  if (usedTemplate && !c.guide.templateReviewNoted) c.guide.templateReviewNoted = true;
+  const templateNote = usedTemplate ? '<div class="banner warn">Se usó la plantilla «' + esc(usedTemplate.name) + '». Revise cada sección y pulse «Cambiar» en lo que sea distinto antes de generar el informe.</div>' : '';
+  return templateNote + guidedReviewBody(c);
+}
+function guidedReviewBody(c) {
   const evolution = c.kind === 'evolution';
   const sections = evolution ? [
     ['Estado del paciente', 'ev-state', [c.admissionReason, c.state, c.progressNotes].filter(Boolean).join(' · ')],
@@ -1981,4 +1999,85 @@ ACTIONS.guideAllNormal = el => {
   c.exam[region].confirmed = CONSULT.exam[region].split('|');
   guidedDirty(c);
   guidedRefreshBody(c);
+};
+// ---------- Plantillas por tipo de visita y favoritos del médico ----------
+// Una plantilla solo rellena lo que el médico ELIGE al tocarla; nunca los signos vitales.
+// Todo queda visible en "Revisar" antes de generar el informe y firmar.
+const daysFromToday = n => { const [Y, M, D] = CONSULT.caracas().date.split('-').map(Number); return new Date(Date.UTC(Y, M - 1, D + n, 12)).toISOString().slice(0, 10); };
+const dxFromCatalog = (label, certainty) => { const d = CONSULT.diagnoses.find(x => x.label === label) || { label };
+  return { label: d.label, ...(d.code ? { code: d.code, codeSource: d.codeSource } : {}), priority: 'principal', certainty }; };
+const QUICK_TEMPLATES = [
+  { id: 'postop_ok', name: 'Control postoperatorio sin novedades', desc: 'Herida bien, sin fiebre ni sangrado; control en 2 semanas.',
+    reason: 'control_postoperatorio', ask: ['reason-0-evolution', 'vitals'],
+    answers: { progressivePain: 'No', wound: 'Cicatrización adecuada', secrecion: 'No', sangrado: 'No', fiebre: 'No', inflamacion: 'No', apertura: 'No' },
+    exam: { 'Herida quirúrgica': 'all' }, dx: ['Control postoperatorio', 'confirmado'],
+    plan: { conducts: ['Seguimiento'], instructions: ['Cumplir el tratamiento indicado', 'Acudir al control'], alarmSigns: ['Fiebre persistente', 'Dolor progresivo', 'Sangrado'], days: 14 },
+    noOrders: true, noRx: true },
+  { id: 'results_ok', name: 'Revisión de resultados normales', desc: 'Exámenes sin alteraciones; control en 6 meses.',
+    reason: 'revision_de_resultados', ask: ['vitals'],
+    dx: ['Examen de seguimiento consecutivo a tratamiento', 'confirmado'],
+    plan: { conducts: ['Seguimiento'], instructions: ['Acudir al control'], alarmSigns: [], days: 180 },
+    noOrders: true, noRx: true },
+  { id: 'hta_ok', name: 'Control de hipertensión estable', desc: 'Continúa el mismo tratamiento; control en 1 mes.',
+    reason: 'control_medico', ask: ['reason-0-evolution', 'vitals', 'indications'],
+    exam: { Cardiovascular: 'all' }, dx: ['Hipertensión esencial', 'confirmado'], repeatRx: true,
+    plan: { conducts: ['Tratamiento ambulatorio', 'Seguimiento'], instructions: ['Cumplir el tratamiento indicado', 'Acudir al control'], alarmSigns: ['Alteración de conciencia', 'Empeoramiento general'], days: 30 },
+    noOrders: true }
+];
+// Tratamiento de la última consulta firmada del paciente (punto de partida editable)
+function lastPatientRx(c) {
+  const prev = (S.consults || []).filter(x => x.pid === c.pid && x.id !== c.id && x.status === 'firmada' && (x.rx || []).some(r => r.drug))
+    .sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time))[0];
+  return prev ? prev.rx.filter(r => r.drug && !c.rx.some(x => normQ(x.drug) === normQ(r.drug))) : [];
+}
+ACTIONS.guideRxRepeat = () => {
+  const c = ccCurrent(); if (!c) return;
+  const prev = lastPatientRx(c); if (!prev.length) return;
+  const risky = prev.filter(r => guidedRxAllergies(c, r.drug).length);
+  if (risky.length && !window.confirm('⚠ Alergia registrada con: ' + risky.map(r => r.drug).join(', ') + '. ¿Repetir de todas formas?')) return;
+  prev.forEach(r => c.rx.push({ ...CONSULT.clone(r), status: 'prescrito', documentStatus: 'borrador' }));
+  delete GUIDE.init(c).noIndication?.rx;
+  consultAudit(c, 'tratamiento_repetido', prev.length + ' medicamento(s)');
+  toast('Tratamiento anterior copiado. Revise dosis y duración.');
+  guidedSaveSelection(c, 'guide-rx-results');
+};
+// Lo que cada médico usa con más frecuencia en sus consultas firmadas
+function doctorFavorites(docId) {
+  const out = { dx: {}, rx: {}, orders: {} };
+  if (!docId) return out;
+  (S.consults || []).filter(x => x.doc === docId && x.status === 'firmada').forEach(x => {
+    (x.dx || []).forEach(d => { const k = normQ(d.label); out.dx[k] = (out.dx[k] || 0) + 1; });
+    (x.rx || []).forEach(r => { if (r.drug) { const k = normQ(r.drug); out.rx[k] = (out.rx[k] || 0) + 1; } });
+    (x.orders || []).forEach(o => { const k = normQ(o.label); out.orders[k] = (out.orders[k] || 0) + 1; });
+  });
+  return out;
+}
+ACTIONS.guideTemplate = el => {
+  const c = ccCurrent(), t = QUICK_TEMPLATES.find(x => x.id === el.dataset.id);
+  if (!c || !t || !consultCanEdit(c)) return;
+  c.mode = 'quick';
+  const g = GUIDE.init(c);
+  Object.assign(g, { started: true, template: t.id });
+  if (!c.reasons.some(r => r.key === t.reason)) ACTIONS.ccReasonAdd({ dataset: { key: t.reason } });
+  const r = c.reasons.find(x => x.key === t.reason);
+  if (r) Object.entries(t.answers || {}).forEach(([k, val]) => { if (!CONSULT.filled(r.answers[k])) r.answers[k] = val; });
+  Object.entries(t.exam || {}).forEach(([region, how]) => {
+    const items = (CONSULT.exam[region] || '').split('|').filter(Boolean);
+    c.exam[region] = { ...(c.exam[region] || {}), state: 'normal', confirmed: how === 'all' ? items : how };
+  });
+  if (t.dx && !c.dx.length) c.dx.push(dxFromCatalog(t.dx[0], t.dx[1]));
+  const plan = t.plan || {};
+  ['conducts', 'instructions', 'alarmSigns'].forEach(k => { if (plan[k]) c.plan[k] = Array.from(new Set((c.plan[k] || []).concat(plan[k]))); });
+  if (plan.days && !c.plan.nextControl) c.plan.nextControl = daysFromToday(plan.days);
+  g.noIndication = { ...(g.noIndication || {}), ...(t.noOrders ? { orders: true } : {}), ...(t.noRx && !c.rx.length ? { rx: true } : {}) };
+  if (t.repeatRx) { const prev = lastPatientRx(c); prev.forEach(x => c.rx.push({ ...CONSULT.clone(x), status: 'prescrito', documentStatus: 'borrador' })); }
+  // Recorrido corto: solo lo que la plantilla no puede saber (evolución, signos vitales…) y luego "Revisar"
+  const keys = guidedSteps(c).map(x => x.key);
+  g.templateFlow = (t.ask || []).filter(k => keys.includes(k)).concat('review');
+  g.current = g.templateFlow[0];
+  consultAudit(c, 'plantilla_aplicada', t.id);
+  consultDirty(c);
+  guidedSavePosition(c);
+  guidedRenderNavigation();
+  toast('Plantilla «' + t.name + '» aplicada. Complete lo que falta y revise antes de firmar.');
 };

@@ -1730,6 +1730,47 @@ async function test(name, fn) {
     ACTIONS.guidePrevious(); ACTIONS.guideNext();
     assert.equal(S.appts.length, count + 1);
   });
+  await test('Plantilla de control postoperatorio: rellena solo lo elegido, nunca signos vitales, y termina en Revisar', () => {
+    const t = CONSULT.newConsult({ id: 'co-template-test', pid: 'pt4', doc: c.doc, specialty: c.specialty });
+    S.consults.push(t);
+    const saved = param; param = t.id;
+    ACTIONS.guideTemplate({ dataset: { id: 'postop_ok' } });
+    assert.equal(t.mode, 'quick');
+    assert.equal(t.reasons[0].key, 'control_postoperatorio');
+    assert.equal(t.reasons[0].answers.fiebre, 'No');
+    assert.equal(t.exam['Herida quirúrgica'].state, 'normal');
+    assert.ok(t.exam['Herida quirúrgica'].confirmed.length > 3);
+    assert.equal(t.dx[0].certainty, 'confirmado');
+    assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(t.plan.nextControl));
+    // Los signos vitales nunca vienen de la plantilla
+    assert.ok(!t.vitals.some(v => CONSULT.vitals.some(([k]) => CONSULT.filled(v[k]))));
+    // Recorrido corto: evolución → signos vitales → Revisar
+    assert.equal(t.guide.current, 'reason-0-evolution');
+    ACTIONS.guideNext();
+    assert.equal(t.guide.current, 'vitals');
+    ACTIONS.guideNext();
+    assert.equal(t.guide.current, 'review');
+    assert.ok(guidedConsultBody(t).includes('Se usó la plantilla'));
+    // El informe dice "sin" para los hallazgos patológicos verificados como normales
+    const report = CONSULT.report(CONSULT.clean(t, pat(t.pid)));
+    assert.ok(report.includes('sin eritema'));
+    assert.ok(!report.includes('undefined'));
+    param = saved;
+  });
+  await test('Repetir el tratamiento anterior copia los medicamentos de la última consulta firmada', () => {
+    const prev = { ...CONSULT.newConsult({ id: 'co-prev-rx', pid: 'pt2', doc: c.doc }), date: '2026-01-10', time: '09:00', status: 'firmada',
+      rx: [{ drug: 'Losartán 50 mg', dose: '50', unit: 'mg', freq: 'Cada 24 horas' }] };
+    const t = CONSULT.newConsult({ id: 'co-repeat-rx', pid: 'pt2', doc: c.doc, specialty: c.specialty });
+    S.consults.push(prev, t);
+    const saved = param; param = t.id;
+    assert.equal(lastPatientRx(t).length, 1);
+    ACTIONS.guideRxRepeat();
+    assert.equal(t.rx.length, 1);
+    assert.equal(t.rx[0].drug, 'Losartán 50 mg');
+    assert.equal(lastPatientRx(t).length, 0);
+    assert.ok(doctorFavorites(c.doc).rx[normQ('Losartán 50 mg')] >= 1);
+    param = saved;
+  });
   await test('Preparar solicitud para probar fallo de almacenamiento sin duplicarla', () => {
     ACTIONS.guideStart({
       dataset: {
