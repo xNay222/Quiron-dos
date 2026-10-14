@@ -378,7 +378,7 @@ ACTIONS.ccOpen = el => {
   }
 };
 function consultListRows(list, clinical) {
-  return list.map(c => '<div class="row"><div class="grow"><div class="t">' + esc(pat(c.pid)?.name || 'Paciente') + '</div><div class="s">' + esc(c.date + ' ' + c.time + ' · ' + (med(c.doc)?.name || 'Médico no asignado') + ' · ' + c.specialty + ' · ' + (CONSULT.types[c.type] || c.type)) + '</div></div><span class="pill ' + (c.status === 'firmada' ? 'good' : 'warn') + '">' + esc(c.status === 'firmada' ? 'Finalizada y firmada' : c.status === 'pendiente_revision' ? 'Pendiente de revisión' : 'Borrador guardado') + '</span>' + (clinical ? ccButton('ccOpen', c.status === 'firmada' ? 'Ver' : 'Continuar', 'data-id="' + c.id + '"') : '') + '</div>').join('') || '<div class="empty">No hay consultas en este grupo.</div>';
+  return list.map(c => '<div class="row"><div class="grow"><div class="t">' + esc(pat(c.pid)?.name || 'Paciente') + '</div><div class="s">' + esc(fdate(c.date) + ' ' + c.time + ' · ' + (med(c.doc)?.name || 'Médico no asignado') + ' · ' + c.specialty + ' · ' + (CONSULT.types[c.type] || c.type)) + '</div></div><span class="pill ' + (c.status === 'firmada' ? 'good' : 'warn') + '">' + esc(c.status === 'firmada' ? 'Finalizada y firmada' : c.status === 'pendiente_revision' ? 'Pendiente de revisión' : 'Borrador guardado') + '</span>' + (clinical ? ccButton('ccOpen', c.status === 'firmada' ? 'Ver' : 'Continuar', 'data-id="' + c.id + '"') : '') + '</div>').join('') || '<div class="empty">No hay consultas en este grupo.</div>';
 }
 function consultPrevious() {
   if (!consultClinical()) return '';
@@ -1059,7 +1059,7 @@ function consultView(c) {
     editable = consultCanEdit(c);
   const alarms = CONSULT.alarms(c, p);
   const alerts = consultAlerts(c);
-  const top = header('Consulta ' + (c.mode === 'quick' ? 'rápida' : 'completa'), esc(p.name) + ' · ' + esc(c.specialty) + ' · ' + esc(c.date + ' ' + c.time) + ' Caracas', '<span class="pill ' + (c.status === 'firmada' ? 'good' : 'info') + '">' + (c.status === 'firmada' ? 'Firmada · solo lectura' : 'Borrador') + '</span><span class="pill" id="consult-save" role="status" aria-live="polite">' + esc(UI.consultSave || 'Guardado') + '</span><button class="btn" data-go="consultas">Volver a Consultas</button>' + (editable ? ccButton('ccMode', c.mode === 'quick' ? 'Ampliar a consulta completa' : 'Volver a vista rápida') : ''));
+  const top = header('Consulta ' + (c.mode === 'quick' ? 'rápida' : 'completa'), esc(p.name) + ' · ' + esc(c.specialty) + ' · ' + esc(fdate(c.date) + ' ' + c.time) + ' Caracas', '<span class="pill ' + (c.status === 'firmada' ? 'good' : 'info') + '">' + (c.status === 'firmada' ? 'Firmada · solo lectura' : 'Borrador') + '</span><span class="pill" id="consult-save" role="status" aria-live="polite">' + esc(UI.consultSave || 'Guardado') + '</span><button class="btn" data-go="consultas">Volver a Consultas</button>' + (editable ? ccButton('ccMode', c.mode === 'quick' ? 'Ampliar a consulta completa' : 'Volver a vista rápida') : ''));
   if (c.status === 'firmada') return top + '<div class="stack">' + consultReport(c) + '<div class="hstack">' + ['report', 'recipe', 'orders', 'referral'].filter(k => k === 'report' || k === 'recipe' && c.rx.some(r => r.drug) || k === 'orders' && c.orders.length || k === 'referral' && c.plan.referral).map(k => ccButton('ccPdf', {
     report: 'Informe PDF',
     recipe: 'Récipe PDF',

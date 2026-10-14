@@ -1112,6 +1112,134 @@ body:has(.scrim){overflow:hidden}
   .guide-clinical-row .guide-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .guide-clinical-row .guide-scale { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
+
+/* =====================================================================
+   Liquid Glass (estilo iOS 26)
+   El vidrio es la capa de los controles (menú, barras, ventanas, botones de abajo);
+   el contenido (tarjetas, listas, formularios) queda sólido para leerse bien.
+   ===================================================================== */
+:root,:root[data-theme="light"]{
+  --lg-bg:rgba(255,255,255,.58);
+  --lg-bg-strong:rgba(255,255,255,.74);
+  --lg-edge:rgba(255,255,255,.75);
+  --lg-line:rgba(20,20,30,.07);
+  --lg-shadow:0 1px 1px rgba(20,20,30,.04),0 10px 30px -12px rgba(20,20,30,.18);
+  --lg-shadow-big:0 2px 4px rgba(20,20,30,.05),0 24px 60px -20px rgba(20,20,30,.28);
+  --lg-blur:blur(26px) saturate(185%);
+  --lg-ambient-a:rgba(0,96,199,.10);
+  --lg-ambient-b:rgba(255,166,92,.10);
+  --lg-ambient-c:rgba(31,199,158,.07);
+}
+:root[data-theme="dark"]{
+  --lg-bg:rgba(36,36,40,.52);
+  --lg-bg-strong:rgba(40,40,46,.72);
+  --lg-edge:rgba(255,255,255,.14);
+  --lg-line:rgba(255,255,255,.08);
+  --lg-shadow:0 1px 1px rgba(0,0,0,.3),0 12px 34px -12px rgba(0,0,0,.6);
+  --lg-shadow-big:0 2px 6px rgba(0,0,0,.35),0 28px 70px -20px rgba(0,0,0,.75);
+  --lg-blur:blur(28px) saturate(170%);
+  --lg-ambient-a:rgba(78,161,255,.13);
+  --lg-ambient-b:rgba(176,108,255,.09);
+  --lg-ambient-c:rgba(255,140,90,.06);
+}
+:root[data-theme="verde"]{
+  --lg-bg:rgba(30,36,40,.52);
+  --lg-bg-strong:rgba(32,40,44,.72);
+  --lg-edge:rgba(160,255,225,.14);
+  --lg-line:rgba(255,255,255,.08);
+  --lg-shadow:0 1px 1px rgba(0,0,0,.3),0 12px 34px -12px rgba(0,0,0,.6);
+  --lg-shadow-big:0 2px 6px rgba(0,0,0,.35),0 28px 70px -20px rgba(0,0,0,.75);
+  --lg-blur:blur(28px) saturate(170%);
+  --lg-ambient-a:rgba(31,199,158,.14);
+  --lg-ambient-b:rgba(40,120,255,.07);
+  --lg-ambient-c:rgba(31,199,158,.06);
+}
+
+/* Fondo con un poco de color, quieto, para que el vidrio tenga algo que refractar */
+body{background:
+  radial-gradient(1100px 700px at 8% -10%,var(--lg-ambient-a),transparent 60%),
+  radial-gradient(900px 600px at 105% 15%,var(--lg-ambient-b),transparent 60%),
+  radial-gradient(900px 700px at 60% 115%,var(--lg-ambient-c),transparent 60%),
+  var(--bg);background-attachment:fixed}
+
+/* Material base: vidrio con borde de luz (el "filo" que capta la luz) */
+.lg,.app .side,.global-search-button,.shell-icon-button,.guide-footer,.toast,.sheet footer,.shell-panel{
+  background:var(--lg-bg);-webkit-backdrop-filter:var(--lg-blur);backdrop-filter:var(--lg-blur);
+  box-shadow:inset 0 1px 0 var(--lg-edge),inset 0 0 0 .5px var(--lg-line),var(--lg-shadow)}
+
+/* ---------- Menú lateral: panel de vidrio que flota, separado del borde ---------- */
+@media(min-width:1024px){
+  .app{grid-template-columns:256px minmax(0,1fr)}
+  .app .side{position:sticky;top:12px;height:calc(100dvh - 24px);margin:12px 0 12px 12px;border:0;border-radius:26px;padding:18px 12px}
+  .app .side .nav{border-radius:14px}
+  .app .side .nav[aria-current="page"]{background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent);box-shadow:inset 0 0 0 .5px color-mix(in srgb,var(--accent) 25%,transparent)}
+  .app .side .nav:hover:not([aria-current="page"]){background:color-mix(in srgb,var(--fg) 6%,transparent)}
+}
+
+/* ---------- Barra superior: sin franja; buscador y botones son cápsulas de vidrio ---------- */
+.global-topbar{background:transparent;position:sticky;top:0;z-index:30}
+.global-topbar::before{content:"";position:absolute;inset:0 0 -18px;pointer-events:none;z-index:-1;
+  background:linear-gradient(to bottom,var(--bg) 35%,transparent);opacity:.85}
+.global-search-button{border-radius:999px;border:0;padding-inline:16px}
+.shell-icon-button{border-radius:999px;border:0}
+.global-topbar .shell-avatar{background:var(--fg);color:var(--bg);box-shadow:var(--lg-shadow)}
+
+/* ---------- Contenido: sólido, más redondeado, sin rayas duras ---------- */
+.card,.list,.tablewrap{border-radius:22px;border:0;box-shadow:inset 0 0 0 .5px var(--lg-line),0 1px 2px rgba(0,0,0,.03)}
+.row{border-bottom-color:var(--lg-line)}
+.pill{border-radius:999px}
+.input,select.input,textarea.input{border-radius:14px}
+
+/* ---------- Botones en cápsula; el principal teñido, con brillo suave arriba ---------- */
+.btn{border-radius:999px;padding-inline:18px}
+.btn.primary{background:linear-gradient(to bottom,color-mix(in srgb,var(--accent) 88%,#fff),var(--accent));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 6px 16px -6px color-mix(in srgb,var(--accent) 60%,transparent)}
+.btn:not(.primary):not(.danger):not(.ghost){background:color-mix(in srgb,var(--fg) 6%,var(--card));box-shadow:inset 0 0 0 .5px var(--lg-line)}
+
+/* ---------- Ventanas: vidrio grueso que "materializa" al abrir ---------- */
+.scrim{background:rgba(10,10,20,.18);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.sheet{background:var(--lg-bg-strong);-webkit-backdrop-filter:blur(40px) saturate(190%);backdrop-filter:blur(40px) saturate(190%);
+  border-radius:30px;box-shadow:inset 0 1px 0 var(--lg-edge),inset 0 0 0 .5px var(--lg-line),var(--lg-shadow-big)}
+.sheet footer{border-top:0;border-radius:0 0 30px 30px}
+@keyframes lgMaterialize{from{opacity:0;transform:translateY(14px) scale(.97);-webkit-backdrop-filter:blur(0);backdrop-filter:blur(0)}}
+@media(min-width:821px){.sheet{animation:lgMaterialize .34s cubic-bezier(.32,.72,0,1)}}
+
+/* ---------- Teléfono y tableta: barra de pestañas flotante en cápsula ---------- */
+@media(max-width:1023px){
+  .app .side{left:12px;right:12px;bottom:calc(10px + env(safe-area-inset-bottom,0px));width:auto;height:64px;
+    border:0;border-radius:999px;padding:6px 10px;inset:auto 12px calc(10px + env(safe-area-inset-bottom,0px)) 12px}
+  .app .side .nav[aria-current="page"]{background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent);border-radius:999px}
+  .guide-footer{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+  .main{padding-bottom:calc(120px + env(safe-area-inset-bottom,0px))}
+}
+
+/* ---------- Asistente: barra de abajo como cápsula flotante centrada ---------- */
+.guide-footer{left:50%;right:auto;transform:translateX(-50%);width:min(720px,calc(100% - 24px));bottom:14px;
+  border:0;border-radius:999px;padding:8px;gap:8px}
+@media(min-width:1024px){.guide-footer{left:calc(50% + 134px)}}
+.guide-footer .btn{min-height:48px;border-radius:999px}
+.guide-footer .guide-continue{flex:1}
+.guide-progress{height:5px;border-radius:999px;background:color-mix(in srgb,var(--fg) 8%,transparent)}
+.guide-progress span{border-radius:999px;background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 70%,#fff),var(--accent))}
+.guide-card{border-radius:28px}
+.patient-band{border-radius:20px;background:var(--lg-bg);-webkit-backdrop-filter:var(--lg-blur);backdrop-filter:var(--lg-blur);box-shadow:inset 0 1px 0 var(--lg-edge),inset 0 0 0 .5px var(--lg-line)}
+
+/* ---------- Avisos ---------- */
+.toast{border:0;border-radius:999px;color:var(--fg);font-weight:600}
+
+/* ---------- Accesibilidad: sin vidrio ni brillo cuando el dispositivo lo pide ---------- */
+@media (prefers-reduced-transparency:reduce){
+  body{background:var(--bg)}
+  .lg,.app .side,.global-search-button,.shell-icon-button,.guide-footer,.toast,.sheet,.sheet footer,.shell-panel,.patient-band{
+    background:var(--card)!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important;box-shadow:0 0 0 1px var(--line)!important}
+}
+@media (prefers-contrast:more){
+  .lg,.app .side,.global-search-button,.shell-icon-button,.guide-footer,.sheet{background:var(--card)!important;box-shadow:0 0 0 1.5px var(--fg2)!important}
+}
+@media (prefers-reduced-motion:reduce){.sheet{animation:none}}
+
+/* Icono del buscador siempre legible (en teléfono el botón queda solo con la lupa) */
+.global-search-button svg{width:20px;height:20px;flex:none}
 </style>
 </head>
 <body>
