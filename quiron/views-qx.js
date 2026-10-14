@@ -56,7 +56,7 @@ ACTIONS.qxReturn = el => {
 };
 function qxReturnBody() {
   const o = S.medOrders.find(x => x.id === UI.ret.id);
-  return `<div class="small muted">Indique cuántas unidades no se utilizaron. Vuelven al inventario y no se consideran consumidas.</div>
+  return `${patientBand(o.pid, 'Quirófano')}<div class="small muted">Indique cuántas unidades no se utilizaron. Vuelven al inventario y no se consideran consumidas.</div>
   <div class="list">${o.items.filter(it => it.qty > 0).map(it => { const max = it.qty - (it.returned || 0); return `<div class="row"><div class="grow"><div class="t">${esc(prod(it.pid).name)}</div><div class="s">Despachadas ${it.qty}${it.returned ? ` · ya devueltas ${it.returned}` : ''}</div></div>${stepper('rt-' + it.pid, UI.ret.q[it.pid], 'qxRetQ', `data-p="${it.pid}"`, 0, max)}</div>`; }).join('')}</div>`;
 }
 ACTIONS.qxRetQ = el => { const o = S.medOrders.find(x => x.id === UI.ret.id); const it = o.items.find(i => i.pid === el.dataset.p);

@@ -151,17 +151,17 @@ ACTIONS.agendaDate = el => { if (el.value) { UI.agendaDay = el.value; animNext =
 // ---------- Nueva cita / cirugía ----------
 function apptForm(f) {
   const kindSeg = `<div class="seg" role="group" aria-label="Tipo"><button data-act="apKind" data-k="consulta" aria-pressed="${f.kind === 'consulta'}">Consulta</button><button data-act="apKind" data-k="cirugia" aria-pressed="${f.kind === 'cirugia'}">Cirugía</button></div>`;
-  const common = `<div class="field full"><label for="ap-p">Paciente</label><select class="input" id="ap-p">${patientOptions(f.pid)}</select></div>
-    <div class="field"><label for="ap-date">Fecha</label><input class="input" type="date" id="ap-date" value="${f.date}"></div>
+  const common = `<div class="full">${sheetStep(1, 'Paciente')}</div><div class="field full"><label for="ap-p">Paciente</label><select class="input" id="ap-p">${patientOptions(f.pid)}</select></div>
+    <div class="full">${sheetStep(2, 'Fecha y hora')}</div><div class="field"><label for="ap-date">Fecha</label><input class="input" type="date" id="ap-date" value="${f.date}"></div>
     <div class="field"><label for="ap-time">Hora de inicio</label><input class="input" type="time" id="ap-time" step="900" value="${f.time}"></div>`;
-  if (f.kind === 'cirugia') return kindSeg + `<div class="form">${common}
+  if (f.kind === 'cirugia') return `<div id="appt-patient-band">${patientBand(f.pid)}</div>` + kindSeg + `<div class="form">${common}<div class="full">${sheetStep(3, 'Atención y equipo médico')}</div>
     <div class="field full"><label for="ap-proc">Cirugía o procedimiento</label><input class="input" id="ap-proc" value="${esc(f.proc || '')}" placeholder="Ej. Colecistectomía laparoscópica"></div>
     <div class="field"><label for="ap-d">Médico tratante</label><select class="input" id="ap-d">${apDocs().map(m => `<option value="${m.id}" ${m.id === f.doc ? 'selected' : ''}>${esc(m.name)} · ${esc(m.esp)}</option>`).join('')}</select></div>
     <div class="field"><label for="ap-h">Duración estimada</label><select class="input" id="ap-h" data-ch="apHours">${[1, 1.5, 2, 2.5, 3, 4, 5, 6].map(h => `<option value="${h}" ${+f.hours === h ? 'selected' : ''}>${hrs(h)}</option>`).join('')}</select></div>
     <div class="field"><label for="ap-an">Anestesiólogo</label><select class="input" id="ap-an"><option value="">Por asignar</option>${anesthDocs().map(m => `<option value="${m.id}" ${m.id === f.anest ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</select></div>
     <div class="field"><label for="ap-kit">Kit de cirugía <span style="color:var(--bad)">*</span></label><select class="input" id="ap-kit"><option value="">${(S.kits || []).length ? 'Elija el kit' : 'Aún no hay kits creados'}</option>${(S.kits || []).map(k => `<option value="${k.id}" ${k.id === f.kit ? 'selected' : ''}>${esc(k.name)} · ${k.items.length} artículo(s)</option>`).join('')}</select></div>
     <div class="full small muted" id="ap-msg"></div></div>`;
-  return kindSeg + `<div class="form">${common}
+  return `<div id="appt-patient-band">${patientBand(f.pid)}</div>` + kindSeg + `<div class="form">${common}<div class="full">${sheetStep(3, 'Atención y equipo médico')}</div>
     <div class="field"><label for="ap-d">Médico</label><select class="input" id="ap-d" data-ch="apDoc">${apDocs().map(m => `<option value="${m.id}" ${m.id === f.doc ? 'selected' : ''}>${esc(m.name)} · ${esc(m.esp)}</option>`).join('')}</select><span class="small" id="ap-hrs" style="color:var(--good)">Atiende: ${esc(hoursText(f.doc))}</span></div>
     <div class="field"><label for="ap-s">Servicio</label><select class="input" id="ap-s">${S.services.filter(s => ['Consultas', 'Imagen y diagnóstico', 'Emergencia y enfermería'].includes(s.cat)).map(s => `<option value="${s.id}" ${s.id === f.svc ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></div>
     <div class="full small muted" id="ap-msg">¿Paciente nuevo? <button class="btn ghost sm" data-act="newPatient">Registrar paciente</button></div></div>`;
@@ -213,7 +213,7 @@ ACTIONS.openAppt = el => {
   const a = byId(S.appts, el.dataset.id); const p = pat(a.pid); const g = dutyOf(a.date);
   const btn = (st, label, cls = '') => a.status !== st ? `<button class="btn ${cls}" data-act="apptStatus" data-id="${a.id}" data-st="${st}">${label}</button>` : '';
   const row = (k, v, end = '') => `<div class="row"><div class="grow"><div class="s">${k}</div><div class="t">${v}</div></div>${end ? `<div class="end">${end}</div>` : ''}</div>`;
-  openSheet(`${a.kind === 'cirugia' ? 'Cirugía' : 'Consulta'} · ${p.name}`, `<div class="list">
+  openSheet(`${a.kind === 'cirugia' ? 'Cirugía' : 'Consulta'} · ${p.name}`, `${patientBand(p.id)}<div class="list">
     ${row('Fecha y hora', `${fdate(a.date)} · ${a.time}${a.kind === 'cirugia' ? '–' + toTime(apptEnd(a)) + ' (' + hrs(a.hours) + ')' : ''}`, statusPill(a.status))}
     ${a.kind === 'cirugia' ? row('Cirugía', esc(a.proc)) + row('Médico tratante', esc(med(a.doc).name)) + row('Anestesiólogo', a.anest ? esc(med(a.anest)?.name) : 'Por asignar') + row('Kit de cirugía', kitOf(a.kit) ? esc(kitOf(a.kit).name) : '<span style="color:var(--bad)">Sin kit</span>', !a.done && can('agenda.programar') && (S.kits || []).length ? `<button class="btn sm" data-act="apKitChange" data-id="${a.id}">Cambiar</button>` : '')
       : row('Servicio', esc(svc(a.svc).name), svcPriceLabel(svc(a.svc))) + row('Médico', `${esc(med(a.doc).name)} · ${esc(med(a.doc).esp)}`)}
@@ -226,7 +226,7 @@ ACTIONS.openAppt = el => {
 };
 // Cambiar el kit de una cirugía ya programada (el kit es obligatorio)
 ACTIONS.apKitChange = el => { const a = byId(S.appts, el.dataset.id);
-  openSheet(`Kit de cirugía · ${a.proc}`, `<div class="field"><label for="ak-k">Kit</label><select class="input" id="ak-k">${S.kits.map(k => `<option value="${k.id}" ${k.id === a.kit ? 'selected' : ''}>${esc(k.name)} · ${k.items.length} artículo(s)</option>`).join('')}</select></div>
+  openSheet(`Kit de cirugía · ${a.proc}`, `${patientBand(a.pid)}<div class="field"><label for="ak-k">Kit</label><select class="input" id="ak-k">${S.kits.map(k => `<option value="${k.id}" ${k.id === a.kit ? 'selected' : ''}>${esc(k.name)} · ${k.items.length} artículo(s)</option>`).join('')}</select></div>
     ${qxOrders(a).length ? '<div class="small muted">Ya hay solicitudes enviadas al almacén para esta cirugía: el cambio no las modifica.</div>' : '<div class="small muted">La solicitud al almacén de esta cirugía llegará precargada con el kit elegido.</div>'}`,
     `<button class="btn" data-act="openAppt" data-id="${a.id}">Volver</button><button class="btn primary" data-act="apKitSave" data-id="${a.id}">Guardar</button>`); };
 ACTIONS.apKitSave = el => { const a = byId(S.appts, el.dataset.id); const k = kitOf(val('ak-k')); if (!k || !can('agenda.programar')) return;
@@ -238,6 +238,9 @@ const APPT_NEXT = { reservada: ['confirmada', 'en_espera', 'atendida', 'no_asist
 const APPT_BTN = { confirmada: 'Confirmar', en_espera: 'Llegó', atendida: 'Atendida', no_asistio: 'No asistió' };
 const apptEditable = a => can('agenda.programar') && (!agendaOwn() || a.doc === myDoc() || a.anest === myDoc());
 function apptFooter(a, p, btn, extra) {
+  if (a.kind === 'consulta' && can('consulta.clinico') && (!agendaOwn() || a.doc === myDoc()) && !['cancelada', 'no_asistio'].includes(a.status)) {
+    extra += '<button class="btn primary" data-act="beginConsult" data-id="' + a.id + '">Comenzar consulta</button>';
+  }
   const open = !['atendida', 'cancelada', 'no_asistio'].includes(a.status);
   const exp = canSee('pacientes') ? `<button class="btn" data-go="pacientes" data-param="${p.id}">Abrir expediente</button>` : '';
   if (!apptEditable(a)) return open ? extra : exp;
@@ -258,7 +261,7 @@ ACTIONS.attendAppt = el => {
 
 // Posponer (o reprogramar una cita a la que no asistió o que se canceló): nueva fecha y hora, con los mismos controles de choque
 ACTIONS.apPostpone = el => { const a = byId(S.appts, el.dataset.id); if (!apptEditable(a)) return;
-  openSheet(`${['no_asistio', 'cancelada'].includes(a.status) ? 'Reprogramar' : 'Posponer'} · ${pat(a.pid).name}`, `<div class="small muted">Actual: ${fdate(a.date)} a las ${a.time}${a.kind === 'cirugia' ? ' · ' + esc(a.proc) : ''}.</div><div class="form">
+  openSheet(`${['no_asistio', 'cancelada'].includes(a.status) ? 'Reprogramar' : 'Posponer'} · ${pat(a.pid).name}`, `${patientBand(a.pid)}<div class="small muted">Actual: ${fdate(a.date)} a las ${a.time}${a.kind === 'cirugia' ? ' · ' + esc(a.proc) : ''}.</div><div class="form">
     <div class="field"><label for="pp-date">Nueva fecha</label><input class="input" type="date" id="pp-date" value="${a.date}" min="${dAt(0)}"></div>
     <div class="field"><label for="pp-time">Nueva hora</label><input class="input" type="time" step="900" id="pp-time" value="${a.time}"></div>
     <div class="full small muted" id="pp-msg"></div></div>`,

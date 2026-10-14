@@ -46,7 +46,7 @@ ACTIONS.preopUpload = el => {
 };
 function preopBody() {
   const o = UI.po; const a = S.appts.find(x => x.id === o.apptId); const p = pat(a.pid);
-  return `<div class="small muted">${esc(p.name)} · para ${esc(a.proc)} (${fdate(a.date)}). Suba las fotos o el PDF de los resultados; quedarán en la pestaña Exámenes del paciente.</div>
+  return `${patientBand(p.id)}<div class="small muted">${esc(p.name)} · para ${esc(a.proc)} (${fdate(a.date)}). Suba las fotos o el PDF de los resultados; quedarán en la pestaña Exámenes del paciente.</div>
   <div class="form">
     <div class="field"><label for="po-lab">Laboratorio o clínica donde se realizó <span style="color:var(--bad)">*</span></label><input class="input" id="po-lab" value="${esc(o.lab)}" placeholder="Ej. Laboratorio Clínico Central"></div>
     <div class="field"><label for="po-date">Fecha de los resultados</label><input class="input" type="date" id="po-date" value="${o.date}" max="${dAt(0)}"></div></div>

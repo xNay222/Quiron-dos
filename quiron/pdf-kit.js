@@ -21,12 +21,13 @@ window.LOGO = null;
 })();
 
 // ---------- Plantilla A4 ----------
-const PG = { W: 595.28, H: 841.89, L: 48, R: 547.28, top: 132, bottom: 788 };
-const INK = [24, 24, 26], GREY = [112, 112, 118], SOFT = [246, 246, 248], LINE = [222, 222, 226], RED = [196, 32, 38];
-const rifText = () => `RIF ${S.clinic.rif}`;
+const PG = { W: 595.28, H: 841.89, L: 48, R: 547.28, top: 176, bottom: 780 };
+const INK = [24, 24, 26], GREY = [112, 112, 118], SOFT = [246, 246, 248], LINE = [85, 85, 88], RED = [196, 32, 38];
+const PDF_CLINIC = { name: 'Quirón Especialidades Médicas S.A.', rif: 'J-502131973', email: 'Quironespecialidadesmedicas@gmail.com', address: 'Calle Choroní entre Santa Fe y Roraima, Qta Lala,', address2: 'Urb. Chuao, Caracas (El Cafetal) Miranda. Z.P.: 1061.', phone: '(+58-212) 9939173 - 9932747' };
+const rifText = () => 'RIF ' + PDF_CLINIC.rif;
 
 // Las fuentes estándar del PDF solo traen caracteres latinos: se reemplazan subíndices, letras griegas, etc.
-const PDF_SUBST = [[/[₀-₉]/g, c => String(c.charCodeAt(0) - 0x2080)], [/⁴|⁵|⁶|⁷|⁸|⁹|⁰/g, c => ({ '⁰': '0', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' })[c]],
+const PDF_SUBST = [[/⚠\uFE0F?/g, 'Advertencia: '], [/[–—]/g, '-'],[/[₀-₉]/g, c => String(c.charCodeAt(0) - 0x2080)], [/⁴|⁵|⁶|⁷|⁸|⁹|⁰/g, c => ({ '⁰': '0', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' })[c]],
   [/≥/g, '>='], [/≤/g, '<='], [/≠/g, '<>'], [/≈|∼/g, '~'], [/→/g, '->'], [/←/g, '<-'], [/↑/g, '(alto)'], [/↓/g, '(bajo)'], [/✓|✔/g, 'Sí'], [/✗|✘/g, 'No'],
   [/α/g, 'alfa'], [/β/g, 'beta'], [/γ/g, 'gamma'], [/δ|Δ/g, 'delta'], [/κ/g, 'kappa'], [/λ/g, 'lambda'], [/[\u2009\u202F\u00A0]/g, ' '], [/[‐‑‒]/g, '-']];
 const pdfClean = s => Array.isArray(s) ? s.map(pdfClean) : PDF_SUBST.reduce((t, [re, to]) => t.replace(re, to), String(s ?? '')).replace(/[^\x00-\xFF–—‘’“”•…€]/g, '');
@@ -40,31 +41,38 @@ function pdfNew(title, meta = []) {
 }
 // Encabezado: logo a la izquierda con el RIF debajo; título y datos del documento a la derecha
 function pdfHeader(doc, first) {
-  const { L, R } = PG; const lw = first ? 132 : 92;
-  if (window.LOGO) doc.addImage(window.LOGO.pdf || window.LOGO.url, 'PNG', L, 34, lw, lw * window.LOGO.ratio, 'logo', 'FAST');   // alias: una sola copia del logo aunque haya varias páginas
-  else { doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.setTextColor(...INK); doc.text('QUIRÓN', L, 58); }
-  const ly = 34 + lw * (window.LOGO?.ratio || .3) + 11;
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...GREY); doc.setCharSpace(0.6); doc.text(rifText(), L, ly); doc.setCharSpace(0);
-  // Título alineado a la derecha calculando el ancho real con el espaciado (alinear con espaciado lo desborda del margen)
-  const t = pdfClean(doc._title.toUpperCase()); const cs = first ? 1 : .7; const fs = first ? 15 : 11;
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(fs); doc.setTextColor(...INK); doc.setCharSpace(cs);
-  doc.text(t, R - doc.getTextWidth(t) - cs * Math.max(0, t.length - 1), first ? 52 : 46); doc.setCharSpace(0);
-  if (first && doc._meta.length) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(...GREY); doc.text(doc._meta, R, 68, { align: 'right', lineHeightFactor: 1.45 }); }
-  const ry = first ? 116 : 92;
-  doc.setDrawColor(...LINE); doc.setLineWidth(.6); doc.line(L, ry, R, ry);
-  doc.setDrawColor(...INK); doc.setLineWidth(2.2); doc.line(L, ry, L + 46, ry);   // barra corta, como en el logo
-  doc.setLineWidth(.6);
-  return first ? PG.top : 108;
+  const { L, R } = PG, c=PDF_CLINIC;
+  // Marca de agua detrás del contenido, nunca en la impresión sobre imprenta.
+  if(window.LOGO && doc.GState) {
+    doc.saveGraphicsState(); doc.setGState(new doc.GState({opacity:.07}));
+    doc.addImage(window.LOGO.pdf || window.LOGO.url,'PNG',100,355,395,395*window.LOGO.ratio,'logo','FAST'); doc.restoreGraphicsState();
+  }
+  // La dirección va debajo del logo completo (incluida la línea ESPECIALIDADES MÉDICAS), nunca encima.
+  const logoH = window.LOGO ? 150*window.LOGO.ratio : 30;
+  if(window.LOGO) doc.addImage(window.LOGO.pdf || window.LOGO.url,'PNG',L,25,150,logoH,'logo','FAST');
+  else { doc.setFont('helvetica','bold');doc.setFontSize(26);doc.text('QUIRÓN',L,55); }
+  doc.setTextColor(...INK);doc.setFont('helvetica','normal');doc.setFontSize(9);
+  doc.text([c.address,c.address2,'Teléfonos: '+c.phone],L,Math.min(25+logoH+11,107),{lineHeightFactor:1.2});
+  doc.text(c.email,R,32,{align:'right'});doc.setFont('helvetica','bold');
+  doc.text(c.name,R,46,{align:'right'});doc.text(rifText(),R,60,{align:'right'});
+  doc.setFont('helvetica','normal');doc.setFontSize(9);
+  const meta=doc._meta.flatMap(x=>doc.splitTextToSize(x,230));
+  doc.text(meta,R,79,{align:'right',lineHeightFactor:1.2});
+  const title=pdfClean(doc._title.toUpperCase());
+  doc.setDrawColor(...LINE);doc.setLineWidth(.6);doc.roundedRect(L,135,R-L,27,5,5);
+  doc.setFont('helvetica','bold');doc.setFontSize(12);
+  const lines=doc.splitTextToSize(title,R-L-20);
+  if(lines.length>1) doc.setFontSize(9);
+  doc.text(doc.splitTextToSize(title,R-L-20).slice(0,2),L+10,lines.length>1?146:153,{lineHeightFactor:1.1});
+  return PG.top;
 }
-// Pie en todas las páginas: razón social y RIF, dirección y teléfono, número de página
 function pdfFooters(doc) {
-  const n = doc.getNumberOfPages(); const c = S.clinic;
-  for (let i = 1; i <= n; i++) {
-    doc.setPage(i); const y = PG.H - 34;
-    doc.setDrawColor(...LINE); doc.setLineWidth(.5); doc.line(PG.L, y - 12, PG.R, y - 12);
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor(...INK); doc.text(c.name, PG.L, y);
-    doc.setFont('helvetica', 'normal'); doc.setTextColor(...GREY); doc.text(`${rifText()}  ·  ${c.address}  ·  ${c.phone}`, PG.L, y + 10);
-    doc.text(`Página ${i} de ${n}`, PG.R, y, { align: 'right' });
+  for(let i=1;i<=doc.getNumberOfPages();i++) {
+    doc.setPage(i); doc.setDrawColor(...LINE);doc.setLineWidth(.5);doc.roundedRect(PG.L,793,PG.R-PG.L,33,4,4);
+    doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...INK);
+    doc.text(PDF_CLINIC.name+' · '+rifText(),PG.L+8,806);
+    doc.text('Caracas, Miranda · Teléfonos '+PDF_CLINIC.phone,PG.L+8,819);
+    doc.text(i+'/'+doc.getNumberOfPages(),PG.R-8,806,{align:'right'});
   }
 }
 // Salto de página si no cabe lo que viene
@@ -72,11 +80,12 @@ function pdfEnsure(doc, y, need) { if (y + need <= PG.bottom) return y; doc.addP
 function pdfSection(doc, y, label) {
   y = pdfEnsure(doc, y, 40);
   doc.setFillColor(...INK); doc.rect(PG.L, y - 6.5, 10, 2.2, 'F');
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...INK); doc.setCharSpace(0.6); doc.text(label.toUpperCase(), PG.L + 16, y - 4); doc.setCharSpace(0);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...INK); doc.setCharSpace(0.6); doc.text(label.toUpperCase(), PG.L + 16, y - 4); doc.setCharSpace(0);
   return y + 12;
 }
 function pdfPara(doc, y, text, { size = 10, color = INK, bold = false, indent = 0, gap = 8 } = {}) {
   if (!text) return y;
+  size = Math.max(9, size);
   doc.setFont('helvetica', bold ? 'bold' : 'normal'); doc.setFontSize(size); doc.setTextColor(...color);
   const lh = size * 1.42; const lines = doc.splitTextToSize(String(text), PG.R - PG.L - indent);
   lines.forEach(l => { y = pdfEnsure(doc, y, lh); doc.text(l, PG.L + indent, y + size * .8); y += lh; });
@@ -84,18 +93,24 @@ function pdfPara(doc, y, text, { size = 10, color = INK, bold = false, indent = 
 }
 // Caja gris con pares etiqueta / valor en columnas
 function pdfInfoBox(doc, y, pairs, cols = 2) {
-  const rows = Math.ceil(pairs.length / cols); const h = 18 + rows * 30; y = pdfEnsure(doc, y, h + 10);
-  doc.setFillColor(...SOFT); doc.roundedRect(PG.L, y, PG.R - PG.L, h, 7, 7, 'F');
-  const cw = (PG.R - PG.L - 28) / cols;
-  pairs.forEach(([k, v], i) => { const cx = PG.L + 14 + (i % cols) * cw, cy = y + 20 + Math.floor(i / cols) * 30;
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(6.8); doc.setTextColor(...GREY); doc.setCharSpace(.5); doc.text(String(k).toUpperCase(), cx, cy); doc.setCharSpace(0);
-    doc.setFontSize(9.8); doc.setTextColor(...INK); doc.text(doc.splitTextToSize(String(v || '—'), cw - 10)[0], cx, cy + 13); });
-  return y + h + 18;
+  const cw=(PG.R-PG.L-28)/cols, maxLines=38;
+  for(let row=0;row<pairs.length;row+=cols) {
+    const cells=pairs.slice(row,row+cols).map(([k,v])=>{doc.setFontSize(9.8);return {key:String(k).toUpperCase(),lines:doc.splitTextToSize(String(v ?? '—'),cw-12)};});
+    const length=Math.max(...cells.map(c=>c.lines.length));
+    for(let offset=0;offset<length;offset+=maxLines) {
+      const count=Math.min(maxLines,length-offset),h=30+count*12;
+      y=pdfEnsure(doc,y,h+10);doc.setDrawColor(...LINE);doc.setLineWidth(.5);doc.roundedRect(PG.L,y,PG.R-PG.L,h,5,5);
+      cells.forEach((cell,i)=>{const x=PG.L+14+i*cw;doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...GREY);doc.text(cell.key+(offset?' (cont.)':''),x,y+14);
+        doc.setFont('helvetica','normal');doc.setFontSize(9.8);doc.setTextColor(...INK);doc.text(cell.lines.slice(offset,offset+count),x,y+28,{lineHeightFactor:12/9.8});});
+      y+=h+6;
+    }
+  }
+  return y+12;
 }
 const pdfTable = (doc, y, head, body, opts = {}) => {
-  doc.autoTable({ startY: y, margin: { left: PG.L, right: PG.W - PG.R, top: 108, bottom: PG.H - PG.bottom }, head: [head], body, theme: 'plain',
+  doc.autoTable({ startY: y, margin: { left: PG.L, right: PG.W - PG.R, top: PG.top, bottom: PG.H - PG.bottom }, head: [head.map(h => typeof h === 'string' ? h.toUpperCase() : h)], body, theme: 'plain',
     styles: { font: 'helvetica', fontSize: 9.4, cellPadding: { top: 7, bottom: 7, left: 8, right: 8 }, textColor: INK, lineColor: LINE, lineWidth: { bottom: .5 } },
-    headStyles: { fillColor: INK, textColor: 255, fontStyle: 'bold', fontSize: 8, lineWidth: 0 }, alternateRowStyles: { fillColor: [251, 251, 252] },
+    headStyles: { fillColor: [243,243,243], textColor: INK, fontStyle: 'bold', fontSize: 9, lineWidth: 0 }, alternateRowStyles: { fillColor: [251, 251, 252] },
     willDrawPage: d => { if (doc.getCurrentPageInfo().pageNumber > 1 && d.pageNumber > 1) pdfHeader(doc, false); }, ...opts });
   return doc.lastAutoTable.finalY + 18;
 };
@@ -105,7 +120,7 @@ function pdfSignature(doc, y, name, sub, img) {
   if (img) doc.addImage(img, 'PNG', x + 20, y - 4, 160, 40);
   doc.setDrawColor(...INK); doc.setLineWidth(.6); doc.line(x, y + 40, PG.R, y + 40);
   doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...INK); doc.text(name, x + 100, y + 54, { align: 'center' });
-  if (sub) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...GREY); doc.text(sub, x + 100, y + 66, { align: 'center' }); }
+  if (sub) { doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...GREY); doc.text(sub, x + 100, y + 66, { align: 'center' }); }
   return y + 80;
 }
 // Nombre de archivo válido en Windows, macOS y teléfonos (sin / \\ : * ? " < > |)
@@ -115,7 +130,7 @@ async function pdfSave(doc, filename) {
   // Metadatos: el visor y el explorador de archivos muestran título, autor y asunto; idioma para lectores de pantalla
   doc.setProperties({ title: pdfClean(filename.replace(/\.pdf$/i, '')), subject: pdfClean(doc._title), author: pdfClean(S.clinic?.name || 'Quirón'), keywords: pdfClean(`RIF ${S.clinic?.rif || ''}`), creator: 'Quirón · sistema de gestión clínica' });
   try { doc.setLanguage('es-VE'); } catch (e) {}
-  pdfFooters(doc);
+  if (!doc._preprinted) pdfFooters(doc);
   const dl = await getCap('downloads');
   if (!dl) { try { doc.save(filename); toast('PDF descargado'); return true; } catch (e) { toast('No se pudo descargar el PDF'); return false; } }
   try { await dl.save({ filename, data: doc.output('blob') }); toast('PDF guardado'); return true; }
@@ -128,19 +143,19 @@ const patientPairs = p => [['Paciente', p.name], ['Cédula', p.ci], ['Historia',
 // ---------- Presupuesto y factura ----------
 function pdfBilling(m) {
   const meta = [`Nº ${m.num}`]; if (m.control) meta.push(`Nº de control ${m.control}`); meta.push(`Fecha ${fdate(m.date)}`); if (m.until) meta.push(`Válido hasta ${fdate(m.until)}`);
-  const doc = pdfNew(m.title, meta); let y = PG.top;
+  const doc = pdfNew(m.fiscal ? 'FACTURA - COPIA DIGITAL' : m.title, meta); let y = PG.top;
   y = pdfInfoBox(doc, y, [['Paciente', m.p.name], ['Cédula', m.p.ci], ['Teléfono', m.p.phone], ['Dirección', m.p.address || '—'], ['Médico tratante', m.doc?.name || '—'], ['Procedimiento', m.proc || '—']]);
   const money = m.kind === 'budget' ? usd : m.money;   // presupuesto en dólares; cuentas y facturas en Bs
   y = pdfTable(doc, y, ['Descripción', 'Monto'], m.items.map(x => [x.name, money(x.price)]), { columnStyles: { 1: { halign: 'right', cellWidth: 120 } } });
   // Totales a la derecha
   const lines = [['Subtotal', money(m.t.sub)]]; if (m.t.disc) lines.push([`Cortesía (descuento ${m.t.disc}%)`, '-' + money(m.t.desc)]);
   if (m.kind === 'invoice' && m.fiscal) lines.push(['IVA', 'Exento (servicio médico)']);
-  const igtf = r2(m.payments.reduce((a, p) => a + p.igtf, 0));
+  const igtf = r2(m.payments.reduce((a, p) => a + (+p.igtf || 0), 0));
   y = pdfEnsure(doc, y, lines.length * 15 + 80); const x0 = PG.R - 230;
   doc.setFontSize(9.5); lines.forEach(([k, v]) => { doc.setFont('helvetica', 'normal'); doc.setTextColor(...(k.startsWith('Cortesía') ? RED : GREY)); doc.text(k, x0, y); doc.setTextColor(...(k.startsWith('Cortesía') ? RED : INK)); doc.text(v, PG.R, y, { align: 'right' }); y += 15; });
   y += 2; doc.setFillColor(...INK); doc.roundedRect(x0 - 10, y - 2, PG.R - x0 + 10, 30, 5, 5, 'F');
   doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(255); doc.text('TOTAL', x0, y + 17); doc.text(money(m.t.total), PG.R - 8, y + 17, { align: 'right' }); y += 42;
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(...GREY);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...GREY);
   doc.text(m.kind === 'budget' ? `Equivalente: ${fmt(m.t.total * S.rate, 'VES')} a tasa BCV ${S.rate.toLocaleString('es-VE', { maximumFractionDigits: 4 })} Bs/USD` : `Tasa BCV ${m.rate.toLocaleString('es-VE', { maximumFractionDigits: 4 })} Bs/USD · referencia ${usd(m.t.total)}`, PG.R, y, { align: 'right' }); y += 13;
   if (igtf) { doc.text(`IGTF ${S.igtfRate}% pagado: ${money(igtf)}`, PG.R, y, { align: 'right' }); y += 13; }
   y += 10;
@@ -154,8 +169,8 @@ function pdfBilling(m) {
 // ---------- Historia clínica (una nota) ----------
 function pdfNoteBody(doc, y, n, compact) {
   const v = n.vitals || {}; const d = med(n.doc);
-  if (compact) { y = pdfEnsure(doc, y, 60); doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...INK); doc.text(`${NOTE_TYPES[n.type]} · ${fdate(n.date)} ${n.time}`, PG.L, y); doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(...GREY); doc.text(`${d?.name || ''} · ${d?.esp || ''}`, PG.R, y, { align: 'right' }); y += 16; }
-  const block = (label, text) => { if (!text) return; y = pdfEnsure(doc, y, 34); doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(...GREY); doc.setCharSpace(.5); doc.text(label.toUpperCase(), PG.L, y); doc.setCharSpace(0); y = pdfPara(doc, y + 4, text, { size: 9.8, gap: 10 }); };
+  if (compact) { y = pdfEnsure(doc, y, 60); doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...INK); doc.text(`${clinicalNoteTitle(n)} · ${fdate(n.date)} ${n.time}`, PG.L, y); doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...GREY); doc.text(`${d?.name || ''} · ${d?.esp || ''}`, PG.R, y, { align: 'right' }); y += 16; }
+  const block = (label, text) => { if (!text) return; y = pdfEnsure(doc, y, 34); doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...GREY); doc.setCharSpace(.5); doc.text(label.toUpperCase(), PG.L, y); doc.setCharSpace(0); y = pdfPara(doc, y + 4, text, { size: 9.8, gap: 10 }); };
   if (n.type === 'informe') { if (n.to) block('Dirigido a', n.to); block(compact ? (n.motivo || 'Informe médico') : 'Contenido', n.actual); }
   else if (n.type === 'libre') block(n.motivo || 'Nota', n.actual);
   else {
@@ -170,12 +185,12 @@ function pdfNoteBody(doc, y, n, compact) {
   if (n.recipe?.length) block('Tratamiento indicado', n.recipe.map(r => `• ${r.med}${[r.dosis, r.frec, r.dur].filter(Boolean).length ? ' — ' + [r.dosis, r.frec, r.dur].filter(Boolean).join(', ') : ''}`).join('\n'));
   const ords = S.exams.filter(e => e.note === n.id); if (ords.length) block('Exámenes solicitados', ords.map(e => `${e.num}: ${e.tests.join(', ')} (${EX_ST[e.status][0].toLowerCase()})`).join('\n'));
   (n.addenda || []).forEach(a => block(`Nota aclaratoria · ${a.at} · ${a.by}`, a.text));
-  y = pdfEnsure(doc, y, 20); doc.setFont('helvetica', 'italic'); doc.setFontSize(7.8); doc.setTextColor(...GREY); doc.text(`Firmada electrónicamente por ${d?.name || ''} el ${n.signedAt || ''}.`, PG.L, y); y += 18;
+  y = pdfEnsure(doc, y, 20); doc.setFont('helvetica', 'italic'); doc.setFontSize(9); doc.setTextColor(...GREY); doc.text(`Firmada electrónicamente por ${d?.name || ''} el ${n.signedAt || ''}.`, PG.L, y); y += 18;
   return y;
 }
 function pdfNote(n) {
   const p = pat(n.pid); const d = med(n.doc);
-  const doc = pdfNew(n.type === 'informe' ? (n.motivo || 'Informe médico') : 'Historia clínica', [NOTE_TYPES[n.type], `Fecha ${fdate(n.date)} · ${n.time}`, d?.name || '']); let y = PG.top;
+  const doc = pdfNew(n.evolutionId ? clinicalNoteTitle(n) : n.type === 'informe' ? (n.motivo || 'Informe médico') : 'Historia clínica', [clinicalNoteTitle(n), `Fecha ${fdate(n.date)} · ${n.time}`, d?.name || '']); let y = PG.top;
   y = pdfInfoBox(doc, y, patientPairs(p), 3);
   if (p.allergies.length) { doc.setFillColor(253, 236, 236); doc.roundedRect(PG.L, y - 8, PG.R - PG.L, 24, 5, 5, 'F'); doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...RED); doc.text(`ALERGIAS: ${p.allergies.join(', ')}`, PG.L + 12, y + 7.5); y += 30; }
   y = pdfNoteBody(doc, y, n, false);
@@ -248,9 +263,9 @@ function pdfConsentPrint(p, c) {
   // Firmas: paciente (con huella), representante, testigo y médico tratante
   const box = (x, yy, w, title, sub, finger) => {
     doc.setDrawColor(...INK); doc.setLineWidth(.6); doc.line(x, yy + 44, x + w - (finger ? 70 : 0), yy + 44);
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(8.6); doc.setTextColor(...INK); doc.text(title, x, yy + 57);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.8); doc.setTextColor(...GREY); doc.text(sub, x, yy + 68);
-    if (finger) { doc.setDrawColor(...LINE); doc.roundedRect(x + w - 58, yy, 58, 62, 4, 4); doc.setFontSize(6.8); doc.text('Huella', x + w - 29, yy + 72, { align: 'center' }); }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...INK); doc.text(title, x, yy + 57);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...GREY); doc.text(sub, x, yy + 68);
+    if (finger) { doc.setDrawColor(...LINE); doc.roundedRect(x + w - 58, yy, 58, 62, 4, 4); doc.setFontSize(9); doc.text('Huella', x + w - 29, yy + 72, { align: 'center' }); }
   };
   const w = (PG.R - PG.L - 30) / 2;
   y = pdfEnsure(doc, y + 8, 166);
@@ -262,7 +277,7 @@ function pdfConsentPrint(p, c) {
   y += 74;
   y = pdfPara(doc, y, 'Revocación de este consentimiento · Nombre: ________________  C.I.: __________  Firma: ______________  Fecha: __________', { size: 7.8, color: GREY, gap: 0 });
   const pages = doc.getNumberOfPages();
-  if (pages > 1) for (let i = 1; i < pages; i++) { doc.setPage(i); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...GREY); doc.text('Iniciales del paciente: __________', PG.R, PG.bottom - 2, { align: 'right' }); }
+  if (pages > 1) for (let i = 1; i < pages; i++) { doc.setPage(i); doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...GREY); doc.text('Iniciales del paciente: __________', PG.R, PG.bottom - 2, { align: 'right' }); }
   doc.setPage(pages);
   return doc;
 }
@@ -277,8 +292,97 @@ function pdfConsent(p, c) {
 }
 
 // ---------- Botones ----------
-ACTIONS.pdfNote = async el => { if (!pdfReady()) return; const n = S.hc.find(x => x.id === el.dataset.id); await pdfSave(pdfNote(n), `${n.type === 'informe' ? 'Informe médico' : 'Historia clínica'} ${pat(n.pid).name} ${n.date}.pdf`); };
+ACTIONS.pdfNote = async el => { if (!pdfReady()) return; const n = S.hc.find(x => x.id === el.dataset.id); await pdfSave(pdfNote(n), `${n.evolutionId ? clinicalNoteTitle(n) : n.type === 'informe' ? 'Informe médico' : 'Historia clínica'} ${pat(n.pid).name} ${n.date}.pdf`); };
 ACTIONS.pdfFull = async el => { if (!pdfReady()) return; const p = pat(el.dataset.id); await pdfSave(pdfFullHistory(p.id), `Historia clínica completa ${p.name}.pdf`); };
 ACTIONS.pdfExam = async el => { if (!pdfReady()) return; const e = S.exams.find(x => x.id === el.dataset.id); await pdfSave(pdfExam(e), `${e.area === 'laboratorio' ? 'Laboratorio' : 'Informe'} ${e.num} ${pat(e.pid).name}.pdf`); };
 ACTIONS.pdfConsent = async el => { if (!pdfReady()) return; const p = pat(el.dataset.id); const c = p.consents[+el.dataset.i]; await pdfSave(pdfConsent(p, c), `${c.type} ${p.name}.pdf`); };
 ACTIONS.rxPdf = async el => { if (!pdfReady()) return; const n = S.hc.find(x => x.id === el.dataset.id); await pdfSave(pdfRecipe(n), `Récipe ${pat(n.pid).name} ${n.date}.pdf`); };
+
+// Hoja de imprenta Carta. Origen arriba/izquierda; unidades pt (PNG 1275x1650, 150 dpi: px * 0.48).
+// Rectángulos de escritura: x, y, ancho, alto. Ningún elemento fijo se dibuja en el PDF de impresión.
+const FACTURA_LAYOUT = {
+  width: 612, height: 792, fontSize: 10, lineHeight: 13,
+  background: 'plantillas/factura-hoja.png',
+  fields: {
+    place: [372, 74, 82, 19], day: [460, 74, 36, 19], month: [502, 74, 35, 19], year: [544, 74, 36, 19],
+    name: [100, 146, 480, 18], address: [94, 169, 486, 19],
+    ci: [62, 191, 121, 16], phone: [226, 191, 119, 16], terms: [425, 191, 155, 16],
+    base: [482, 643, 98, 13], exempt: [482, 660, 98, 13], igtf: [482, 677, 98, 13],
+    ivaPercent: [410, 694, 15, 13], ivaBase: [482, 694, 46, 13], iva: [532, 694, 48, 13], total: [482, 711, 98, 13]
+  },
+  table: { x: 33, y: 239, bottom: 635, descriptionWidth: 383, unitX: 425, unitWidth: 60, totalX: 495, totalWidth: 85, gap: 5 }
+};
+const facturaCalibration = () => ({ x: Number(S.facturaPrint?.x) || 0, y: Number(S.facturaPrint?.y) || 0 });
+function facturaDoc() {
+  const doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'letter', compress: true });
+  const raw = doc.text.bind(doc); doc.text = (t, ...a) => raw(pdfClean(t), ...a);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(FACTURA_LAYOUT.fontSize); doc.setTextColor(0);
+  doc._preprinted = true; doc._title = 'Datos variables de factura'; return doc;
+}
+function facturaPages(inv) {
+  const doc = facturaDoc(), t = FACTURA_LAYOUT.table, pages = [[]]; let y = t.y;
+  const source = inv.items.map(x => ({ ...x }));
+  const totals = invTotals(inv);
+  if (totals.desc) source.push({ name: 'Cortesía (descuento ' + totals.disc + '%)', price: -totals.desc });
+  source.forEach(item => {
+    const lines = doc.splitTextToSize(pdfClean(item.name), t.descriptionWidth);
+    // Un concepto muy largo continúa sin repetir su monto en los fragmentos intermedios.
+    let pos = 0;
+    while (pos < lines.length) {
+      let available = Math.floor((t.bottom - y - t.gap) / FACTURA_LAYOUT.lineHeight);
+      if (available < 1) { pages.push([]); y = t.y; continue; }
+      const part = lines.slice(pos, pos + available); pos += part.length;
+      pages.at(-1).push({ item, lines: part, y, amount: pos === lines.length });
+      y += part.length * FACTURA_LAYOUT.lineHeight + t.gap;
+    }
+  });
+  return pages;
+}
+function facturaCommands(inv) {
+  const l = FACTURA_LAYOUT, f = l.fields, t = l.table, doc = facturaDoc();
+  const buyer = inv.buyer || pat(inv.pid), date = (inv.issueDate || inv.date).split('-');
+  const money = n => (n * invRate(inv)).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const pages = facturaPages(inv), totals = invTotals(inv), igtf = r2((inv.payments || []).reduce((s,p) => s + (+p.igtf || 0),0));
+  return pages.map((rows,index) => {
+    const commands = [];
+    const put = (rect, value, right = false) => {
+      const lines = doc.splitTextToSize(pdfClean(value), rect[2]);
+      if (lines.length * l.lineHeight > rect[3] + 1) throw new Error('Un dato no cabe en la hoja: ' + value + '. Ajuste el dato antes de imprimir.');
+      commands.push({ x: rect[0] + (right ? rect[2] : 0), y: rect[1] + 10, lines, right });
+    };
+    put(f.place, inv.place || 'Caracas'); put(f.day,date[2]); put(f.month,date[1]); put(f.year,date[0]);
+    put(f.name,buyer.name || ''); put(f.address,buyer.address || ''); put(f.ci,buyer.ci || ''); put(f.phone,buyer.phone || '');
+    put(f.terms,inv.paymentTerms || (inv.status === 'pagada' ? 'Contado' : 'Crédito'));
+    rows.forEach(r => {
+      commands.push({ x: t.x, y: r.y + 10, lines: r.lines });
+      if(r.amount) {
+        put([t.unitX,r.y,t.unitWidth,14],money(r.item.price / (r.item.qty || 1)),true);
+        put([t.totalX,r.y,t.totalWidth,14],money(r.item.price),true);
+      }
+    });
+    // Los totales globales aparecen solo en la última hoja para no duplicar el cobro.
+    if(index === pages.length - 1) {
+      put(f.base,money(totals.base),true); put(f.exempt,money(totals.exento),true); put(f.igtf,money(igtf),true);
+      put(f.ivaPercent,'0',true); put(f.ivaBase,money(totals.base),true); put(f.iva,money(totals.iva),true); put(f.total,money(totals.total + igtf),true);
+    }
+    return commands;
+  });
+}
+function pdfFacturaPrint(inv, test = false) {
+  const doc = facturaDoc(), offset = facturaCalibration(), dx = offset.x * 72 / 25.4, dy = offset.y * 72 / 25.4;
+  facturaCommands(inv).forEach((commands, page) => {
+    if(page) doc.addPage('letter');
+    commands.forEach(c => doc.text(c.lines,c.x+dx,c.y+dy,{ align: c.right ? 'right' : 'left', lineHeightFactor: 1.3 }));
+    if(test) {
+      doc.setDrawColor(90); doc.setLineWidth(.3);
+      const t=FACTURA_LAYOUT.table;
+      [...Object.values(FACTURA_LAYOUT.fields),[t.x,t.y,t.descriptionWidth,t.bottom-t.y],[t.unitX,t.y,t.unitWidth,t.bottom-t.y],[t.totalX,t.y,t.totalWidth,t.bottom-t.y]].forEach(([x,y,w,h]) => {
+        [[x,y,1,1],[x+w,y,-1,1],[x,y+h,1,-1],[x+w,y+h,-1,-1]].forEach(([a,b,sx,sy]) => { doc.line(a+dx,b+dy,a+dx+3*sx,b+dy); doc.line(a+dx,b+dy,a+dx,b+dy+3*sy); });
+      });
+    }
+  }); return doc;
+}
+function facturaPreview(inv) {
+  const off=facturaCalibration();
+  return facturaCommands(inv).map((commands,i) => '<div class="small muted">Hoja '+(i+1)+' · Control '+esc(inv.sheets?.[i]?.control || 'pendiente de registrar')+'</div><div style="overflow:auto"><div style="position:relative;width:612px;height:792px;background:white;color:black;flex-shrink:0"><img src="'+FACTURA_LAYOUT.background+'" alt="Modelo de hoja preimpresa" style="position:absolute;width:612px;height:792px"><svg xmlns="http://www.w3.org/2000/svg" width="612" height="792" viewBox="0 0 612 792" style="position:absolute;inset:0">'+commands.map(c => '<text x="'+(c.x+off.x*72/25.4)+'" y="'+(c.y+off.y*72/25.4)+'" font-family="Arial,Helvetica,sans-serif" font-size="10" text-anchor="'+(c.right?'end':'start')+'">'+c.lines.map((line,j)=>'<tspan x="'+(c.x+off.x*72/25.4)+'" dy="'+(j?13:0)+'">'+esc(line)+'</tspan>').join('')+'</text>').join('')+'</svg></div></div>').join('');
+}

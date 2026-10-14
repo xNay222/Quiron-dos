@@ -34,7 +34,11 @@ window.backupCard = () => `<div class="card sec"><h2>Copias de seguridad</h2>
   <div class="banner warn" style="margin-bottom:12px">En este prototipo <b>no hay respaldos automáticos</b>: los datos viven solo en este navegador. Descargue una copia con frecuencia y guárdela fuera de este equipo. En el sistema definitivo, el servidor hará copias diarias en otra ubicación y probará su restauración.</div>
   <div class="list" style="margin-bottom:12px">${(S.backups || []).filter(b => b.hash).slice(0, 6).map(b => `<div class="row"><div class="grow"><div class="t">${b.at} · ${esc(b.file)}</div><div class="s">${b.size} · huella ${b.hash.slice(0, 12)}…</div></div>${b.tested ? `<span class="pill good">Restauración probada el ${b.tested}</span>` : '<span class="pill">Sin probar</span>'}</div>`).join('') || '<div class="empty">Todavía no se ha descargado ninguna copia.</div>'}</div>
   <div class="hstack"><button class="btn primary" data-act="exportData">Descargar copia completa</button><button class="btn" data-act="restorePick" data-mode="test">Probar una copia</button><button class="btn" data-act="restorePick" data-mode="restore">Restaurar desde una copia</button></div>
-  <input type="file" id="bk-file" accept="application/json,.json" data-ch="restoreFile" hidden></div>`;
+  <input type="file" id="bk-file" accept="application/json,.json" data-ch="restoreFile" hidden>
+  ${['admin', 'almacen'].includes(role()) ? `<h3 style="margin-top:18px">Inventario del almacén</h3>
+  <div class="small muted" style="margin-bottom:8px">Carga un archivo de inventario (por ejemplo <i>almacen-2026-10-13.json</i>). Solo reemplaza productos, lotes, proveedores, movimientos, órdenes de compra, kits y tasas BCV; los pacientes, historias, usuarios y cobros no se tocan. Antes se descarga una copia completa.</div>
+  <button class="btn" data-act="invImportPick">Importar inventario del almacén</button>
+  <input type="file" id="inv-file" accept="application/json,.json" data-ch="invImportFile" hidden>` : ''}</div>`;
 const backupPayload = () => JSON.stringify({ app: 'quiron', schema: S.schema || 1, exportedAt: nowStamp(), state: S });
 ACTIONS.exportData = async () => {
   const data = backupPayload(); const hash = await sha256(data);
@@ -139,3 +143,47 @@ ACTIONS.cleanStart = async () => {
 };
 
 renderSysBar();
+
+// ---------- Importar inventario del almacén (archivo "tipo: almacen") ----------
+// Reemplaza solo las claves del almacén; deja intactos pacientes, historias, usuarios y el resto.
+const INV_KEYS = ['products', 'suppliers', 'orders', 'moves', 'rates', 'kits', 'rate', 'rateDate'];
+
+// Productos del inventario actual que no vienen en el archivo pero siguen usados en otros registros
+const invOrphans = obj => {
+  const incoming = new Set(obj.products.map(p => p.id));
+  const others = JSON.stringify(Object.fromEntries(Object.entries(S).filter(([k]) => !INV_KEYS.includes(k) && !['audit', 'backups'].includes(k))));
+  return S.products.filter(p => !incoming.has(p.id) && others.includes('"' + p.id + '"'));
+};
+ACTIONS.invImportPick = () => {
+  if (!['admin', 'almacen'].includes(role())) { toast('Solo administración o almacén pueden importar el inventario.'); return; }
+  document.getElementById('inv-file')?.click();
+};
+ACTIONS.invImportFile = async el => {
+  const f = el.files?.[0]; el.value = ''; if (!f) return;
+  let obj; try { obj = JSON.parse(await f.text()); } catch (e) { toast('El archivo no se pudo leer.'); return; }
+  if (obj?.tipo !== 'almacen' || !Array.isArray(obj.products)) { toast('El archivo no es un inventario del almacén de Quirón.'); return; }
+  const today = dAt(0), lots = obj.products.flatMap(p => p.lots || []);
+  const units = lots.reduce((n, l) => n + (+l.qty || 0), 0);
+  const expired = lots.filter(l => l.exp && l.exp < today).reduce((n, l) => n + (+l.qty || 0), 0);
+  const noLoc = obj.products.filter(p => !p.loc?.sector).length;
+  UI.invImport = obj;
+  const orphans = invOrphans(obj);
+  openSheet('Importar inventario del almacén',
+    `<div class="banner warn">Se reemplazará el inventario actual (${S.products.length} productos) por el del archivo. Pacientes, historias, usuarios y cobros no cambian. Antes se descargará una copia completa.</div>
+    <div class="list"><div class="row"><div class="grow"><div class="t">${esc(f.name)}</div><div class="s">Exportado ${esc(obj.exportado || '—')}</div></div></div>
+    <div class="row"><div class="grow"><div class="t">${obj.products.length} productos · ${units.toLocaleString('es-VE')} unidades</div><div class="s">${expired.toLocaleString('es-VE')} unidades vencidas · ${noLoc} sin ubicar · ${(obj.suppliers || []).length} proveedores · ${(obj.moves || []).length} movimientos</div></div></div></div>
+    ${orphans.length ? `<div class="banner" style="margin-top:10px">${orphans.length} producto(s) del inventario actual no vienen en el archivo pero se usan en solicitudes, indicaciones o consultas ya registradas (${esc(orphans.slice(0, 4).map(p => p.name).join(', '))}${orphans.length > 4 ? '…' : ''}). Se conservarán como <b>retirado · sin existencias</b> para no romper esos registros.</div>` : ''}`,
+    '<button class="btn" data-act="close">Cancelar</button><button class="btn danger" data-act="invImportDo">Importar</button>');
+};
+ACTIONS.invImportDo = async () => {
+  const obj = UI.invImport; if (!obj) return;
+  if (!(await saveFile(`Antes de importar inventario ${dAt(0)}.json`, backupPayload()))) { toast('No se pudo descargar la copia previa; no se importó nada.'); return; }
+  const orphans = invOrphans(obj).map(p => ({ ...p, name: /retirado/.test(p.name) ? p.name : p.name + ' (retirado)', lots: [], min: 0, loc: null, retired: true }));
+  INV_KEYS.forEach(k => { if (obj[k] !== undefined) S[k] = obj[k]; });
+  S.products = S.products.concat(orphans);
+  migrate(); const ok = save();
+  let verified = false; try { const back = JSON.parse(localStorage.getItem(KEY)); verified = (back.products || []).length === S.products.length && (back.patients || []).length === S.patients.length; } catch (e) {}
+  log('Inventario del almacén importado', `${obj.products.length} productos · ${obj.exportado || ''}`); save();
+  UI.invImport = null; closeSheet(); render();
+  toast(ok && verified ? `Inventario importado: ${obj.products.length} productos. Pacientes sin cambios.` : 'El inventario se cargó, pero no se pudo verificar el guardado.');
+};

@@ -167,13 +167,13 @@ function seed() {
   const BP = (id, num, pid, doc, d, pk, status, more = {}) => ({ id, num, pid, doc, date: dAt(d), valid: 15, status, inv: null, ...budgetFromPkg(packages.find(p => p.id === pk)), ...more });
   const budget0 = BP('b0', 'P-0012', 'pt2', 'm1', -3, 'pk2', 'abierto', { proc: 'Herniorrafia inguinal derecha', adj: 10, disc: 5 });
   const budget1 = BP('b1', 'P-0011', 'pt3', 'm1', -2, 'pk1', 'enviado', { sentAt: dAt(-1) + ' 10:20', sentBy: 'Administrador' });
-  const budget2 = BP('b2', 'P-0010', 'pt4', 'm1', -6, 'pk3', 'aceptado', { sentAt: dAt(-4) + ' 09:00', acceptedAt: dAt(-3) + ' 11:40' });
+  const budget2 = BP('b2', 'P-0010', 'pt4', 'm1', -6, 'pk3', 'enviado', { sentAt: dAt(-4) + ' 09:00', acceptedAt: dAt(-3) + ' 11:40' });
   return {
     rate: 866.56, rateDate: '2026-10-02', rateSource: 'BCV vía DolarAPI', ivaRate: 16, igtfRate: 3, invSeq: 42, cobSeq: 1, ocSeq: 8, budSeq: 13, packages,
     clinic: { name: 'Quirón Especialidades Médicas', rif: 'J-50213973', address: 'Caracas, Venezuela', phone: '0212-000-0000', email: 'administracion@quiron.com', note: 'Gracias por confiar en Clínica Quirón.' },
     products, services, patients, appts, suppliers, orders, moves, nurses, duty, hours, doctors: [...REAL_DOCS, ...DEMO_DOCS].map(d => ({ ...d })), nurseStaff: REAL_NURSES.map(n => ({ ...n, days: [...n.days] })),
     invoices: [inv0], budgets: [budget0, budget1, budget2], ...(typeof seedHosp === 'function' ? seedHosp(products, moves) : { admissions: [], medOrders: [], mar: [], hosSeq: 1, moSeq: 1 }),
-    ...(c => ({ hc: c.notes.concat(typeof hospNotes !== 'undefined' ? hospNotes.map(n => ({ ...n, date: dAt(-1), signedAt: dAt(-1) + ' 19:10' })) : []), exams: c.exams, exSeq: c.exSeq, labCatalog: c.labCatalog }))(typeof seedClinical === 'function' ? seedClinical() : { notes: [], exams: [], exSeq: 1 }),
+    ...(c => ({ hc: c.notes.concat(typeof hospNotes !== 'undefined' ? hospNotes.map(n => ({ ...n, date: dAt(-1), signedAt: dAt(-1) + ' 19:10' })) : []), exams: c.exams, exSeq: c.exSeq, labCatalog: c.labCatalog, labCatalogMeta: c.labCatalogMeta, clinicLab2026: c.clinicLab2026 }))(typeof seedClinical === 'function' ? seedClinical() : { notes: [], exams: [], exSeq: 1 }),
     session: { role: 'admin', doc: null },
     records: (typeof seedRecords === 'function' ? seedRecords() : []), ledger: (typeof seedLedger === 'function' ? seedLedger() : []), recurring: (typeof seedRecurring === 'function' ? seedRecurring() : []),
     cash: { open: { at: dAt(0) + ' 07:45', by: 'Recepción', floatUSD: 100 }, moves: [{ id: uid('c'), at: dAt(0) + ' 08:40', kind: 'cobro', method: 'zelle', amount: 51.5, cur: 'USD', ref: 'F-00041' }], closures: [
@@ -219,7 +219,16 @@ function save() {
   try {
     const cur = +(localStorage.getItem(REV_KEY) || 0);
     if (cur > STORE.rev) { STORE.stale = true; STORE.error = 'Los datos se modificaron en otra pestaña o ventana. Para no sobrescribir esos cambios, este no se guardó. Recargue la página.'; sysNotice(); return false; }
-    localStorage.setItem(KEY, JSON.stringify(S)); localStorage.setItem(REV_KEY, String(cur + 1)); STORE.rev = cur + 1;
+    // Datos y revisión forman una misma operación. Si falla la revisión, restaure el JSON anterior.
+    const previousRaw = localStorage.getItem(KEY);
+    localStorage.setItem(KEY, JSON.stringify(S));
+    try { localStorage.setItem(REV_KEY, String(cur + 1)); }
+    catch (revisionError) {
+      try { if (previousRaw === null) localStorage.removeItem(KEY); else localStorage.setItem(KEY, previousRaw); }
+      catch (_) { STORE.blocked = true; } // no siga escribiendo si el almacenamiento impide restaurar
+      throw revisionError;
+    }
+    STORE.rev = cur + 1;
     if (STORE.error && !STORE.stale) { STORE.error = null; sysNotice(); }
     return true;
   } catch (e) {
@@ -261,10 +270,10 @@ const actor = () => { const s = S.session || {}; return s.name ? s.name : s.role
 function log(action, ref) { S.audit.unshift({ at: nowStamp(), user: actor(), action, ref }); }
 
 // ---------- Inventario (siempre por lote) ----------
-const stock = p => p.lots.reduce((a, l) => a + l.qty, 0);
-const fefo = p => p.lots.filter(l => l.qty > 0 && daysTo(l.exp) >= 0).sort((a, b) => daysTo(a.exp) - daysTo(b.exp));
+const stock = p => (p?.lots || []).reduce((a, l) => a + l.qty, 0);
+const fefo = p => (p?.lots || []).filter(l => l.qty > 0 && daysTo(l.exp) >= 0).sort((a, b) => daysTo(a.exp) - daysTo(b.exp));
 const usable = p => fefo(p).reduce((a, l) => a + l.qty, 0);
-const avgCost = p => { const q = stock(p); return q ? p.lots.reduce((a, l) => a + l.qty * l.cost, 0) / q : (p.lots.at(-1)?.cost || 0); };
+const avgCost = p => { const q = stock(p); return q ? (p?.lots || []).reduce((a, l) => a + l.qty * l.cost, 0) / q : (p?.lots?.at(-1)?.cost || 0); };
 const invValue = () => S.products.reduce((a, p) => a + p.lots.reduce((b, l) => b + l.qty * l.cost, 0), 0);
 function stockState(p) {
   const q = usable(p);
@@ -377,15 +386,16 @@ const budgetItems = b => b.items || (b.v2 ? pkgItems(b) : buildItems(b.serviceId
 const budgetTotals = b => totalsOf(budgetItems(b), b.disc);
 
 // ---------- Atención → factura (todo en una operación) ----------
-function createAttention({ pid, doc, serviceIds, extras = [], adj = {}, qty = {}, disc = 0, proc = '', apptId, budgetId, fiscal = false }) {
+function createAttention({ pid, doc, serviceIds, extras = [], adj = {}, qty = {}, disc = 0, proc = '', apptId, budgetId, fiscal = false, sheets, fiscalDetails = {} }) {
   if (budgetId && byId(S.budgets, budgetId)?.status === 'facturado') return { ok: false, msg: 'Este presupuesto ya tiene un cobro registrado.' };
   const lines = bundleLines(serviceIds, extras, qty);
   const missing = checkStock(lines);
   if (missing.length) return { ok: false, missing };
-  const n = chargeNumber(fiscal); const num = n.num;   // la factura fiscal es opcional
+  if (fiscal) { const error = facturaSheetError(sheets); if (error) return { ok: false, msg: error }; }
+  const n = chargeNumber(fiscal, sheets); const num = n.num;   // la factura fiscal es opcional
   let cost = 0;
   lines.forEach(l => { cost += takeStock(l.pid, l.qty, 'consumo', num).cost; });
-  const inv = { id: uid('f'), ...n, pid, doc, date: dAt(0), disc: +disc || 0, proc, items: buildItems(serviceIds, extras, adj, qty), cost: r2(cost), payments: [], status: 'pendiente', budget: budgetId || null, ...(fiscal ? { rate: S.rate } : {}) };
+  const inv = { id: uid('f'), ...n, pid, doc, date: dAt(0), disc: +disc || 0, proc, items: budgetId ? budgetItems(byId(S.budgets, budgetId)).map(x => ({ ...x })) : buildItems(serviceIds, extras, adj, qty), cost: r2(cost), payments: [], status: 'pendiente', budget: budgetId || null, ...(fiscal ? { rate: S.rate, issueDate: dAt(0), ...fiscalDetails } : {}) };
   S.invoices.unshift(inv);
   if (apptId) { const a = byId(S.appts, apptId); if (a) { a.status = 'atendida'; a.inv = inv.id; } }
   if (budgetId) { const b = byId(S.budgets, budgetId); if (b) { b.status = 'facturado'; b.inv = inv.id; } }
@@ -408,7 +418,7 @@ const invDue = inv => r2(invTotals(inv).total - invPaid(inv));
 function pay(invId, { method, amount, igtf: withIgtf = false }) {
   const inv = byId(S.invoices, invId); const m = metodo(method); const rate = invRate(inv);
   const usd = m.cur === 'USD' ? r2(amount) : r2(amount / rate);
-  if (usd <= 0) return { ok: false, msg: 'Escriba un monto mayor que cero.' };
+  if (!Number.isFinite(usd) || usd <= 0) return { ok: false, msg: 'Escriba un monto mayor que cero.' };
   if (usd - invDue(inv) > 0.01) return { ok: false, msg: `El monto supera el saldo pendiente (${bsOf(invDue(inv), inv)}).` };
   const igtf = withIgtf ? r2(usd * S.igtfRate / 100) : 0;
   inv.payments.push({ id: uid('pg'), method, amount: r2(amount), cur: m.cur, rate, usd, igtf, at: nowStamp() });
@@ -447,8 +457,27 @@ function migrate() {
   fix(S.clinic && /^J-0+/.test(S.clinic.rif || ''), () => { S.clinic.rif = 'J-50213973'; S.clinic.name = 'Quirón Especialidades Médicas'; });
   fix(!S.packages && typeof seedPackages === 'function', () => { S.packages = seedPackages(); });
   fix(S.services?.some(x => x.iva), () => S.services.forEach(x => { x.iva = false; }));
+  fix(!S.facturaPrint, () => { S.facturaPrint = { x: 0, y: 0 }; });
+  fix(!S.facturaVoids, () => { S.facturaVoids = []; });
   fix(!S.dues, () => { S.dues = []; });
+  fix(!S.clinicLab2026, () => importClinicLab2026(S));
+  fix(!S.imageStudiesV1, () => {
+    (S.exams || []).filter(e => e.area === 'imagen').forEach(e => {
+      if (!e.imageStudy) e.imageStudy = { type: null, region: '', date: e.date, requestingDoc: e.doc || null, legacy: true };
+    }); S.imageStudiesV1 = true;
+  });
+  fix(!S.budgetPaymentV2, () => {
+    (S.budgets || []).forEach(b => {
+      const invoice = (S.invoices || []).find(i => i.id === b.inv || i.budget === b.id);
+      if (invoice) { b.inv = invoice.id; b.status = 'facturado'; return; }
+      if (['aceptado', 'aprobado', 'aprobado_paciente', 'aprobado_por_paciente', 'aprobado_por_el_paciente'].includes(b.status) || (b.status === 'abierto' && (b.patientApprovedAt || b.approvedByPatient))) {
+        b.previousStatus = b.status; b.status = 'enviado';
+        b.sentAt = b.sentAt || b.acceptedAt || b.patientApprovedAt || b.date;
+      }
+    }); S.budgetPaymentV2 = true;
+  });
   fix(!S.kits, () => { S.kits = []; });   // kits de cirugía
+  fix(!S.evolutions, () => { S.evolutions = []; });   // borradores y evoluciones guiadas
   fix(!S.indications, () => { S.indications = []; });   // indicaciones médicas de medicación
   // Personal real: médicos (los de ejemplo quedan inactivos) y enfermeras con sus días de guardia
   fix(!S.doctors, () => { S.doctors = [...REAL_DOCS, ...DEMO_DOCS].map(d => ({ ...d })); });
@@ -471,6 +500,7 @@ function migrate() {
     auto.forEach(g => S.dues.push({ id: uid('du'), rec: g.rec, date: g.date, type: g.type, cat: g.cat, concept: g.concept, amount: g.amount, cur: g.cur, method: g.method, status: 'pendiente' }));
     S.ledger = (S.ledger || []).filter(g => !auto.includes(g)); S.schema = 2;
   });
+  if (typeof CONSULT !== 'undefined' && CONSULT.migrateState(S)) ch = true;
   if (ch) save();
 }
 migrate();

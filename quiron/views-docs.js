@@ -7,7 +7,7 @@ function docModel(kind, id) {
     return { kind, title: 'PRESUPUESTO', num: b.num, date: b.date, until, p: pat(b.pid), doc: med(b.doc), proc: b.proc, items: budgetItems(b), t: budgetTotals(b), payments: [], money: n => fmt(n) };
   }
   const i = byId(S.invoices, id);
-  return { kind, title: isFiscal(i) ? 'FACTURA' : i.status === 'pagada' ? 'RECIBO DE PAGO' : 'NOTA DE COBRO', fiscal: isFiscal(i), num: i.num, control: i.control, date: i.date, p: pat(i.pid), doc: med(i.doc), proc: i.proc, items: i.items, t: invTotals(i), payments: i.payments,
+  return { kind, title: isFiscal(i) ? 'FACTURA' : i.status === 'pagada' ? 'RECIBO DE PAGO' : 'NOTA DE COBRO', invoice: i, fiscal: isFiscal(i), num: i.num, control: i.sheets?.map(h => h.control).join(', ') || i.control, date: i.issueDate || i.date, p: i.buyer ? { ...pat(i.pid), ...i.buyer } : pat(i.pid), doc: med(i.doc), proc: i.proc, items: i.items, t: invTotals(i), payments: i.payments,
     rate: invRate(i), fixed: !!i.rate, money: n => fmt(n * invRate(i), 'VES') };   // cuentas y facturas en Bs
 }
 const pdfMoney = n => fmt(n).replace('$', 'USD ');
@@ -41,36 +41,36 @@ function docHTML(m) {
 
 ACTIONS.showDoc = el => {
   const m = docModel(el.dataset.kind, el.dataset.id); UI.docShown = { kind: el.dataset.kind, id: el.dataset.id };
-  openSheet(`${m.kind === 'budget' ? 'Presupuesto' : m.fiscal ? 'Factura' : 'Recibo'} ${m.num}`, docHTML(m),
+  if (m.fiscal) {
+    if (!pdfReady()) return;
+    if (!m.invoice.sheets || m.invoice.sheets.length !== facturaPages(m.invoice).length) return openFacturaIssue({ id: m.invoice.id });
+    try { openSheet('Factura · revisión sobre hoja preimpresa', facturaPreview(m.invoice) + facturaVoidHistory(m.invoice.id), '<button class="btn" data-act="facturaReplace" data-id="'+m.invoice.id+'">Hoja dañada / anulada · reemplazar</button><button class="btn" data-act="downloadDoc">Descargar copia digital</button><button class="btn primary" data-act="facturaPrint">Imprimir sobre hoja preimpresa</button>', { wide: true }); } catch(e) { toast(e.message); }
+    return;
+  }
+  openSheet(`${m.kind === 'budget' ? 'Presupuesto' : m.fiscal ? 'Factura' : 'Recibo'} ${m.num}`, patientBand(m.p.id) + docHTML(m),
     `<span class="note" id="doc-msg">${m.kind === 'budget' ? 'Los aumentos por servicio no se muestran; la cortesía sí.' : ''}</span><button class="btn" data-act="close">Cerrar</button><button class="btn primary" data-act="downloadDoc">Descargar PDF</button>`, { wide: true });
 };
 ACTIONS.downloadDoc = async () => {
   const msg = document.getElementById('doc-msg'); const m = docModel(UI.docShown.kind, UI.docShown.id);
   if (!pdfReady()) return;
-  await pdfSave(pdfBilling(m), `${m.kind === 'budget' ? 'Presupuesto' : m.fiscal ? 'Factura' : 'Recibo'} ${m.num} - ${m.p.name}.pdf`);
+  await pdfSave(pdfBilling(m), `${m.kind === 'budget' ? 'Presupuesto' : m.fiscal ? 'Copia digital de factura' : 'Recibo'} ${m.num} - ${m.p.name}.pdf`);
 };
 
 // ---------- Presupuestos ----------
-// Flujo: se elabora → se descarga y se entrega al paciente → el paciente lo aprueba → se envía a Contabilidad
-// → Contabilidad aprueba o descarta → Contabilidad registra el cobro (la factura fiscal es opcional).
-// Vocabulario formal: en presupuestos quirúrgicos se usa "Cirugía aprobada" / "Cirugía descartada".
-const isSurgBudget = b => b.v2 ? b.kind === 'quirurgico' : b.serviceIds.includes('v5') || /cirug|ectom|rrafia|plastia|scopia/i.test(b.proc || '');
-const budWords = b => isSurgBudget(b)
-  ? { ok: 'Cirugía aprobada', no: 'Cirugía descartada', okSt: 'Cirugía aprobada · pendiente de cobro', noSt: 'Cirugía descartada' }
-  : { ok: 'Presupuesto aprobado', no: 'Presupuesto descartado', okSt: 'Aprobado · pendiente de cobro', noSt: 'Descartado' };
-const BUD_ST = {
-  abierto: ['Pendiente de aprobación del paciente', 'info'], enviado: ['En revisión por Contabilidad', 'warn'], aceptado: ['Aprobado · pendiente de cobro', 'info'],
-  facturado: ['Cobro registrado', 'good'], rechazado: ['Descartado', ''], vencido: ['Vencido', ''],
+// Guardar → enviar a Contabilidad → registrar dinero recibido o rechazo.
+const isSurgBudget = b => b.v2 ? b.kind === 'quirurgico' : (b.serviceIds || []).includes('v5') || /cirug|ectom|rrafia|plastia|scopia/i.test(b.proc || '');
+const budWords = b => ({ ok: 'Pago recibido', no: 'No pagado / rechazado', okSt: 'Enviado a Contabilidad', noSt: 'No pagado / rechazado' });
+const BUD_ST = { abierto: ['Guardado · por enviar', 'info'], enviado: ['Enviado a Contabilidad', 'warn'], aceptado: ['Enviado a Contabilidad', 'warn'], facturado: ['Cuenta registrada · sin pago', 'warn'], pagado: ['Pago recibido', 'good'], parcial: ['Pago parcial recibido', 'info'], rechazado: ['No pagado / rechazado', ''], vencido: ['Vencido', ''] };
+const budStatus = b => {
+  if (b.status === 'facturado') { const inv = byId(S.invoices, b.inv); return inv && invPaid(inv) > 0 ? (invDue(inv) <= 0.01 ? 'pagado' : 'parcial') : 'facturado'; }
+  if (b.status === 'aceptado') return 'enviado';
+  return b.status === 'abierto' && daysTo(iso(new Date(new Date(b.date + 'T00:00').getTime() + b.valid * DAY))) < 0 ? 'vencido' : b.status;
 };
-const budStatus = b => b.status === 'abierto' && daysTo(iso(new Date(new Date(b.date + 'T00:00').getTime() + b.valid * DAY))) < 0 ? 'vencido' : b.status;
-window.budPill = b => { const st = budStatus(b); const s = BUD_ST[st]; const w = budWords(b);
-  const label = st === 'aceptado' ? w.okSt : st === 'rechazado' ? w.noSt : s[0]; return `<span class="pill ${s[1]}">${label}</span>`; };
-// Etapas del presupuesto
+window.budPill = b => { const s = BUD_ST[budStatus(b)] || [b.status, '']; return `<span class="pill ${s[1]}">${s[0]}</span>`; };
 function budSteps(b) {
-  const st = budStatus(b); if (st === 'rechazado' || st === 'vencido') return '';
-  const order = ['abierto', 'enviado', 'aceptado', 'facturado']; const at = order.indexOf(st);
-  const names = ['Aprobación del paciente', 'Revisión de Contabilidad', 'Registro del cobro', 'Cobro registrado'];
-  return `<div class="hstack small" style="gap:6px;flex-wrap:wrap">${names.map((n, i) => `<span class="pill ${i < at ? 'good' : i === at ? 'warn' : ''}">${i < at ? '✓ ' : `${i + 1}. `}${n}</span>`).join('')}</div>`;
+  const st = budStatus(b); if (['rechazado', 'vencido'].includes(st)) return '';
+  const at = st === 'abierto' ? 0 : st === 'enviado' || st === 'facturado' ? 1 : 2;
+  return `<div class="hstack small">${['Guardado', 'Contabilidad', st === 'parcial' ? 'Pago parcial recibido' : 'Pago recibido'].map((n, i) => `<span class="pill ${i < at || (i === 2 && at === 2) ? 'good' : i === at ? 'warn' : ''}">${i + 1}. ${n}</span>`).join('')}</div>`;
 }
 window.budSteps = budSteps;
 
@@ -78,21 +78,11 @@ ACTIONS.openBudget = el => {
   const b = byId(S.budgets, el.dataset.id); const t = budgetTotals(b); const items = budgetItems(b); const st = budStatus(b); const w = budWords(b);
   const missing = b.v2 ? [] : checkStock(bundleLines(b.serviceIds, b.extras, b.qty || {}));
   const acct = canSee('contabilidad'); const surg = isSurgBudget(b);
-  const tip = {
-    abierto: 'Descargue el PDF y entréguelo al paciente. Una vez aprobado por el paciente, envíelo a Contabilidad.',
-    enviado: acct ? `El paciente aprobó el presupuesto. Indique si ${surg ? 'la cirugía queda aprobada o descartada' : 'el presupuesto queda aprobado o descartado'}.` : 'El paciente aprobó el presupuesto. Pendiente de revisión por Contabilidad.',
-    aceptado: acct ? `${w.ok} por Contabilidad. Registre el cobro; la factura fiscal es opcional y puede emitirse después.` : `${w.ok} por Contabilidad. Contabilidad registrará el cobro.`,
-    facturado: 'El cobro ya está registrado.', rechazado: `${w.noSt}.${b.reason ? ' Motivo: ' + b.reason : ''}`, vencido: 'El período de validez finalizó. Si el paciente desea continuar, elabore un presupuesto nuevo con los precios vigentes.',
-  }[st];
+  const tip = { abierto: 'Puede descargar el presupuesto y enviarlo directamente a Contabilidad.', enviado: 'Contabilidad debe registrar el dinero recibido o indicar que no se pagó / fue rechazado.', facturado: 'La cuenta existe, pero todavía no tiene pagos registrados.', parcial: 'Se recibió un abono. El saldo restante está pendiente en Contabilidad.', pagado: 'El pago está registrado en Contabilidad.', rechazado: 'No pagado / rechazado.' + (b.reason ? ' Motivo: ' + b.reason : ''), vencido: 'El período de validez finalizó. Elabore un presupuesto nuevo con los precios vigentes.' }[st];
   const dl = `<button class="btn" data-act="budDownload" data-id="${b.id}">${icon('descargar')}Descargar PDF</button>`;
-  const no = `<button class="btn danger" data-act="budReject" data-id="${b.id}">${w.no}</button>`;
-  const btns = {
-    abierto: `${no}${dl}<button class="btn primary" data-act="budSend" data-id="${b.id}">Aprobado por el paciente · Enviar a Contabilidad</button>`,
-    enviado: acct ? `${dl}${no}<button class="btn primary" data-act="budAccept" data-id="${b.id}">${w.ok}</button>` : dl,
-    aceptado: acct ? `${dl}<button class="btn" data-act="convertBudget" data-id="${b.id}" data-fiscal="1" ${missing.length ? 'disabled' : ''}>Cobrar con factura fiscal</button><button class="btn primary" data-act="convertBudget" data-id="${b.id}" ${missing.length ? 'disabled' : ''}>Registrar cobro</button>` : dl,
-    facturado: `${dl}${b.inv && canSee('contabilidad') ? `<button class="btn primary" data-act="openInvoice" data-id="${b.inv}">Ver cobro</button>` : ''}`,
-  }[st] || dl;
-  openSheet(`Presupuesto ${b.num}`, `<div class="between"><div><b>${esc(pat(b.pid).name)}</b><div class="small muted">${fdate(b.date)} · válido por ${b.valid} días${b.proc ? ' · ' + esc(b.proc) : ''}</div></div>${budPill(b)}</div>
+  const no = `<button class="btn danger" data-act="budReject" data-id="${b.id}">No pagado / rechazado</button>`;
+  const btns = st === 'abierto' ? `${dl}<button class="btn primary" data-act="budSend" data-id="${b.id}">Enviar a contabilidad</button>` : st === 'enviado' && acct ? `${dl}${no}<button class="btn primary" data-act="budAccept" data-id="${b.id}">Pago recibido</button>` : ['facturado', 'parcial', 'pagado'].includes(st) && acct && b.inv ? `${dl}<button class="btn primary" data-act="openInvoice" data-id="${b.inv}">Ver cuenta y pagos</button>` : dl;
+  openSheet(`Presupuesto ${b.num}`, `${patientBand(b.pid)}<div class="between"><div><b>${esc(pat(b.pid).name)}</b><div class="small muted">${fdate(b.date)} · válido por ${b.valid} días${b.proc ? ' · ' + esc(b.proc) : ''}</div></div>${budPill(b)}</div>
     ${budSteps(b)}
     <div class="banner">${esc(tip)}</div>
     <div class="tablewrap"><table><thead><tr><th>Concepto</th><th class="num">Precio de lista</th><th class="num">Aumento</th><th class="num">En documento</th></tr></thead><tbody>
@@ -109,24 +99,30 @@ ACTIONS.budDownload = async el => {
 };
 const budRefresh = b => { save(); closeSheet(); render(); };
 ACTIONS.budSend = el => {
-  const b = byId(S.budgets, el.dataset.id); if (b.status !== 'abierto') { closeSheet(); render(); return; } b.status = 'enviado'; b.sentAt = nowStamp(); b.sentBy = actor();
-  log('Presupuesto enviado a Contabilidad', `${b.num} · aprobado por el paciente`); budRefresh(b); toast(`${b.num} enviado a Contabilidad`);
+  if (!canSee('atencion')) return;
+  const b = byId(S.budgets, el.dataset.id); if (!b || budStatus(b) !== 'abierto') { closeSheet(); render(); return; } b.status = 'enviado'; b.sentAt = nowStamp(); b.sentBy = actor();
+  log('Presupuesto enviado a Contabilidad', b.num); budRefresh(b); toast(`${b.num} enviado a Contabilidad`);
 };
-ACTIONS.budAccept = el => {
-  const b = byId(S.budgets, el.dataset.id); if (b.status !== 'enviado') { closeSheet(); render(); return; } const w = budWords(b); b.status = 'aceptado'; b.acceptedAt = nowStamp(); b.acceptedBy = actor();
-  log(w.ok, b.num); save(); toast(`${b.num}: ${w.ok.toLowerCase()}. Puede registrar el cobro.`); ACTIONS.openBudget({ dataset: { id: b.id } }); render();
-};
-ACTIONS.budReject = el => { const w = budWords(byId(S.budgets, el.dataset.id));
-  openSheet(w.no, `<div class="field"><label for="bud-r">Motivo (opcional)</label><input class="input" id="bud-r" placeholder="Ej. el paciente no aceptó el monto; la intervención se reprogramará"></div>`,
+ACTIONS.budAccept = el => ACTIONS.convertBudget(el);
+ACTIONS.budReject = el => { if (!canSee('contabilidad') || !['enviado', 'aceptado'].includes(byId(S.budgets, el.dataset.id)?.status)) return; const w = budWords(byId(S.budgets, el.dataset.id));
+  openSheet(w.no, `${patientBand(byId(S.budgets, el.dataset.id)?.pid)}<div class="field"><label for="bud-r">Motivo (opcional)</label><input class="input" id="bud-r" placeholder="Ej. el paciente no aceptó el monto; la intervención se reprogramará"></div>`,
   `<button class="btn" data-act="close">Cancelar</button><button class="btn danger" data-act="budRejectSave" data-id="${el.dataset.id}">Confirmar</button>`); };
 ACTIONS.budRejectSave = el => {
+  if (!canSee('contabilidad') || !['enviado', 'aceptado'].includes(byId(S.budgets, el.dataset.id)?.status)) return;
   const b = byId(S.budgets, el.dataset.id); const w = budWords(b); b.status = 'rechazado'; b.reason = val('bud-r').trim();
   log(w.noSt, `${b.num}${b.reason ? ' · ' + b.reason : ''}`); budRefresh(b); toast(`${b.num}: ${w.noSt.toLowerCase()}`);
 };
 ACTIONS.convertBudget = el => {
-  const b = byId(S.budgets, el.dataset.id); const fiscal = el.dataset.fiscal === '1';
-  const res = b.v2 ? chargeFromBudget(b, fiscal)
-    : createAttention({ pid: b.pid, doc: b.doc, serviceIds: b.serviceIds, extras: b.extras, adj: b.adj, qty: b.qty || {}, disc: b.disc, proc: b.proc, budgetId: b.id, fiscal });
-  if (!res.ok) { toast(res.msg || 'Existencia insuficiente'); closeSheet(); render(); return; }
-  toast(`${fiscal ? 'Factura' : 'Cuenta'} ${res.inv.num} registrada desde ${b.num}`); openPay(res.inv.id);
+  if (!canSee('contabilidad')) return;
+  const b = byId(S.budgets, el.dataset.id); if (!b || !['enviado', 'aceptado'].includes(b.status)) return;
+  UI.pay = { budget: b.id, method: 'usd', igtf: false, draft: { pid: b.pid, items: budgetItems(b), disc: b.disc, payments: [], fiscal: false, status: 'pendiente' } };
+  openSheet(`Pago recibido · ${b.num}`, payBody(), '<span class="note" id="pay-msg"></span><button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="savePay">Confirmar pago recibido</button>');
+};
+
+ACTIONS.facturaPrint = async () => {
+  if(!pdfReady() || !canSee('contabilidad')) return;
+  const inv=byId(S.invoices,UI.docShown.id);
+  if(!inv.sheets || inv.sheets.length !== facturaPages(inv).length) return openFacturaIssue({id:inv.id});
+  const error=facturaSheetError(inv.sheets,inv.id); if(error) return toast(error);
+  try { await pdfSave(pdfFacturaPrint(inv),'Impresión en hoja preimpresa '+inv.num+'.pdf'); } catch(e) {toast(e.message);}
 };

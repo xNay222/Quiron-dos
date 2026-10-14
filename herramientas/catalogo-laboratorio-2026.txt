@@ -1,0 +1,162 @@
+# Catálogo del laboratorio de la clínica Quirón (enero 2026). Solo nombres: los precios NO se cargan.
+# Formato: PERFIL | nombre | pruebas incluidas   ·   PRUEBA | nombre
+
+PERFIL | Perfil 20 | Hematología completa, glicemia basal, urea, creatinina, ácido úrico, colesterol total, triglicéridos, transaminasas (AST y ALT), proteínas totales y fraccionadas, bilirrubina total y fraccionada, VDRL, orina y heces
+PERFIL | Perfil 21 | Hematología completa, glicemia basal, urea, creatinina, ácido úrico, colesterol total, triglicéridos, transaminasas (AST y ALT), proteínas totales y fraccionadas, bilirrubina total y fraccionada, perfil lipídico, orina y heces
+PERFIL | Perfil hepático | Hematología completa, transaminasas (AST y ALT), proteínas totales y fraccionadas, bilirrubina total y fraccionada, GGT, fosfatasa alcalina, LDH
+PERFIL | Perfil lipídico | Colesterol total, triglicéridos, HDL-colesterol, LDL-colesterol y VLDL-colesterol
+PERFIL | Perfil preoperatorio | Hematología completa, glicemia, urea, creatinina, PT, PTT, HIV, VDRL cualitativo y orina
+PERFIL | Perfil prenatal básico 1 | Hematología completa, grupo sanguíneo, glicemia basal, urea, creatinina, VDRL cualitativo, HIV, orina y heces
+PERFIL | Perfil prenatal 2 | Hematología completa, glicemia basal, PT, PTT, VDRL cualitativo, HIV y orina
+PERFIL | Perfil hormonal femenino | Progesterona, prolactina, LH, FSH y estradiol
+PERFIL | Perfil hormonal masculino | Testosterona total y libre, LH, FSH y prolactina
+PERFIL | Perfil diarreico | Heces, leucograma fecal, adenovirus y rotavirus
+PERFIL | Perfil TORCH I (IgG/IgM) | Toxoplasma, rubéola y citomegalovirus
+PERFIL | Perfil TORCH II (IgG/IgM) | Toxoplasma, rubéola, citomegalovirus y herpes
+PERFIL | Perfil tiroideo libre | TSH, T4 libre, T3 libre
+PRUEBA | Hematología completa
+PRUEBA | VSG
+PRUEBA | Grupo sanguíneo (tipiaje)
+PRUEBA | Frotis de sangre periférica
+PRUEBA | Reticulocitos
+PRUEBA | Glicemia basal
+PRUEBA | Glicemia posprandial
+PRUEBA | Urea
+PRUEBA | Creatinina
+PRUEBA | Ácido úrico
+PRUEBA | Colesterol total
+PRUEBA | Triglicéridos
+PRUEBA | AST/TGO
+PRUEBA | ALT/TGP
+PRUEBA | HDL-colesterol
+PRUEBA | Bilirrubina total
+PRUEBA | Bilirrubina directa
+PRUEBA | Proteínas totales
+PRUEBA | Albúmina
+PRUEBA | Deshidrogenasa láctica (LDH)
+PRUEBA | Fosfatasa alcalina (ALP)
+PRUEBA | Calcio sérico/orina
+PRUEBA | Electrolitos séricos (sodio, potasio y cloro)
+PRUEBA | Fósforo sérico/orina
+PRUEBA | Magnesio
+PRUEBA | Amilasa sérica
+PRUEBA | Lipasa sérica
+PRUEBA | Gammaglutamil transpeptidasa (GGT)
+PRUEBA | PCR cuantitativa (proteína C reactiva)
+PRUEBA | Procalcitonina
+PRUEBA | CK total
+PRUEBA | CK-MB
+PRUEBA | Troponina I cualitativa
+PRUEBA | ASTO cuantitativo (antiestreptolisina O)
+PRUEBA | RA test (factor reumatoideo)
+PRUEBA | HCG cualitativa (prueba de embarazo en sangre/orina)
+PRUEBA | HCG cuantitativa (prueba de embarazo)
+PRUEBA | HIV prueba rápida
+PRUEBA | HIV por ELISA
+PRUEBA | Dengue (IgG/IgM, antígeno NS1)
+PRUEBA | Hepatitis A (IgM)
+PRUEBA | Hepatitis A (IgG)
+PRUEBA | Hepatitis B (core total)
+PRUEBA | Hepatitis B (antígeno de superficie)
+PRUEBA | Hepatitis C
+PRUEBA | Mycoplasma pneumoniae (IgG/IgM)
+PRUEBA | Toxoplasma (IgM)
+PRUEBA | Toxoplasma (IgG)
+PRUEBA | VDRL cualitativo
+PRUEBA | VDRL cuantitativo
+PRUEBA | PT (coagulación)
+PRUEBA | PTT (coagulación)
+PRUEBA | Dímero D
+PRUEBA | Orina
+PRUEBA | Urocultivo
+PRUEBA | Heces
+PRUEBA | Azúcares reductores en heces
+PRUEBA | Leucograma fecal
+PRUEBA | Sangre oculta en heces
+PRUEBA | Depuración de creatinina 24 horas
+PRUEBA | Proteinuria en orina aislada
+PRUEBA | Proteinuria en orina 24 horas
+PRUEBA | Relación calcio/creatinina en orina parcial
+PRUEBA | Relación ácido úrico/creatinina en orina parcial
+PRUEBA | Relación fósforo/creatinina en orina parcial
+PRUEBA | Citrato en orina de 24 horas
+PRUEBA | Oxalato en orina de 24 horas
+PRUEBA | Cocaína en orina
+PRUEBA | Marihuana en orina
+PRUEBA | Monotest
+PRUEBA | CEA (antígeno carcinoembrionario)
+PRUEBA | Chagas
+PRUEBA | CA 125
+PRUEBA | CA 15-3
+PRUEBA | CA 19-9
+PRUEBA | Alfafetoproteína
+PRUEBA | Anticuerpo antitiroideo (anti-TPO)
+PRUEBA | Anticuerpo antitiroideo (anti-TG)
+PRUEBA | Tiroglobulina
+PRUEBA | Hemoglobina glicosilada
+PRUEBA | Helicobacter pylori (antígeno en heces)
+PRUEBA | Helicobacter pylori en suero (IgG)
+PRUEBA | Helicobacter pylori en suero (IgM)
+PRUEBA | FTA-ABS
+PRUEBA | Fibrinógeno
+PRUEBA | Anticuerpos COVID-19 (IgG/IgM)
+PRUEBA | IgE sérica
+PRUEBA | Citomegalovirus (IgG)
+PRUEBA | Citomegalovirus (IgM)
+PRUEBA | Electrolitos en orina (sodio, potasio y cloro)
+PRUEBA | Epstein-Barr (IgG)
+PRUEBA | Epstein-Barr (IgM)
+PRUEBA | Pro-BNP
+PRUEBA | Rubéola (IgG)
+PRUEBA | Rubéola (IgM)
+PRUEBA | Herpes simplex I (IgG)
+PRUEBA | Herpes simplex I (IgM)
+PRUEBA | Herpes simplex II (IgG)
+PRUEBA | Herpes simplex II (IgM)
+PRUEBA | TSH
+PRUEBA | T4 libre
+PRUEBA | T3 libre
+PRUEBA | PSA total
+PRUEBA | PSA libre
+PRUEBA | Saturación de transferrina
+PRUEBA | Transferrina
+PRUEBA | Ferritina
+PRUEBA | Captación de hierro
+PRUEBA | Ácido fólico o folato
+PRUEBA | Ácido láctico
+PRUEBA | Ácido láctico posprandial
+PRUEBA | Insulina (basal, 30 minutos, 1 hora o 2 horas)
+PRUEBA | Litio
+PRUEBA | Péptido C
+PRUEBA | Somatomedina C
+PRUEBA | Homocisteína
+PRUEBA | Hormona antimülleriana
+PRUEBA | Estrógeno
+PRUEBA | Anticuerpos antinucleares (ANA)
+PRUEBA | Anti-DNA
+PRUEBA | Anticuerpos anti-CCP
+PRUEBA | Paratohormona (PTH)
+PRUEBA | Hormona de crecimiento (hGH)
+PRUEBA | SHBG (globulina fijadora de hormona sexual)
+PRUEBA | Vitamina D
+PRUEBA | Vitamina D3
+PRUEBA | Amonio (muestra plasma citratado)
+PRUEBA | Complemento C3
+PRUEBA | Complemento C4
+PRUEBA | Complemento CH50
+PRUEBA | Coombs directo
+PRUEBA | Coombs indirecto
+PRUEBA | Androstenediona
+PRUEBA | Prolactina
+PRUEBA | Estradiol
+PRUEBA | Progesterona
+PRUEBA | FSH
+PRUEBA | 17-OH progesterona
+PRUEBA | DHEA-S
+PRUEBA | Testosterona total
+PRUEBA | Testosterona libre
+PRUEBA | Cortisol AM o PM
+PRUEBA | Adenovirus en heces
+PRUEBA | Rotavirus en heces
+PRUEBA | Calprotectina en heces
+PRUEBA | Antígeno prostático

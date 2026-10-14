@@ -46,27 +46,39 @@ function pkgItems(b) {
 }
 
 // Número de la cuenta de cobro: con factura fiscal (F- y Nº de control) o sin factura (C-)
-function chargeNumber(fiscal) {
-  if (fiscal) { const num = 'F-' + String(S.invSeq++).padStart(5, '0'); return { num, control: '00-' + num.slice(2).padStart(6, '0'), fiscal: true }; }
+function chargeNumber(fiscal, sheets) {
+  if (fiscal) { const error = facturaSheetError(sheets); if (error) throw new Error(error); const num = 'F-' + String(S.invSeq++).padStart(5, '0'); return { num, control: sheets[0].control, sheets: sheets.map(x => ({ ...x })), fiscal: true }; }
   S.cobSeq = S.cobSeq || 1; return { num: 'C-' + String(S.cobSeq++).padStart(5, '0'), control: '', fiscal: false };
 }
 const isFiscal = i => i.fiscal !== false;
 const chargeLabel = i => isFiscal(i) ? 'Factura' : 'Cuenta';
 // Emitir la factura fiscal de una cuenta ya registrada (opcional, cuando el paciente la pida)
-function emitFiscal(inv) {
+function emitFiscal(inv, sheets, details = {}) {
   if (isFiscal(inv)) return inv;
-  const n = chargeNumber(true); inv.prev = inv.num; inv.num = n.num; inv.control = n.control; inv.fiscal = true; inv.fiscalAt = nowStamp();
+  const n = chargeNumber(true, sheets); Object.assign(inv, details, { sheets: n.sheets }); inv.issueDate = dAt(0); inv.prev = inv.num; inv.num = n.num; inv.control = n.control; inv.fiscal = true; inv.fiscalAt = nowStamp();
   if (!inv.rate) inv.rate = S.rate;   // el monto en Bs de la factura queda fijo a la tasa del día de emisión
   log('Factura fiscal emitida', `${inv.num} · antes ${inv.prev} · ${pat(inv.pid).name}`); save();
   return inv;
 }
 
 // Cuenta de cobro desde un presupuesto (sin descontar inventario). La factura fiscal es opcional.
-function chargeFromBudget(b, fiscal = false) {
-  if (b.status !== 'aceptado') return { ok: false, msg: 'Este presupuesto ya tiene un cobro registrado o no está aprobado.' };
-  const n = chargeNumber(fiscal);
+function chargeFromBudget(b, fiscal = false, sheets) {
+  if (!['enviado', 'aceptado'].includes(b.status) || b.inv) return { ok: false, msg: 'Este presupuesto ya tiene un cobro registrado o no está enviado a Contabilidad.' };
+  const n = chargeNumber(fiscal, sheets);
   const inv = { id: uid('f'), ...n, pid: b.pid, doc: b.doc, date: dAt(0), disc: +b.disc || 0, proc: b.proc, items: budgetItems(b).map(x => ({ ...x })), cost: 0, payments: [], status: 'pendiente', budget: b.id, ...(fiscal ? { rate: S.rate } : {}) };
   S.invoices.unshift(inv); b.status = 'facturado'; b.inv = inv.id;
   log('Cobro registrado desde presupuesto', `${inv.num} · ${b.num} · ${pat(b.pid).name}`); save();
   return { ok: true, inv };
+}
+
+// Los controles impresos nunca se generan ni se reutilizan, incluidas hojas dañadas.
+const facturaControlKey = value => String(value || '').trim().toUpperCase().replace(/[\s-]/g, '').replace(/^0+(?=\d)/, '');
+function facturaSheetError(sheets, excludeId) {
+  if (!Array.isArray(sheets) || !sheets.length || sheets.some(x => !String(x.control || '').trim())) return 'Escriba el N° de control de cada hoja usada.';
+  const keys = sheets.map(x => facturaControlKey(x.control));
+  if (new Set(keys).size !== keys.length) return 'No repita el N° de control entre hojas.';
+  const used = (S.facturaVoids || []).map(x => x.control);
+  (S.invoices || []).filter(x => x.id !== excludeId).forEach(x => used.push(...(x.sheets?.map(h => h.control) || [x.control]).filter(Boolean)));
+  const duplicate = sheets.find(x => used.some(y => facturaControlKey(y) === facturaControlKey(x.control)));
+  return duplicate ? 'El N° de control ' + duplicate.control + ' ya fue usado o anulado.' : '';
 }

@@ -36,10 +36,187 @@ function needsCheck(value, ref) {
 const flagCell = (value, ref) => { const f = flagOf(value, ref);
   return (f ? `<span class="pill bad">${f}</span>` : '') + (needsCheck(value, ref) ? ' <span class="pill warn" title="Más de 25 % por debajo del valor normal">⚠ Verifique</span>' : ''); };
 const checkList = rows => rows.filter(r => needsCheck(r.value, r.ref));
+// Fuente: herramientas/catalogo-laboratorio-2026.txt. Sin precios ni rangos inventados.
+const CLINIC_LAB_2026 = [
+  {"name":"Perfil 20","kind":"perfil","includes":"Hematología completa, glicemia basal, urea, creatinina, ácido úrico, colesterol total, triglicéridos, transaminasas (AST y ALT), proteínas totales y fraccionadas, bilirrubina total y fraccionada, VDRL, orina y heces"},
+  {"name":"Perfil 21","kind":"perfil","includes":"Hematología completa, glicemia basal, urea, creatinina, ácido úrico, colesterol total, triglicéridos, transaminasas (AST y ALT), proteínas totales y fraccionadas, bilirrubina total y fraccionada, perfil lipídico, orina y heces"},
+  {"name":"Perfil hepático","kind":"perfil","includes":"Hematología completa, transaminasas (AST y ALT), proteínas totales y fraccionadas, bilirrubina total y fraccionada, GGT, fosfatasa alcalina, LDH"},
+  {"name":"Perfil lipídico","kind":"perfil","includes":"Colesterol total, triglicéridos, HDL-colesterol, LDL-colesterol y VLDL-colesterol"},
+  {"name":"Perfil preoperatorio","kind":"perfil","includes":"Hematología completa, glicemia, urea, creatinina, PT, PTT, HIV, VDRL cualitativo y orina"},
+  {"name":"Perfil prenatal básico 1","kind":"perfil","includes":"Hematología completa, grupo sanguíneo, glicemia basal, urea, creatinina, VDRL cualitativo, HIV, orina y heces"},
+  {"name":"Perfil prenatal 2","kind":"perfil","includes":"Hematología completa, glicemia basal, PT, PTT, VDRL cualitativo, HIV y orina"},
+  {"name":"Perfil hormonal femenino","kind":"perfil","includes":"Progesterona, prolactina, LH, FSH y estradiol"},
+  {"name":"Perfil hormonal masculino","kind":"perfil","includes":"Testosterona total y libre, LH, FSH y prolactina"},
+  {"name":"Perfil diarreico","kind":"perfil","includes":"Heces, leucograma fecal, adenovirus y rotavirus"},
+  {"name":"Perfil TORCH I (IgG/IgM)","kind":"perfil","includes":"Toxoplasma, rubéola y citomegalovirus"},
+  {"name":"Perfil TORCH II (IgG/IgM)","kind":"perfil","includes":"Toxoplasma, rubéola, citomegalovirus y herpes"},
+  {"name":"Perfil tiroideo libre","kind":"perfil","includes":"TSH, T4 libre, T3 libre"},
+  {"name":"Hematología completa","kind":"prueba","includes":""},
+  {"name":"VSG","kind":"prueba","includes":""},
+  {"name":"Grupo sanguíneo (tipiaje)","kind":"prueba","includes":""},
+  {"name":"Frotis de sangre periférica","kind":"prueba","includes":""},
+  {"name":"Reticulocitos","kind":"prueba","includes":""},
+  {"name":"Glicemia basal","kind":"prueba","includes":""},
+  {"name":"Glicemia posprandial","kind":"prueba","includes":""},
+  {"name":"Urea","kind":"prueba","includes":""},
+  {"name":"Creatinina","kind":"prueba","includes":""},
+  {"name":"Ácido úrico","kind":"prueba","includes":""},
+  {"name":"Colesterol total","kind":"prueba","includes":""},
+  {"name":"Triglicéridos","kind":"prueba","includes":""},
+  {"name":"AST/TGO","kind":"prueba","includes":""},
+  {"name":"ALT/TGP","kind":"prueba","includes":""},
+  {"name":"HDL-colesterol","kind":"prueba","includes":""},
+  {"name":"Bilirrubina total","kind":"prueba","includes":""},
+  {"name":"Bilirrubina directa","kind":"prueba","includes":""},
+  {"name":"Proteínas totales","kind":"prueba","includes":""},
+  {"name":"Albúmina","kind":"prueba","includes":""},
+  {"name":"Deshidrogenasa láctica (LDH)","kind":"prueba","includes":""},
+  {"name":"Fosfatasa alcalina (ALP)","kind":"prueba","includes":""},
+  {"name":"Calcio sérico/orina","kind":"prueba","includes":""},
+  {"name":"Electrolitos séricos (sodio, potasio y cloro)","kind":"prueba","includes":""},
+  {"name":"Fósforo sérico/orina","kind":"prueba","includes":""},
+  {"name":"Magnesio","kind":"prueba","includes":""},
+  {"name":"Amilasa sérica","kind":"prueba","includes":""},
+  {"name":"Lipasa sérica","kind":"prueba","includes":""},
+  {"name":"Gammaglutamil transpeptidasa (GGT)","kind":"prueba","includes":""},
+  {"name":"PCR cuantitativa (proteína C reactiva)","kind":"prueba","includes":""},
+  {"name":"Procalcitonina","kind":"prueba","includes":""},
+  {"name":"CK total","kind":"prueba","includes":""},
+  {"name":"CK-MB","kind":"prueba","includes":""},
+  {"name":"Troponina I cualitativa","kind":"prueba","includes":""},
+  {"name":"ASTO cuantitativo (antiestreptolisina O)","kind":"prueba","includes":""},
+  {"name":"RA test (factor reumatoideo)","kind":"prueba","includes":""},
+  {"name":"HCG cualitativa (prueba de embarazo en sangre/orina)","kind":"prueba","includes":""},
+  {"name":"HCG cuantitativa (prueba de embarazo)","kind":"prueba","includes":""},
+  {"name":"HIV prueba rápida","kind":"prueba","includes":""},
+  {"name":"HIV por ELISA","kind":"prueba","includes":""},
+  {"name":"Dengue (IgG/IgM, antígeno NS1)","kind":"prueba","includes":""},
+  {"name":"Hepatitis A (IgM)","kind":"prueba","includes":""},
+  {"name":"Hepatitis A (IgG)","kind":"prueba","includes":""},
+  {"name":"Hepatitis B (core total)","kind":"prueba","includes":""},
+  {"name":"Hepatitis B (antígeno de superficie)","kind":"prueba","includes":""},
+  {"name":"Hepatitis C","kind":"prueba","includes":""},
+  {"name":"Mycoplasma pneumoniae (IgG/IgM)","kind":"prueba","includes":""},
+  {"name":"Toxoplasma (IgM)","kind":"prueba","includes":""},
+  {"name":"Toxoplasma (IgG)","kind":"prueba","includes":""},
+  {"name":"VDRL cualitativo","kind":"prueba","includes":""},
+  {"name":"VDRL cuantitativo","kind":"prueba","includes":""},
+  {"name":"PT (coagulación)","kind":"prueba","includes":""},
+  {"name":"PTT (coagulación)","kind":"prueba","includes":""},
+  {"name":"Dímero D","kind":"prueba","includes":""},
+  {"name":"Orina","kind":"prueba","includes":""},
+  {"name":"Urocultivo","kind":"prueba","includes":""},
+  {"name":"Heces","kind":"prueba","includes":""},
+  {"name":"Azúcares reductores en heces","kind":"prueba","includes":""},
+  {"name":"Leucograma fecal","kind":"prueba","includes":""},
+  {"name":"Sangre oculta en heces","kind":"prueba","includes":""},
+  {"name":"Depuración de creatinina 24 horas","kind":"prueba","includes":""},
+  {"name":"Proteinuria en orina aislada","kind":"prueba","includes":""},
+  {"name":"Proteinuria en orina 24 horas","kind":"prueba","includes":""},
+  {"name":"Relación calcio/creatinina en orina parcial","kind":"prueba","includes":""},
+  {"name":"Relación ácido úrico/creatinina en orina parcial","kind":"prueba","includes":""},
+  {"name":"Relación fósforo/creatinina en orina parcial","kind":"prueba","includes":""},
+  {"name":"Citrato en orina de 24 horas","kind":"prueba","includes":""},
+  {"name":"Oxalato en orina de 24 horas","kind":"prueba","includes":""},
+  {"name":"Cocaína en orina","kind":"prueba","includes":""},
+  {"name":"Marihuana en orina","kind":"prueba","includes":""},
+  {"name":"Monotest","kind":"prueba","includes":""},
+  {"name":"CEA (antígeno carcinoembrionario)","kind":"prueba","includes":""},
+  {"name":"Chagas","kind":"prueba","includes":""},
+  {"name":"CA 125","kind":"prueba","includes":""},
+  {"name":"CA 15-3","kind":"prueba","includes":""},
+  {"name":"CA 19-9","kind":"prueba","includes":""},
+  {"name":"Alfafetoproteína","kind":"prueba","includes":""},
+  {"name":"Anticuerpo antitiroideo (anti-TPO)","kind":"prueba","includes":""},
+  {"name":"Anticuerpo antitiroideo (anti-TG)","kind":"prueba","includes":""},
+  {"name":"Tiroglobulina","kind":"prueba","includes":""},
+  {"name":"Hemoglobina glicosilada","kind":"prueba","includes":""},
+  {"name":"Helicobacter pylori (antígeno en heces)","kind":"prueba","includes":""},
+  {"name":"Helicobacter pylori en suero (IgG)","kind":"prueba","includes":""},
+  {"name":"Helicobacter pylori en suero (IgM)","kind":"prueba","includes":""},
+  {"name":"FTA-ABS","kind":"prueba","includes":""},
+  {"name":"Fibrinógeno","kind":"prueba","includes":""},
+  {"name":"Anticuerpos COVID-19 (IgG/IgM)","kind":"prueba","includes":""},
+  {"name":"IgE sérica","kind":"prueba","includes":""},
+  {"name":"Citomegalovirus (IgG)","kind":"prueba","includes":""},
+  {"name":"Citomegalovirus (IgM)","kind":"prueba","includes":""},
+  {"name":"Electrolitos en orina (sodio, potasio y cloro)","kind":"prueba","includes":""},
+  {"name":"Epstein-Barr (IgG)","kind":"prueba","includes":""},
+  {"name":"Epstein-Barr (IgM)","kind":"prueba","includes":""},
+  {"name":"Pro-BNP","kind":"prueba","includes":""},
+  {"name":"Rubéola (IgG)","kind":"prueba","includes":""},
+  {"name":"Rubéola (IgM)","kind":"prueba","includes":""},
+  {"name":"Herpes simplex I (IgG)","kind":"prueba","includes":""},
+  {"name":"Herpes simplex I (IgM)","kind":"prueba","includes":""},
+  {"name":"Herpes simplex II (IgG)","kind":"prueba","includes":""},
+  {"name":"Herpes simplex II (IgM)","kind":"prueba","includes":""},
+  {"name":"TSH","kind":"prueba","includes":""},
+  {"name":"T4 libre","kind":"prueba","includes":""},
+  {"name":"T3 libre","kind":"prueba","includes":""},
+  {"name":"PSA total","kind":"prueba","includes":""},
+  {"name":"PSA libre","kind":"prueba","includes":""},
+  {"name":"Saturación de transferrina","kind":"prueba","includes":""},
+  {"name":"Transferrina","kind":"prueba","includes":""},
+  {"name":"Ferritina","kind":"prueba","includes":""},
+  {"name":"Captación de hierro","kind":"prueba","includes":""},
+  {"name":"Ácido fólico o folato","kind":"prueba","includes":""},
+  {"name":"Ácido láctico","kind":"prueba","includes":""},
+  {"name":"Ácido láctico posprandial","kind":"prueba","includes":""},
+  {"name":"Insulina (basal, 30 minutos, 1 hora o 2 horas)","kind":"prueba","includes":""},
+  {"name":"Litio","kind":"prueba","includes":""},
+  {"name":"Péptido C","kind":"prueba","includes":""},
+  {"name":"Somatomedina C","kind":"prueba","includes":""},
+  {"name":"Homocisteína","kind":"prueba","includes":""},
+  {"name":"Hormona antimülleriana","kind":"prueba","includes":""},
+  {"name":"Estrógeno","kind":"prueba","includes":""},
+  {"name":"Anticuerpos antinucleares (ANA)","kind":"prueba","includes":""},
+  {"name":"Anti-DNA","kind":"prueba","includes":""},
+  {"name":"Anticuerpos anti-CCP","kind":"prueba","includes":""},
+  {"name":"Paratohormona (PTH)","kind":"prueba","includes":""},
+  {"name":"Hormona de crecimiento (hGH)","kind":"prueba","includes":""},
+  {"name":"SHBG (globulina fijadora de hormona sexual)","kind":"prueba","includes":""},
+  {"name":"Vitamina D","kind":"prueba","includes":""},
+  {"name":"Vitamina D3","kind":"prueba","includes":""},
+  {"name":"Amonio (muestra plasma citratado)","kind":"prueba","includes":""},
+  {"name":"Complemento C3","kind":"prueba","includes":""},
+  {"name":"Complemento C4","kind":"prueba","includes":""},
+  {"name":"Complemento CH50","kind":"prueba","includes":""},
+  {"name":"Coombs directo","kind":"prueba","includes":""},
+  {"name":"Coombs indirecto","kind":"prueba","includes":""},
+  {"name":"Androstenediona","kind":"prueba","includes":""},
+  {"name":"Prolactina","kind":"prueba","includes":""},
+  {"name":"Estradiol","kind":"prueba","includes":""},
+  {"name":"Progesterona","kind":"prueba","includes":""},
+  {"name":"FSH","kind":"prueba","includes":""},
+  {"name":"17-OH progesterona","kind":"prueba","includes":""},
+  {"name":"DHEA-S","kind":"prueba","includes":""},
+  {"name":"Testosterona total","kind":"prueba","includes":""},
+  {"name":"Testosterona libre","kind":"prueba","includes":""},
+  {"name":"Cortisol AM o PM","kind":"prueba","includes":""},
+  {"name":"Adenovirus en heces","kind":"prueba","includes":""},
+  {"name":"Rotavirus en heces","kind":"prueba","includes":""},
+  {"name":"Calprotectina en heces","kind":"prueba","includes":""},
+  {"name":"Antígeno prostático","kind":"prueba","includes":""}
+];
+const labNameKey = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/\s+/g, ' ');
+function importClinicLab2026(state) {
+  state.labCatalog = state.labCatalog || JSON.parse(JSON.stringify(LAB_PANELS));
+  state.labCatalogMeta = state.labCatalogMeta || {};
+  for (const entry of CLINIC_LAB_2026) {
+    const key = Object.keys(state.labCatalog).find(n => labNameKey(n) === labNameKey(entry.name)) || entry.name;
+    if (!Object.hasOwn(state.labCatalog, key)) state.labCatalog[key] = (entry.includes ? entry.includes.split(',').map(s => s.trim()) : [entry.name]).map(n => [n, '', '']);
+    state.labCatalogMeta[key] = { ...state.labCatalogMeta[key], source: 'clinica', kind: entry.kind, includes: entry.includes };
+  }
+  state.clinicLab2026 = true;
+  return state;
+}
+const labMeta = name => S.labCatalogMeta?.[name];
+const labTestNames = () => [...Object.keys(labPanels()), ...Object.keys(LAB_COMBOS).filter(n => !Object.keys(labPanels()).some(k => labNameKey(k) === labNameKey(n)))];
+
 // El catálogo vigente es el que mantiene el laboratorio (S.labCatalog); LAB_PANELS es solo el de partida
 const labPanels = () => (typeof S !== 'undefined' && S.labCatalog) || LAB_PANELS;
 const isLabTest = t => !!(labPanels()[t] || LAB_COMBOS[t]);
-const panelsOf = tests => tests.flatMap(t => LAB_COMBOS[t] || [t]);
+const panelsOf = tests => [...new Set(tests.flatMap(t => labPanels()[t] ? [t] : LAB_COMBOS[t] || [t]))];
 function blankResults(tests) { const cat = labPanels(); return panelsOf(tests).filter(t => cat[t]).flatMap(t => cat[t].map(([param, unit, ref]) => ({ test: t, param, unit, ref, value: '', flag: '' }))); }
 
 function seedClinical() {
@@ -68,7 +245,7 @@ function seedClinical() {
   // Hemoglobina anterior de Ricardo Salazar, para ver la evolución
   exams.push({ id: 'ex0', num: 'EX-0012', pid: 'pt2', doc: 'm4', date: dAt(-180), area: 'laboratorio', tests: ['Hematología completa'], priority: 'normal', notes: 'Control anual.', status: 'listo', readyAt: dAt(-179) + ' 15:00', by: 'Laboratorio', seen: true, files: [], report: '',
     results: [R('Hematología completa', 'Hemoglobina', 'g/dL', '12–16', '13,6'), R('Hematología completa', 'Hematocrito', '%', '36–46', '40'), R('Hematología completa', 'Leucocitos', 'x10³/µL', '4,5–11', '6,9'), R('Hematología completa', 'Plaquetas', 'x10³/µL', '150–450', '240')] });
-  return { notes, exams, exSeq: 36, labCatalog: JSON.parse(JSON.stringify(LAB_PANELS)) };
+  return importClinicLab2026({ notes, exams, exSeq: 36, labCatalog: JSON.parse(JSON.stringify(LAB_PANELS)) });
 }
 
 // Valor anterior del mismo parámetro para el paciente (para mostrar si subió o bajó)

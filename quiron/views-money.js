@@ -23,7 +23,7 @@ function attentionPreview() {
 function attentionBody() {
   const a = UI.at; const pv = attentionPreview(); const p = pat(a.pid);
   const svcList = S.services.filter(s => !a.q || s.name.toLowerCase().includes(a.q.toLowerCase()));
-  return `<div class="form">
+  return `${patientBand(a.pid)}<div class="form">
     <div class="field"><label for="at-p">Paciente</label><select class="input" id="at-p" data-ch="atField">${patientOptions(a.pid)}</select></div>
     <div class="field"><label for="at-d">Médico</label><select class="input" id="at-d" data-ch="atField">${docOptions(a.doc)}</select></div>
     <div class="field full"><label for="at-proc">Procedimiento o diagnóstico (opcional)</label><input class="input" id="at-proc" value="${esc(a.proc)}" placeholder="Ej. Herniorrafia inguinal derecha" data-in="atProc"></div></div>
@@ -73,8 +73,10 @@ ACTIONS.atAdj = el => { UI.at.adj[el.dataset.id] = Math.max(0, num(el.id)); atRe
 ACTIONS.atDisc = () => { UI.at.disc = Math.min(100, Math.max(0, num('at-disc'))); atRedraw(); };
 ACTIONS.atFiscal = el => { UI.at.fiscal = el.checked; };
 ACTIONS.saveAttention = el => {
-  const a = UI.at; const res = createAttention({ pid: a.pid, doc: a.doc, serviceIds: a.svcs, extras: a.extras, adj: a.adj, qty: a.qty, disc: a.disc, proc: a.proc, apptId: a.apptId, fiscal: !!a.fiscal });
-  if (!res.ok) { toast('No hay existencia suficiente'); atRedraw(); return; }
+  const a = UI.at;
+  if (a.fiscal && !a.sheets) return openFacturaIssue({ draft: { pid: a.pid, items: attentionPreview().items, disc: a.disc, payments: [], date: dAt(0), status: 'pendiente' }, attentionPay: !!el.dataset.pay });
+  const res = createAttention({ pid: a.pid, doc: a.doc, serviceIds: a.svcs, extras: a.extras, adj: a.adj, qty: a.qty, disc: a.disc, proc: a.proc, apptId: a.apptId, fiscal: !!a.fiscal, sheets: a.sheets, fiscalDetails: a.fiscalDetails });
+  if (!res.ok) { toast(res.msg || 'No hay existencia suficiente'); a.sheets = null; atRedraw(); return; }
   toast(`${chargeLabel(res.inv)} ${res.inv.num} registrada · inventario actualizado`);
   if (el.dataset.pay) openPay(res.inv.id); else { closeSheet(); render(); }
 };
@@ -91,10 +93,11 @@ function openPay(invId) {
   render();
 }
 window.openPay = openPay;
+const payTarget = () => UI.pay.draft || byId(S.invoices, UI.pay.inv);
 function payBody() {
-  const inv = byId(S.invoices, UI.pay.inv); const m = metodo(UI.pay.method); const due = invDue(inv); const rate = invRate(inv);
+  const inv = payTarget(); const m = metodo(UI.pay.method); const due = invDue(inv); const rate = invRate(inv);
   const def = m.cur === 'USD' ? due : r2(due * rate);
-  return `<div class="between"><div><div class="small muted">${esc(pat(inv.pid).name)} · ${esc(inv.items.map(i => i.name).join(', '))}</div><div style="font-size:28px;font-weight:600;letter-spacing:-.02em">${fmt(due * rate, 'VES')}</div><div class="small muted">pendiente · equivale a ${fmt(due)} a tasa ${rate.toLocaleString('es-VE', { maximumFractionDigits: 4 })}${inv.rate ? (isFiscal(inv) ? ' (fija desde la emisión de la factura)' : '') : ' (BCV de hoy)'}</div></div>${invStatusPill(inv)}</div>
+  return `${patientBand(inv.pid)}<div class="between"><div><div class="small muted">${esc(pat(inv.pid).name)} · ${esc(inv.items.map(i => i.name).join(', '))}</div><div style="font-size:28px;font-weight:600;letter-spacing:-.02em">${fmt(due * rate, 'VES')}</div><div class="small muted">pendiente · equivale a ${fmt(due)} a tasa ${rate.toLocaleString('es-VE', { maximumFractionDigits: 4 })}${inv.rate ? (isFiscal(inv) ? ' (fija desde la emisión de la factura)' : '') : ' (BCV de hoy)'}</div></div>${invStatusPill(inv)}</div>
   <div class="hstack">${METODOS.map(x => `<button class="btn sm ${x.id === m.id ? 'primary' : ''}" data-act="payMethod" data-id="${x.id}" aria-pressed="${x.id === m.id}">${x.name}</button>`).join('')}</div>
   <div class="form"><div class="field"><label for="pay-a">Monto en ${m.cur === 'USD' ? 'dólares' : 'bolívares'}</label><input class="input" type="number" min="0" step="0.01" id="pay-a" value="${def.toFixed(2)}" data-in="payAmt"></div>
   <div class="field"><label>Equivale a</label><div class="input" id="pay-eq" style="background:none">${eqText(def, m)}</div></div>
@@ -102,7 +105,7 @@ function payBody() {
   ${m.cur === 'VES' ? `<div class="field full"><label for="pay-ref">Referencia bancaria</label><input class="input" id="pay-ref" placeholder="Últimos dígitos de la operación"></div>` : ''}</div>`;
 }
 function eqText(amount, m) {
-  const rate = invRate(byId(S.invoices, UI.pay.inv)); const usd = m.cur === 'USD' ? amount : amount / rate; const igtf = UI.pay.igtf ? r2(usd * S.igtfRate / 100) : 0;
+  const rate = invRate(payTarget()); const usd = m.cur === 'USD' ? amount : amount / rate; const igtf = UI.pay.igtf ? r2(usd * S.igtfRate / 100) : 0;
   const base = m.cur === 'USD' ? fmt(amount * rate, 'VES') : `${fmt(usd)} a tasa ${rate.toLocaleString('es-VE', { maximumFractionDigits: 4 })}`;
   return igtf ? `${base} · + IGTF ${S.igtfRate}% ${m.cur === 'USD' ? fmt(igtf) : fmt(igtf * rate, 'VES')} = <b>${m.cur === 'USD' ? fmt(usd + igtf) : fmt((usd + igtf) * rate, 'VES')}</b> a recibir` : base;
 }
@@ -110,6 +113,17 @@ ACTIONS.payIgtf = el => { UI.pay.igtf = el.checked; ACTIONS.payAmt(); };
 ACTIONS.payMethod = el => { UI.pay.method = el.dataset.id; refreshSheet(payBody()); };   // la casilla de IGTF conserva lo marcado
 ACTIONS.payAmt = () => { document.getElementById('pay-eq').innerHTML = eqText(num('pay-a'), metodo(UI.pay.method)); };
 ACTIONS.savePay = () => {
+  if (!canSee('contabilidad')) return;
+  const amount = num('pay-a'), target = payTarget(), m = metodo(UI.pay.method);
+  const usd = m.cur === 'USD' ? r2(amount) : r2(amount / invRate(target));
+  if (!Number.isFinite(usd) || usd <= 0 || usd - invDue(target) > 0.01) { document.getElementById('pay-msg').textContent = 'Indique un monto válido, mayor que cero y que no supere el saldo.'; return; }
+  if (UI.pay.budget) {
+    const b = byId(S.budgets, UI.pay.budget);
+    if (!b || !['enviado', 'aceptado'].includes(b.status) || b.inv) { document.getElementById('pay-msg').textContent = 'El presupuesto cambió. Abra nuevamente el detalle.'; return; }
+    const result = b.v2 ? chargeFromBudget(b) : createAttention({ pid: b.pid, doc: b.doc, serviceIds: b.serviceIds, extras: b.extras, adj: b.adj, qty: b.qty || {}, disc: b.disc, proc: b.proc, budgetId: b.id });
+    if (!result.ok) { document.getElementById('pay-msg').textContent = result.msg || 'Existencia insuficiente para registrar la cuenta.'; return; }
+    UI.pay.inv = result.inv.id; delete UI.pay.draft; delete UI.pay.budget;
+  }
   const res = pay(UI.pay.inv, { method: UI.pay.method, amount: num('pay-a'), igtf: UI.pay.igtf });
   if (!res.ok) { document.getElementById('pay-msg').textContent = res.msg; return; }
   const inv = byId(S.invoices, UI.pay.inv);
@@ -119,7 +133,7 @@ ACTIONS.savePay = () => {
 ACTIONS.payInvoice = el => openPay(el.dataset.id);
 
 // ---------- Presupuestos ----------
-const BUD_TABS = [['abierto', 'Pendientes del paciente'], ['enviado', 'En revisión'], ['aceptado', 'Pendientes de cobro'], ['facturado', 'Cobro registrado'], ['otros', 'Descartados y vencidos'], ['todos', 'Todos']];
+const BUD_TABS = [['abierto', 'Por enviar'], ['enviado', 'En Contabilidad'], ['facturado', 'Sin pago'], ['parcial', 'Pago parcial'], ['pagado', 'Pago recibido'], ['otros', 'Descartados y vencidos'], ['todos', 'Todos']];
 VIEWS.atencion = () => {
   const f = UI.budF || 'abierto';
   const inTab = b => { const st = budStatus(b); return f === 'todos' || st === f || (f === 'otros' && ['rechazado', 'vencido'].includes(st)); };
@@ -128,9 +142,9 @@ VIEWS.atencion = () => {
   const list = S.budgets.filter(inTab).map(b => `<button class="row" data-act="openBudget" data-id="${b.id}"><span class="avatar">${initials(pat(b.pid).name)}</span>
     <div class="grow"><div class="t">${b.num} · ${esc(pat(b.pid).name)}</div><div class="s">${fdate(b.date)}${b.proc ? ' · ' + esc(b.proc) : ''} · ${esc(med(b.doc)?.name || '')}</div></div>
     <div class="end"><div>${fmt(budgetTotals(b).total)}</div>${budPill(b)}</div></button>`).join('') || '<div class="empty">No hay presupuestos en esta sección.</div>';
-  return header('Presupuestos', 'Quirúrgicos, de emergencia y de procedimientos. Se arman desde un paquete y se envían a Contabilidad una vez aprobados por el paciente', `<button class="btn primary" data-act="newAttention" data-budget="1">+ Nuevo presupuesto</button>`) +
-  `<div class="grid g4">${kpi('Pendientes del paciente', count('abierto'), fmt(sum('abierto')))}${kpi('En revisión por Contabilidad', count('enviado'), fmt(sum('enviado')))}${kpi('Aprobados, pendientes de cobro', count('aceptado'), fmt(sum('aceptado')))}${kpi('Cobros registrados este mes', S.budgets.filter(b => b.status === 'facturado' && (byId(S.invoices, b.inv)?.date || '').slice(0, 7) === dAt(0).slice(0, 7)).length)}</div>
-  <div class="card sec" style="padding:12px 16px"><div class="hstack small" style="gap:8px;flex-wrap:wrap"><b>Procedimiento:</b><span class="pill">1. Elaborar y descargar el PDF</span>→<span class="pill">2. Aprobación del paciente</span>→<span class="pill">3. Envío a Contabilidad</span>→<span class="pill">4. Cirugía aprobada o descartada</span>→<span class="pill">5. Registro del cobro</span></div></div>
+  return header('Presupuestos', 'Quirúrgicos, de emergencia y de procedimientos. Se arman desde un paquete y se envían directamente a Contabilidad para registrar el pago o rechazo', `<button class="btn primary" data-act="newAttention" data-budget="1">+ Nuevo presupuesto</button>`) +
+  `<div class="grid g4">${kpi('Por enviar', count('abierto'), fmt(sum('abierto')))}${kpi('En Contabilidad', count('enviado'), fmt(sum('enviado')))}${kpi('Pago parcial', count('parcial'), fmt(sum('parcial')))}${kpi('Pagos recibidos este mes', S.budgets.filter(b => budStatus(b) === 'pagado' && (byId(S.invoices, b.inv)?.date || '').slice(0, 7) === dAt(0).slice(0, 7)).length)}</div>
+  <div class="card sec" style="padding:12px 16px"><div class="hstack small" style="gap:8px;flex-wrap:wrap"><b>Procedimiento:</b><span class="pill">1. Guardar presupuesto</span>→<span class="pill">2. Enviar a contabilidad</span>→<span class="pill">3. Pago recibido o no pagado / rechazado</span></div></div>
   <div class="seg sec" role="group" aria-label="Filtro" style="margin-bottom:12px">${BUD_TABS.map(([k, t]) => { const n = k === 'todos' || k === 'facturado' ? 0 : count(k); return `<button data-act="budF" data-k="${k}" aria-pressed="${f === k}">${t}${n ? ` (${n})` : ''}</button>`; }).join('')}</div>
   <div class="list">${list}</div>`;
 };
@@ -152,7 +166,7 @@ function invoicesView() {
 ACTIONS.invF = el => { UI.invF = el.dataset.k; render(); };
 ACTIONS.openInvoice = el => {
   const i = byId(S.invoices, el.dataset.id); const t = invTotals(i); const used = S.moves.filter(m => m.ref === i.num && m.pid);
-  openSheet(`${chargeLabel(i)} ${i.num}`, `<div class="between"><div><b>${esc(pat(i.pid).name)}</b><div class="small muted">${esc(pat(i.pid).ci)} · ${fdate(i.date)}${isFiscal(i) ? ` · Nº control ${i.control}` : ' · sin factura fiscal'}${i.prev ? ` · antes ${i.prev}` : ''}${i.doc ? ' · ' + esc(med(i.doc).name) : ''}</div></div>${invStatusPill(i)}</div>
+  openSheet(`${chargeLabel(i)} ${i.num}`, `${patientBand(i.pid)}<div class="between"><div><b>${esc(pat(i.pid).name)}</b><div class="small muted">${esc(pat(i.pid).ci)} · ${fdate(i.date)}${isFiscal(i) ? ` · Nº control ${esc(i.sheets?.map(h => h.control).join(', ') || i.control || '')}` : ' · sin factura fiscal'}${i.prev ? ` · antes ${i.prev}` : ''}${i.doc ? ' · ' + esc(med(i.doc).name) : ''}</div></div>${invStatusPill(i)}</div>
     <div class="tablewrap"><table><thead><tr><th>Concepto</th><th class="num">Monto</th></tr></thead><tbody>${i.items.map(x => `<tr><td>${esc(x.name)}${x.adj ? ` <span class="pill warn" title="Solo visible para la clínica">+${x.adj}%</span>` : ''}</td><td class="num">${bsOf(x.price, i)}</td></tr>`).join('')}</tbody>
     <tfoot>${t.disc ? `<tr><td>Cortesía (descuento ${t.disc}%)</td><td class="num">-${bsOf(t.desc, i)}</td></tr>` : ''}${isFiscal(i) ? '<tr><td>IVA</td><td class="num">Exento · servicio médico</td></tr>' : ''}<tr><td>Total</td><td class="num">${bsOf(t.total, i)}</td></tr></tfoot></table></div>
     <div class="small muted">Equivale a ${fmt(t.total)} a tasa ${invRate(i).toLocaleString('es-VE', { maximumFractionDigits: 4 })} Bs/USD${i.rate ? (isFiscal(i) ? ' · tasa fija desde la emisión de la factura' : ' · tasa del cobro') : ' · tasa BCV de hoy (queda fija al saldarse)'}.</div>
@@ -161,7 +175,7 @@ ACTIONS.openInvoice = el => {
     `${i.status !== 'pagada' ? `<span class="note">Pendiente ${bsOf(invDue(i), i)}</span>` : ''}${isFiscal(i) ? '' : `<button class="btn" data-act="emitFiscal" data-id="${i.id}">Emitir factura fiscal</button>`}<button class="btn" data-act="showDoc" data-kind="invoice" data-id="${i.id}">${isFiscal(i) ? 'Imprimir factura (PDF)' : i.status === 'pagada' ? 'Imprimir recibo (PDF)' : 'Imprimir nota de cobro (PDF)'}</button>${i.status !== 'pagada' ? `<button class="btn primary" data-act="payInvoice" data-id="${i.id}">Cobrar</button>` : ''}`, { wide: true });
 };
 
-ACTIONS.emitFiscal = el => { const i = emitFiscal(byId(S.invoices, el.dataset.id)); toast(`Factura fiscal ${i.num} emitida`); ACTIONS.openInvoice({ dataset: { id: i.id } }); render(); };
+ACTIONS.emitFiscal = el => openFacturaIssue({ id: el.dataset.id });
 
 // Texto CSV (separado por ;) para Excel; lo usa Contabilidad
 const toCSV = rows => rows.map(r => r.map(v => { const s = String(v ?? ''); return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; }).join(';')).join('\n');
@@ -191,6 +205,7 @@ VIEWS.ajustes = () => {
       <div class="field full"><label for="cl-x">Nota al pie</label><input class="input" id="cl-x" value="${esc(cl.note)}"></div></div>
       <div style="margin-top:12px"><button class="btn" data-act="saveClinic">Guardar datos</button></div></div>
   </div>
+  ${role() === 'admin' ? facturaSettingsCard() : ''}
   ${backupCard()}
   <div class="sec"><h3>Historial de acciones</h3><div class="list">${S.audit.slice(0, 40).map(a => `<div class="row"><div class="grow"><div class="t">${esc(a.action)}</div><div class="s">${esc(a.ref)}</div></div><div class="end small muted">${a.at}<br>${esc(a.user)}</div></div>`).join('')}</div></div>
   <div class="sec card" style="display:grid;gap:12px"><div><b>Datos de trabajo</b><div class="small muted">${S.cleanStart ? `Empezó en limpio el ${fdate(S.cleanStart)}: los datos son los suyos.` : 'Ahora hay <b>datos de ejemplo</b> (pacientes, inventario, cobros, historias…) para practicar.'} Por ahora se guardan solo en este navegador.</div></div>
@@ -238,3 +253,63 @@ ACTIONS.saveSettings = () => { const r = num('aj-r'); if (r <= 0) { toast('La ta
 ACTIONS.saveClinic = () => { S.clinic = { name: val('cl-n').trim() || 'Clínica Quirón', rif: val('cl-r').trim(), phone: val('cl-t').trim(), address: val('cl-a').trim(), email: val('cl-e').trim(), note: val('cl-x').trim() }; log('Datos de la clínica actualizados', S.clinic.rif); save(); toast('Datos guardados'); };
 ACTIONS.askReset = () => openSheet('Volver a los datos de ejemplo', '<p>Se borrarán <b>todos</b> los datos de este navegador, incluidos los que haya cargado, y volverán los datos de ejemplo. Los usuarios se conservan.</p><p class="small muted">Descargue antes una copia de seguridad si quiere conservar lo cargado.</p>', '<button class="btn" data-act="close">Cancelar</button><button class="btn danger" data-act="doReset">Restablecer</button>');
 ACTIONS.doReset = () => { resetDemo(); closeSheet(); UI.agendaDay = null; go('inicio', null, { root: true }); toast('Datos restablecidos'); };
+
+// Emisión sobre hojas físicas y calibración administrativa.
+function facturaSettingsCard() {
+  const c = facturaCalibration();
+  return '<div class="card sec"><h2>Impresión de facturas</h2><p>Use papel Carta y tamaño real (100%), sin ajustar a página. Los desplazamientos positivos mueven los datos a la derecha y hacia abajo.</p><div class="form"><div class="field"><label for="fp-x">Desplazamiento horizontal (mm)</label><input class="input" id="fp-x" type="number" step="0.1" min="-20" max="20" value="'+c.x+'"></div><div class="field"><label for="fp-y">Desplazamiento vertical (mm)</label><input class="input" id="fp-y" type="number" step="0.1" min="-20" max="20" value="'+c.y+'"></div></div><div class="hstack"><button class="btn" data-act="facturaConfigSave">Guardar calibración</button><button class="btn" data-act="facturaTest">Imprimir página de prueba</button><button class="btn" data-act="facturaVoid">Hoja dañada / anulada</button></div><p class="small muted">Las marcas de prueba se imprimen solo en la página de calibración.</p>'+facturaVoidHistory()+'</div>';
+}
+function facturaVoidHistory(id) {
+  const rows=(S.facturaVoids || []).filter(x => !id || x.invoice === id);
+  return rows.length ? '<details><summary>Hojas dañadas / anuladas ('+rows.length+')</summary>'+rows.map(x=>'<p class="small">Control '+esc(x.control)+' · '+esc(x.at)+' · '+esc(x.reason)+'</p>').join('')+'</details>' : '';
+}
+ACTIONS.facturaConfigSave = () => {
+  if (role() !== 'admin') return false;
+  const x=Number(val('fp-x')), y=Number(val('fp-y'));
+  if (![x,y].every(n=>Number.isFinite(n) && Math.abs(n)<=20)) { toast('Indique desplazamientos entre -20 y 20 mm.'); return false; }
+  S.facturaPrint={x,y}; save(); toast('Calibración guardada'); return true;
+};
+ACTIONS.facturaTest = async () => {
+  if (role() !== 'admin' || !pdfReady() || !ACTIONS.facturaConfigSave()) return;
+  const inv={date:dAt(0),buyer:{name:'María Peña González',ci:'V-12345678',address:'Av. Principal, Caracas',phone:'0412-1234567'},rate:S.rate,items:[{name:'Consulta médica de demostración',price:20,qty:1},{name:'Evaluación y atención · prueba de alineación',price:30}],disc:0,payments:[],status:'pagada'};
+  await pdfSave(pdfFacturaPrint(inv,true),'Calibración de factura - prueba.pdf');
+};
+function openFacturaIssue(context) {
+  if (!canSee('contabilidad') || !pdfReady()) return;
+  UI.facturaIssue = context;
+  const inv=context.draft || byId(S.invoices,context.id), p=inv.buyer || pat(inv.pid), pages=facturaPages(inv).length;
+  const existing=context.replace ? [] : inv.sheets || [];
+  openSheet('Registrar hojas de factura', '<div class="banner">'+(pages>1 ? 'Los renglones requieren '+pages+' hojas. Registre un control por hoja, en el orden de impresión. Los totales se imprimen en la última.' : 'Registre el número que ya viene impreso en la hoja.')+'</div><div class="form">'+Array.from({length:pages},(_,i)=>'<div class="field"><label for="fi-c'+i+'">N° de control de la hoja usada '+(i+1)+' *</label><input class="input" id="fi-c'+i+'" required value="'+esc(existing[i]?.control || '')+'"></div><div class="field"><label for="fi-n'+i+'">N° de factura impreso '+(i+1)+' (opcional)</label><input class="input" id="fi-n'+i+'" value="'+esc(existing[i]?.printedNumber || '')+'"></div>').join('')+
+    '<div class="field"><label for="fi-name">Nombre y apellido o razón social *</label><input class="input" id="fi-name" value="'+esc(p.name)+'"></div><div class="field"><label for="fi-ci">C.I. / RIF *</label><input class="input" id="fi-ci" value="'+esc(p.ci)+'"></div><div class="field full"><label for="fi-address">Dirección fiscal *</label><input class="input" id="fi-address" value="'+esc(p.address || '')+'"></div><div class="field"><label for="fi-phone">Teléfono</label><input class="input" id="fi-phone" value="'+esc(p.phone || '')+'"></div><div class="field"><label for="fi-place">Lugar de emisión *</label><input class="input" id="fi-place" value="'+esc(inv.place || 'Caracas')+'"></div><div class="field"><label for="fi-terms">Condiciones de pago *</label><input class="input" id="fi-terms" value="'+esc(inv.paymentTerms || (inv.status === 'pagada' ? 'Contado' : 'Crédito'))+'"></div></div>'+(context.replace?'<div class="field"><label for="fi-reason">Motivo de anulación de las hojas anteriores *</label><input class="input" id="fi-reason"></div>':''),
+    '<span id="fi-msg" class="note"></span><button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="facturaIssueSave">Registrar y continuar</button>', {wide:true});
+}
+ACTIONS.facturaIssueSave = () => {
+  if (!canSee('contabilidad')) return;
+  const c=UI.facturaIssue; if(!c) return;
+  const inv=c.draft || byId(S.invoices,c.id), sheets=Array.from({length:facturaPages(inv).length},(_,i)=>({control:val('fi-c'+i).trim(),printedNumber:val('fi-n'+i).trim()}));
+  const error=facturaSheetError(sheets,c.replace ? undefined : c.id), msg=document.getElementById('fi-msg');
+  if(error) {msg.textContent=error;return;}
+  const details={buyer:{name:val('fi-name').trim(),ci:val('fi-ci').trim(),address:val('fi-address').trim(),phone:val('fi-phone').trim()},place:val('fi-place').trim(),paymentTerms:val('fi-terms').trim()};
+  if(!details.buyer.name || !details.buyer.ci || !details.buyer.address || !details.place || !details.paymentTerms) {msg.textContent='Complete los datos fiscales obligatorios.';return;}
+  if(c.replace && !val('fi-reason').trim()) {msg.textContent='Indique el motivo de anulación.';return;}
+  try { facturaCommands({...inv,...details}); } catch(e) {msg.textContent=e.message;return;}
+  if(c.draft) { UI.at.sheets=sheets; UI.at.fiscalDetails=details; UI.facturaIssue=null; ACTIONS.saveAttention({dataset:c.attentionPay?{pay:'1'}:{}}); return; }
+  if(c.replace) {
+    (inv.sheets || [{control:inv.control}]).filter(h=>h.control).forEach(h=>S.facturaVoids.push({...h,invoice:inv.id,at:nowStamp(),reason:val('fi-reason').trim(),by:S.user}));
+  }
+  if(isFiscal(inv)) { Object.assign(inv,details,{sheets,control:sheets[0].control}); }
+  else emitFiscal(inv,sheets,details);
+  log(c.replace?'Hojas de factura anuladas y reemplazadas':'Hojas de factura registradas',inv.num+' · '+sheets.map(h=>h.control).join(', '));
+  save(); UI.facturaIssue=null; render(); ACTIONS.showDoc({dataset:{kind:'invoice',id:inv.id}});
+};
+ACTIONS.facturaReplace = el => openFacturaIssue({id:el.dataset.id,replace:true});
+ACTIONS.facturaVoid = () => {
+  if(!canSee('contabilidad')) return;
+  openSheet('Hoja dañada / anulada','<div class="field"><label for="fv-control">N° de control *</label><input class="input" id="fv-control"></div><div class="field"><label for="fv-number">N° de factura impreso (opcional)</label><input class="input" id="fv-number"></div><div class="field"><label for="fv-reason">Motivo *</label><input class="input" id="fv-reason"></div>', '<span class="note" id="fv-msg"></span><button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="facturaVoidSave">Registrar hoja anulada</button>');
+};
+ACTIONS.facturaVoidSave = () => {
+  if(!canSee('contabilidad')) return;
+  const sheet={control:val('fv-control').trim(),printedNumber:val('fv-number').trim()}, error=facturaSheetError([sheet]);
+  if(error || !val('fv-reason').trim()) {document.getElementById('fv-msg').textContent=error || 'Indique el motivo.';return;}
+  S.facturaVoids.push({...sheet,reason:val('fv-reason').trim(),at:nowStamp(),by:S.user}); log('Hoja dañada / anulada',sheet.control);save();closeSheet();render();
+};

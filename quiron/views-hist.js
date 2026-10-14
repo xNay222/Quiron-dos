@@ -137,7 +137,7 @@ ACTIONS.openRecord = el => {
   const r = findRecord(el.dataset.id); const linked = S.patients.find(p => p.id === r.pid) || S.patients.find(p => normDigits(p.ci) && normDigits(p.ci) === normDigits(r.ci));
   if (r.status === 'escaneada') {   // historia escaneada: datos del archivo y el PDF original
     const same = scannedRecords().filter(x => x !== r && normDigits(x.ci) && normDigits(x.ci) === normDigits(r.ci));
-    openSheet(r.patient, `<div class="between"><div><b>${esc(r.patient)}</b> · Cédula ${esc(r.ci)}<div class="small muted">Año de la cirugía: <b>${esc(r.year)}</b>${r.period !== r.year ? ` · ${esc(r.period)}` : ''}</div></div>${recPill(r)}</div>
+    openSheet(r.patient, `<div class="between patient-band"><div><b>${esc(r.patient)}</b> · Cédula ${esc(r.ci)}<div class="small muted">Año de la cirugía: <b>${esc(r.year)}</b>${r.period !== r.year ? ` · ${esc(r.period)}` : ''}</div></div>${recPill(r)}</div>
       ${linked ? `<div class="banner">Vinculada al expediente de <button class="btn ghost sm" data-go="pacientes" data-param="${linked.id}">${esc(linked.name)}</button></div>` : ''}
       <div class="list"><div class="row"><div class="grow"><div class="s">Archivo</div><div class="t">${esc(r.file)}</div></div><span class="small muted">${r.mb} MB</span></div></div>
       ${same.length ? `<div><h3 class="small muted" style="margin:0 0 6px">Otras historias de esta cédula</h3><div class="list">${same.map(x => `<button class="row" data-act="openRecord" data-id="${x.id}"><div class="grow"><div class="t">${esc(x.patient)}</div><div class="s">${esc(x.period)} · ${esc(x.file.split('/').pop())}</div></div></button>`).join('')}</div></div>` : ''}
@@ -146,7 +146,7 @@ ACTIONS.openRecord = el => {
     return;
   }
   const f = (k, v) => `<div class="row"><div class="grow"><div class="s">${k}</div><div class="t">${v ?? '<span class="muted">No consta</span>'}</div></div></div>`;
-  openSheet(`${r.procedure}`, `<div class="between"><div><b>${esc(r.patient)}</b> · ${esc(r.ci)}<div class="small muted">${fdate(r.date)} · ${esc(r.source)}</div></div>${recPill(r)}</div>
+  openSheet(`${r.procedure}`, `<div class="between patient-band"><div><b>${esc(r.patient)}</b> · ${esc(r.ci)}<div class="small muted">${fdate(r.date)} · ${esc(r.source)}</div></div>${recPill(r)}</div>
     ${linked ? `<div class="banner">Vinculada al expediente de <button class="btn ghost sm" data-go="pacientes" data-param="${linked.id}">${esc(linked.name)}</button></div>` : ''}
     <div class="grid g2"><div class="list">${f('Tipo', esc(r.type))}${f('Especialidad', r.specialty ? esc(r.specialty) : null)}${f(r.type === 'Cirugía' ? 'Cirujano' : 'Médico', r.surgeon ? esc(r.surgeon) : null)}${r.type === 'Cirugía' ? f('Anestesiólogo', r.anesth ? esc(r.anesth) : null) : ''}${(r.dx || []).length ? f('Diagnósticos', r.dx.map(esc).join('<br>')) : ''}</div>
     <div class="list">${f('Duración', r.durationMin != null ? r.durationMin + ' min' : null)}${f('Complicaciones', r.complications ? esc(r.complications) : 'Ninguna registrada')}${f('Origen', r.origin === 'nativo' ? 'Registrada en el sistema' : 'Historia en papel digitalizada')}</div></div>

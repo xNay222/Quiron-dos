@@ -8,7 +8,7 @@ function ppResults(key) {
   const st = ppState(key); const q = st.q.trim().toLowerCase(); const qd = normDigits(q);
   const list = S.patients.filter(p => !st.exclude.includes(p.id) && (!q || p.name.toLowerCase().includes(q) || (qd.length > 2 && normDigits(p.ci).includes(qd)))).slice(0, 6);
   return list.map(p => `<button class="row pprow" data-act="ppPick" data-k="${key}" data-id="${p.id}"><span class="avatar">${initials(p.name)}</span><div class="grow"><div class="t">${esc(p.name)}</div><div class="s">${esc(p.ci)} · ${ageTxt(p)}</div></div></button>`).join('')
-    || `<div class="small muted" style="padding:10px 4px">No hay pacientes con "${esc(st.q)}". <button class="btn ghost sm" data-act="ppNew" data-k="${key}">Registrarlo como nuevo</button></div>`;
+    || `<div class="small muted" style="padding:10px 4px">No hay pacientes con "${esc(st.q)}". ${st.existingOnly ? '' : `<button class="btn ghost sm" data-act="ppNew" data-k="${key}">Registrarlo como nuevo</button>`}</div>`;
 }
 function patientPicker(key) {
   const st = ppState(key);
@@ -24,14 +24,14 @@ function patientPicker(key) {
   if (p) return `<div class="ppsel"><span class="avatar">${initials(p.name)}</span><div class="grow"><div class="t">${esc(p.name)}</div><div class="small muted">${esc(p.ci)} · ${ageTxt(p)}${p.allergies.length ? ` · <span class="allergy-txt">⚠ Alergias: ${esc(p.allergies.join(', '))}</span>` : ''}</div></div><button class="btn sm" data-act="ppClear" data-k="${key}">Cambiar</button></div>`;
   return `<div class="search">${icon('buscar')}<input class="input" id="pp-${key}-q" placeholder="Escriba el nombre o la cédula del paciente" value="${esc(st.q)}" data-in="ppSearch" data-k="${key}" autocomplete="off" aria-label="Buscar paciente"></div>
     <div class="list" id="pp-${key}-res" style="margin-top:8px;box-shadow:none;border:1px solid var(--line)">${ppResults(key)}</div>
-    <button class="btn sm" style="margin-top:8px" data-act="ppNew" data-k="${key}">+ Paciente nuevo</button>`;
+    ${st.existingOnly ? '' : `<button class="btn sm" style="margin-top:8px" data-act="ppNew" data-k="${key}">+ Paciente nuevo</button>`}`;
 }
 const ppRedraw = key => { const box = document.getElementById('pp-' + key); if (box) box.innerHTML = patientPicker(key); UI.ppChanged?.[key]?.(); };
 const ppKeepNew = key => { const st = ppState(key); const g = s => document.getElementById(`pp-${key}-${s}`); if (g('n')) st.np = { name: g('n').value, ci: g('ci').value, phone: g('t').value, birth: g('b').value, sex: g('s').value }; };
 ACTIONS.ppSearch = el => { const k = el.dataset.k; ppState(k).q = el.value; document.getElementById(`pp-${k}-res`).innerHTML = ppResults(k); };
 ACTIONS.ppPick = el => { const st = ppState(el.dataset.k); st.pid = el.dataset.id; st.newPat = false; ppRedraw(el.dataset.k); };
 ACTIONS.ppClear = el => { const st = ppState(el.dataset.k); st.pid = null; ppRedraw(el.dataset.k); document.getElementById(`pp-${el.dataset.k}-q`)?.focus(); };
-ACTIONS.ppNew = el => { const st = ppState(el.dataset.k); st.newPat = true; st.pid = null; if (st.q && !st.np.name) st.np = { [/\d/.test(st.q) ? 'ci' : 'name']: st.q }; ppRedraw(el.dataset.k); };
+ACTIONS.ppNew = el => { const st = ppState(el.dataset.k); if (st.existingOnly) return; st.newPat = true; st.pid = null; if (st.q && !st.np.name) st.np = { [/\d/.test(st.q) ? 'ci' : 'name']: st.q }; ppRedraw(el.dataset.k); };
 ACTIONS.ppBack = el => { ppKeepNew(el.dataset.k); ppState(el.dataset.k).newPat = false; ppRedraw(el.dataset.k); };
 ACTIONS.ppDup = el => {
   const k = el.dataset.k; const ci = normDigits(document.getElementById(`pp-${k}-ci`).value); const hit = ci.length > 5 && S.patients.find(p => normDigits(p.ci) === ci);

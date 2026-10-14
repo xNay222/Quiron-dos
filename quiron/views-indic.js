@@ -50,21 +50,21 @@ function indicationsTab(a) {
 // Resumen en la tarjeta de la cama
 const bedIndications = a => { const l = admIndications(a.id).filter(i => i.status === 'activa').map(i => ({ i, st: indState(i) })).filter(x => x.st.k !== 'done');
   if (!l.length) return ''; const order = { late: 0, soon: 1, ok: 2, prn: 3 }; l.sort((x, y) => order[x.st.k] - order[y.st.k] || (x.st.next || 0) - (y.st.next || 0));
-  return `<div style="display:grid;gap:4px;margin-top:8px">${l.slice(0, 3).map(({ i, st }) => `<div class="between small" style="gap:6px"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(i.med)}</span><span class="pill ${st.cls}" style="flex:none">${st.k === 'ok' ? hhmm(st.next) : st.k === 'prn' ? 'SN' : st.t.replace('Atrasada · tocaba ', 'Atrasada ')}</span></div>`).join('')}${l.length > 3 ? `<div class="small muted">+${l.length - 3} indicación(es) más</div>` : ''}</div>`; };
+  return `<div style="display:grid;gap:4px;margin-top:8px">${l.slice(0, 3).map(({ i, st }) => `<div class="bed-dose ${st.k === 'late' ? 'late' : ''}"><span>${esc(i.med)}</span><span class="pill ${st.cls}" style="flex:none">${st.k === 'ok' ? hhmm(st.next) : st.k === 'prn' ? 'SN' : st.t.replace('Atrasada · tocaba ', 'Atrasada ')}</span></div>`).join('')}${l.length > 3 ? `<div class="small muted">+${l.length - 3} indicación(es) más</div>` : ''}</div>`; };
 
 // ---------- Nueva indicación (médico o residente) ----------
 ACTIONS.indNew = el => { if (!isClin()) return; const a = admOf(el.dataset.id);
   UI.ind = { admId: a.id, pidProd: '', med: '', dose: '', freq: '', days: '', note: '', start: hhmm(new Date()) };
   openSheet(`Nueva indicación · ${pat(a.pid).name}`, indForm(), `<span class="note" id="ind-msg"></span><button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="indSave">Guardar indicación</button>`, { wide: true }); };
 function indForm() { const o = UI.ind; const p = pat(admOf(o.admId).pid);
-  return `${p.allergies.length ? `<div class="banner allergy"><b>⚠ Alergias:</b>&nbsp;${esc(p.allergies.join(', '))}</div>` : ''}
+  return `${patientBand(p.id, admOf(o.admId).bed)}${sheetStep(1, 'Medicamento, dosis y vía')}
   <div class="form">
     <div class="field full"><label for="ind-p">Medicamento <span style="color:var(--bad)">*</span></label>${prodList('ind-list', medProducts(false))}<input class="input" id="ind-p" list="ind-list" value="${esc(o.med)}" placeholder="Busque en el inventario o escriba el nombre" autocomplete="off" data-ch="indProd"></div>
     <div class="field"><label for="ind-d">Dosis y vía</label><input class="input" id="ind-d" value="${esc(o.dose)}" placeholder="Ej. 30 mg endovenoso"></div>
-    <div class="field"><label for="ind-s">Primera dosis a las</label><input class="input" type="time" id="ind-s" value="${o.start}"></div>
+    <div class="full">${sheetStep(2, 'Horario y duración')}</div><div class="field"><label for="ind-s">Primera dosis a las</label><input class="input" type="time" id="ind-s" value="${o.start}"></div>
     <div class="field"><label for="ind-days">Duración (días)</label><input class="input" type="number" min="1" id="ind-days" value="${esc(o.days)}" placeholder="Vacío = hasta nuevo aviso"></div>
     <div class="field"><label for="ind-n">Observación (opcional)</label><input class="input" id="ind-n" value="${esc(o.note)}" placeholder="Ej. diluir en 100 ml, pasar en 30 min"></div></div>
-  <div><b class="small">Frecuencia <span style="color:var(--bad)">*</span></b><div class="freqpanel" role="group" aria-label="Frecuencia" style="margin-top:6px">${IND_FREQS.map(f => `<button class="btn sm ${f === o.freq ? 'primary' : ''}" data-act="indFreq" data-f="${f}" aria-pressed="${f === o.freq}">${f}</button>`).join('')}</div></div>
+  <div>${sheetStep(3, 'Frecuencia <span style="color:var(--bad)">*</span>')}<div class="freqpanel" role="group" aria-label="Frecuencia" style="margin-top:6px">${IND_FREQS.map(f => `<button class="btn sm ${f === o.freq ? 'primary' : ''}" data-act="indFreq" data-f="${f}" aria-pressed="${f === o.freq}">${f}</button>`).join('')}</div></div>
   ${o.pidProd ? `<div class="small muted">En piso para este paciente: ${floorUnits(o.admId, o.pidProd)} unidad(es) entregadas por el almacén.</div>` : o.med ? '<div class="small muted">No está en el inventario: se registra la indicación, pero no se descuenta del almacén.</div>' : ''}`; }
 const indKeep = () => { const o = UI.ind; o.med = val('ind-p').trim(); o.dose = val('ind-d').trim(); o.start = val('ind-s'); o.days = val('ind-days'); o.note = val('ind-n').trim(); };
 ACTIONS.indProd = el => { indKeep(); const p = pickProd(el.value, medProducts(false)); UI.ind.pidProd = p?.id || ''; if (p) UI.ind.med = p.name; if (p && !UI.ind.dose) UI.ind.dose = doseOf(p); refreshSheet(indForm()); };
@@ -78,7 +78,7 @@ ACTIONS.indSave = () => {
   log('Indicación médica', `${pat(a.pid).name} · ${o.med} ${o.dose} · ${o.freq}${days ? ` · ${days} días` : ''}`); save(); closeSheet(); UI.hospTab = 'indicaciones'; render(); toast('Indicación guardada: enfermería ya la ve en la cama');
 };
 ACTIONS.indStop = el => { const i = (S.indications || []).find(x => x.id === el.dataset.id);
-  openSheet(`Suspender ${i.med}`, `<div class="field"><label for="is-r">Motivo (opcional)</label><input class="input" id="is-r" placeholder="Ej. cambio de antibiótico, alta próxima"></div>`,
+  openSheet(`Suspender ${i.med}`, `${patientBand(i.pid, admOf(i.admId)?.bed)}<div class="field"><label for="is-r">Motivo (opcional)</label><input class="input" id="is-r" placeholder="Ej. cambio de antibiótico, alta próxima"></div>`,
     `<button class="btn" data-act="close">Cancelar</button><button class="btn danger" data-act="indStopSave" data-id="${i.id}">Suspender</button>`); };
 ACTIONS.indStopSave = el => { if (!isClin()) return; const i = S.indications.find(x => x.id === el.dataset.id); i.status = 'suspendida'; i.suspendedAt = nowStamp(); i.suspendedBy = actor(); i.stopReason = val('is-r').trim();
   log('Indicación suspendida', `${pat(i.pid).name} · ${i.med}${i.stopReason ? ' · ' + i.stopReason : ''}`); save(); closeSheet(); render(); toast('Indicación suspendida'); };
@@ -87,7 +87,7 @@ ACTIONS.indStopSave = el => { if (!isClin()) return; const i = S.indications.fin
 ACTIONS.indGive = el => { const i = S.indications.find(x => x.id === el.dataset.id); const st = indState(i); UI.ig = { id: i.id, ok: true };
   openSheet(`Aplicación · ${i.med}`, igBody(i, st), `<span class="note" id="ig-msg"></span><button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="indGiveSave" data-id="${i.id}">Registrar</button>`); };
 function igBody(i, st = indState(i)) { const o = UI.ig;
-  return `<div class="small muted">${esc([i.dose, i.freq, i.note].filter(Boolean).join(' · '))} · <span class="pill ${st.cls}">${st.t}</span></div>
+  return `${patientBand(i.pid, admOf(i.admId)?.bed)}<div class="small muted">${esc([i.dose, i.freq, i.note].filter(Boolean).join(' · '))} · <span class="pill ${st.cls}">${st.t}</span></div>
   <div class="seg" role="group" aria-label="Resultado"><button data-act="igOk" data-k="1" aria-pressed="${o.ok}">Aplicada</button><button data-act="igOk" data-k="0" aria-pressed="${!o.ok}">No se aplicó</button></div>
   <div class="form"><div class="field"><label for="gd-t">Hora</label><input class="input" type="time" id="gd-t" value="${hhmm(new Date())}"></div>
     <div class="field"><label for="gd-n">Enfermera</label><select class="input" id="gd-n">${(S.nurses || []).map(n => `<option ${n === dutyOf(dAt(0)).nurse ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></div>

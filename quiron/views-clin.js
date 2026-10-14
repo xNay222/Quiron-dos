@@ -7,7 +7,11 @@
 // "ingreso": la primera historia de una hospitalización o emergencia (motivo, enfermedad actual, examen, diagnóstico y plan).
 const NOTE_TYPES = { consulta: 'Consulta', ingreso: 'Historia de ingreso', evolucion: 'Evolución', operatoria: 'Nota operatoria', libre: 'Nota libre', informe: 'Informe médico' };
 // Un ingreso sin historia de ingreso firmada empieza por ella; después, evoluciones
-const hasIngreso = admId => S.hc.some(n => n.admId === admId && n.type === 'ingreso');
+const hasIngreso = admId => S.hc.some(n => n.admId === admId && n.type === 'ingreso' && n.status === 'firmada');
+function clinicalNoteTitle(n) {
+  if (n.evolutionId) return n.type === 'ingreso' ? 'Valoración inicial del ingreso' : 'Evolución médica';
+  return NOTE_TYPES[n.type] || 'Historia clínica';
+}
 const admNoteType = admId => admId && !hasIngreso(admId) ? 'ingreso' : 'evolucion';
 const isFree = t => t === 'libre' || t === 'informe';
 // Médico que suscribe por defecto: el último que atendió al paciente, o el primero de la lista
@@ -68,7 +72,7 @@ function noteForm() {
   const p = pat(n.pid); const v = n.vitals || {};
   const ta = (id, label, val, ph = '') => `<div class="field full"><label for="${id}">${label}</label><textarea class="input" id="${id}" rows="3" placeholder="${ph}">${esc(val || '')}</textarea></div>`;
   const chip = (t, area) => { const on = n.tests.includes(t); return `<button class="btn sm ${on ? 'primary' : ''}" data-act="ntTest" data-t="${esc(t)}" aria-pressed="${on}">${on ? '✓ ' : ''}${esc(t)}</button>`; };
-  const head = `${n.pickPatient && !n.id ? `<div class="between"><span class="small muted">Paciente elegido</span><button class="btn ghost sm" data-act="ntChangePat">Cambiar de paciente</button></div>` : ''}
+  const head = `${patientBand(p.id, n.admId ? admOf(n.admId)?.bed : '')}${n.pickPatient && !n.id ? `<div class="between"><span class="small muted">Paciente elegido</span><button class="btn ghost sm" data-act="ntChangePat">Cambiar de paciente</button></div>` : ''}
   ${n.admId && admOf(n.admId) ? `<div class="banner">Queda en el ingreso ${esc(admOf(n.admId).num)} (${esc(admOf(n.admId).bed)}) de ${admArea(admOf(n.admId)) === 'emerg' ? 'Emergencias' : 'Hospitalización'}.</div>` : ''}
   <div class="card" style="display:grid;gap:6px"><div class="between"><div><b style="font-size:17px">${esc(p.name)}</b><div class="small muted">${esc(p.code)} · ${esc(p.ci)} · ${ageTxt(p)} · ${p.sex === 'F' ? 'Femenino' : p.sex === 'M' ? 'Masculino' : 'sexo no registrado'}${p.blood ? ' · ' + esc(p.blood) : ''}</div></div>
     <div class="seg" role="group" aria-label="Tipo de nota">${Object.entries(NOTE_TYPES).filter(([k]) => isClin() || k === 'informe').map(([k, t]) => `<button data-act="ntType" data-k="${k}" aria-pressed="${n.type === k}">${t}</button>`).join('')}</div></div>
@@ -97,7 +101,7 @@ function noteForm() {
     <datalist id="rx-meds">${allMedNames().map(m => `<option value="${esc(m)}">`).join('')}</datalist>
     <div class="stack">${n.recipe.map((r, i) => `<div class="chip-x rxrow"><input class="input" style="flex:2" id="rx-m${i}" list="rx-meds" value="${esc(r.med)}" placeholder="Medicamento" aria-label="Medicamento"><input class="input" id="rx-d${i}" value="${esc(r.dosis)}" placeholder="Dosis" aria-label="Dosis"><input class="input" id="rx-f${i}" value="${esc(r.frec)}" placeholder="Frecuencia" aria-label="Frecuencia"><input class="input" id="rx-u${i}" value="${esc(r.dur)}" placeholder="Duración" aria-label="Duración"><button class="btn ghost" data-act="ntRxDel" data-i="${i}" aria-label="Quitar">✕</button></div>`).join('') || '<span class="small muted">Sin medicamentos.</span>'}</div></div>
   <div><b class="small">Solicitar exámenes</b>
-    <div class="small muted" style="margin:6px 0 4px">Laboratorio</div><div class="hstack">${[...Object.keys(LAB_COMBOS), ...Object.keys(labPanels())].map(t => chip(t)).join('')}</div>
+    <div class="small muted" style="margin:6px 0 4px">Laboratorio</div><div class="hstack">${labTestNames().map(t => chip(t)).join('')}</div>
     <div class="small muted" style="margin:10px 0 4px">Rayos X, ecografía y otros</div><div class="hstack">${IMG_TESTS.map(t => chip(t)).join('')}</div>
     <label class="hstack small" style="margin-top:10px"><input type="checkbox" id="nt-urg" ${n.urgent ? 'checked' : ''}> Urgente</label></div>`;
 }
@@ -131,6 +135,7 @@ function createOrders(n) {
   return out;
 }
 ACTIONS.saveNote = el => {
+  if (UI.nt?.id && S.hc.some(n => n.id === UI.nt.id && n.status === 'firmada')) { toast('La historia firmada solo admite adendas.'); return; }
   const n = readNote(); const sign = el.dataset.sign === '1'; const msg = document.getElementById('nt-msg');
   if (!n.pid) { msg.textContent = 'Primero elija el paciente.'; return; }
   if (isFree(n.type)) { if (!n.actual.trim()) { msg.textContent = n.type === 'informe' ? 'Redacte el contenido del informe antes de guardarlo.' : 'Escribe la nota antes de guardarla.'; return; } }
@@ -154,13 +159,14 @@ ACTIONS.saveNote = el => {
 ACTIONS.openNote = el => {
   if (!can('pac.historia') && !can('hosp.clinico')) { toast('No tiene acceso a la historia clínica'); return; }
   const n = S.hc.find(x => x.id === el.dataset.id); if (!n) return;
+  if (n.consultId) { const c = consultOf(n.consultId); if (c && consultAccessible(c)) { closeSheet(); go('consultas', c.id); } return; }
   if (n.status === 'borrador') {
     if (n.doc !== ME() && role() !== 'admin') { toast('Solo el autor puede editar un borrador'); return; }
     UI.nt = { ...JSON.parse(JSON.stringify(n)), dx: n.dx.length ? [...n.dx] : [''], tests: n.tests || [], pickPatient: false }; openNoteEditor(); return;
   }
   const p = pat(n.pid); const v = n.vitals || {}; const orders = S.exams.filter(e => e.note === n.id);
   const sec = (t, x) => x ? `<div><div class="small muted">${t}</div><div style="white-space:pre-wrap">${esc(x)}</div></div>` : '';
-  openSheet(`${NOTE_TYPES[n.type]} · ${p.name}`, `<div class="between"><div class="small muted">${fdate(n.date)} ${n.time} · ${esc(med(n.doc)?.name)} · ${esc(med(n.doc)?.esp)}</div><span class="pill good">Firmada ${n.signedAt?.slice(11) || ''}</span></div>
+  openSheet(`${clinicalNoteTitle(n)} · ${p.name}`, `${patientBand(p.id, n.admId ? admOf(n.admId)?.bed : '')}<div class="between"><div class="small muted">${fdate(n.date)} ${n.time} · ${esc(med(n.doc)?.name)} · ${esc(med(n.doc)?.esp)}</div><span class="pill good">Firmada ${n.signedAt?.slice(11) || ''}</span></div>
     ${p.allergies.length ? `<div class="banner allergy"><b>⚠ Alergias:</b>&nbsp;${esc(p.allergies.join(', '))}</div>` : ''}
     ${isFree(n.type) ? `${n.motivo ? `<div style="font-size:18px;font-weight:600">${esc(n.motivo)}</div>` : ''}${n.to ? `<div class="small muted">Dirigido a: ${esc(n.to)}</div>` : ''}<div class="freeview">${esc(n.actual)}</div>`
       : sec(n.type === 'operatoria' ? 'Cirugía realizada' : n.type === 'ingreso' ? 'Motivo de ingreso' : 'Motivo de consulta', n.motivo) + sec(n.type === 'operatoria' ? 'Procedimiento y hallazgos' : n.type === 'evolucion' ? 'Evolución' : 'Enfermedad actual', n.actual)}
@@ -175,9 +181,18 @@ ACTIONS.openNote = el => {
     <div class="small muted">Historia firmada: no se puede modificar. Las correcciones se agregan como nota aclaratoria y quedan en el historial.</div>`,
     `<button class="btn" data-act="pdfNote" data-id="${n.id}">${n.type === 'informe' ? 'Descargar informe (PDF)' : 'Descargar historia (PDF)'}</button>${n.recipe?.length ? `<button class="btn" data-act="rxPdf" data-id="${n.id}">Récipe (PDF)</button>` : ''}${can('pac.escribir') ? `<button class="btn" data-act="noteScan" data-id="${n.id}">${n.scans?.length ? 'Agregar otra hoja firmada' : 'Subir copia firmada y sellada'}</button>` : ''}${isClin() ? `<button class="btn primary" data-act="addendum" data-id="${n.id}">Agregar nota aclaratoria</button>` : ''}`, { wide: true });
 };
-ACTIONS.addendum = el => openSheet('Nota aclaratoria', `<div class="field"><label for="ad-t">Aclaración o corrección</label><textarea class="input" id="ad-t" rows="5"></textarea></div><div class="small muted">Se agrega a la historia con tu nombre, fecha y hora. El texto original no cambia.</div>`,
-  `<button class="btn" data-act="openNote" data-id="${el.dataset.id}">Volver</button><button class="btn primary" data-act="saveAddendum" data-id="${el.dataset.id}">Agregar</button>`);
-ACTIONS.saveAddendum = el => { const t = val('ad-t').trim(); if (!t) { toast('Escribe la nota'); return; } const n = S.hc.find(x => x.id === el.dataset.id); n.addenda.push({ at: nowStamp(), by: actor(), text: t }); log('Nota aclaratoria agregada', `${pat(n.pid).name} · historia del ${n.date}`); save(); ACTIONS.openNote({ dataset: { id: n.id } }); toast('Nota agregada'); };
+ACTIONS.addendum = el => { const n = S.hc.find(x => x.id === el.dataset.id); const c = n?.consultId && consultOf(n.consultId); if (!n || n.status !== 'firmada' || (c ? !(consultAccessible(c) && (c.doc === myDoc() || can('consulta.firmar'))) : !can('pac.escribir'))) return; return openSheet('Nota aclaratoria', `${patientBand(S.hc.find(n => n.id === el.dataset.id)?.pid)}<div class="field"><label for="ad-t">Aclaración o corrección</label><textarea class="input" id="ad-t" rows="5"></textarea></div><div class="small muted">Se agrega a la historia con su nombre, fecha y hora. El texto original no cambia.</div>`,
+  `<button class="btn" data-act="openNote" data-id="${el.dataset.id}">Volver</button><button class="btn primary" data-act="saveAddendum" data-id="${el.dataset.id}">Agregar</button>`); };
+ACTIONS.saveAddendum = el => {
+  const n = S.hc.find(x => x.id === el.dataset.id); if (!n || n.status !== 'firmada') return;
+  const c = n.consultId && consultOf(n.consultId);
+  if (c ? !(consultAccessible(c) && (c.doc === myDoc() || can('consulta.firmar'))) : !can('pac.escribir')) { toast('No tiene permiso para agregar una adenda.'); return; }
+  const t = val('ad-t').trim(); if (!t) { toast('Escriba la nota.'); return; }
+  const backup = JSON.parse(JSON.stringify(S)); const entry = { at: nowStamp(), by: actor(), user: S.session?.uid, text: t };
+  n.addenda.push(entry); if (c) { c.report.addenda.push({ ...entry }); consultAudit(c, 'adenda_agregada', n.id); }
+  log('Nota aclaratoria agregada', n.id); if (!save()) { S = backup; syncStaff(); toast('Error al guardar. La adenda no quedó registrada.'); return; }
+  ACTIONS.openNote({ dataset: { id: n.id } }); toast('Adenda guardada; el texto firmado se conserva.');
+};
 
 // Los PDF (historia, récipe) se generan en pdf-kit.js con el diseño A4 de la clínica
 

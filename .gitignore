@@ -6,3 +6,11 @@ datos privados/
 
 # Documentos subidos (historias y consentimientos firmados): datos de pacientes
 archivos/
+
+# Perfiles temporales del navegador de pruebas
+.phase1-browser/
+.phase1-chrome/
+
+# Datos locales de herramientas (no son parte del software)
+.claude/data/
+.impeccable/

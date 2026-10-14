@@ -6,7 +6,9 @@
 // Importante: en este prototipo todo vive en el navegador; en el sistema definitivo la validación la hace el servidor.
 
 const SESSION_KEY = 'quiron-sesion';
-const ROLE_ORDER = ['admin', 'recepcion', 'medico', 'residente', 'enfermeria', 'almacen', 'laboratorio', 'imagen'];
+const ROLE_ORDER = ['admin', 'medico', 'residente', 'enfermeria', 'almacen', 'recepcion', 'laboratorio', 'imagen'];
+const userRoles = () => [...ROLE_ORDER.filter(r => ROLES[r]), ...Object.keys(ROLES).filter(r => !ROLE_ORDER.includes(r))];
+const userRoleTitle = r => ({ admin: 'Administradores', medico: 'Médicos', residente: 'Residentes', enfermeria: 'Enfermeras', almacen: 'Almacén', recepcion: 'Recepción', laboratorio: 'Laboratorio', imagen: 'Imagen/Radiología' })[r] || ROLES[r]?.name || r;
 const roleLabel = r => r === 'admin' ? 'Administrador · control maestro' : ROLES[r]?.name || r;
 const USER_ST = { activo: ['Activo', 'good'], invitado: ['Invitación pendiente', 'warn'], desactivado: ['Desactivado', ''] };
 const b64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
@@ -174,15 +176,15 @@ const docSelect = (role, sel) => ['medico', 'residente'].includes(role) ? `<div 
 function userForm(u) {
   return `<div class="form"><div class="field"><label for="us-name">Nombre completo</label><input class="input" id="us-name" value="${esc(u.name || '')}"></div>
     <div class="field"><label for="us-email">Correo electrónico</label><input class="input" type="email" id="us-email" value="${esc(u.email || '')}" ${u.id ? 'disabled' : ''}></div>
-    <div class="field"><label for="us-role">Rol</label><select class="input" id="us-role" data-ch="usRole" ${u.id && u.id === S.session?.uid ? 'disabled' : ''}>${ROLE_ORDER.map(r => `<option value="${r}" ${r === u.role ? 'selected' : ''}>${esc(roleLabel(r))}</option>`).join('')}</select></div>
+    <div class="field"><label for="us-role">Rol</label><select class="input" id="us-role" data-ch="usRole" ${u.id && u.id === S.session?.uid ? 'disabled' : ''}>${userRoles().map(r => `<option value="${r}" ${r === u.role ? 'selected' : ''}>${esc(roleLabel(r))}</option>`).join('')}</select></div>
     <div id="us-docbox">${docSelect(u.role, u.doc)}</div></div>
     <div class="small muted" id="us-rolehelp">${roleHelp(u.role)}</div>`;
 }
 const roleHelp = r => ({ admin: 'Acceso total, incluidos usuarios, contabilidad, presupuestos y ajustes.', recepcion: 'Agenda completa (citas y cirugías) y fichas de pacientes: datos de contacto, consentimientos y preoperatorios externos. No ve historias clínicas.', medico: 'Su consulta y su agenda: programa sus propias citas y cirugías; quirófano, hospitalización, pacientes, historias clínicas, informes y sus exámenes.', residente: 'Hospitalización completa; consulta de pacientes, exámenes e historias.', enfermeria: 'Hospitalización y quirófano: solicita medicación y material, registra aplicaciones y devoluciones, y lee las evoluciones.', almacen: 'Inventario, compras y despacho. Ve qué se pidió en quirófano y hospitalización, sin modificar. No ve el valor total del inventario.', laboratorio: 'Laboratorio completo (sin rayos X) y pacientes: alergias, antecedentes y exámenes.', imagen: 'Rayos X e imagen: órdenes, estudios e informes.' })[r] || '';
 ACTIONS.usRole = el => { document.getElementById('us-docbox').innerHTML = docSelect(el.value, null); document.getElementById('us-rolehelp').textContent = roleHelp(el.value); };
-ACTIONS.userNew = () => {
+ACTIONS.userNew = (el = {}) => { if (!can('*')) return;
   UI.usMode = 'invite';
-  openSheet('Nuevo usuario', userForm({ role: 'recepcion' }) + `<div><b class="small">¿Cómo recibirá el acceso?</b><div class="seg" role="group" aria-label="Forma de acceso" style="margin-top:6px"><button data-act="usMode" data-k="invite" aria-pressed="true">Código de invitación</button><button data-act="usMode" data-k="temp" aria-pressed="false">Contraseña temporal</button></div>
+  openSheet('Nuevo usuario', userForm({ role: ROLES[el.dataset?.role] ? el.dataset.role : 'recepcion' }) + `<div><b class="small">¿Cómo recibirá el acceso?</b><div class="seg" role="group" aria-label="Forma de acceso" style="margin-top:6px"><button data-act="usMode" data-k="invite" aria-pressed="true">Código de invitación</button><button data-act="usMode" data-k="temp" aria-pressed="false">Contraseña temporal</button></div>
     <div class="small muted" id="us-modehelp" style="margin-top:6px">${modeHelp('invite')}</div></div>`,
     `<span class="note" id="us-msg"></span><button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="userSave">Crear usuario</button>`);
 };
@@ -243,32 +245,27 @@ ACTIONS.userReissue = async el => {
 
 // ---------- Usuarios › Médicos y Enfermeras (personal clínico) ----------
 // Los médicos de esta lista son los que aparecen en la agenda, en "Médico tratante", en "Médico que solicita" y en la guardia.
-const US_TABS = [['usuarios', 'Usuarios'], ['medicos', 'Médicos y residentes'], ['enfermeras', 'Enfermeras']];
 const DOC_KIND = { medico: 'Médico tratante', residente: 'Médico residente', anestesiologo: 'Anestesiólogo' };
 const docKind = m => m.resident ? 'residente' : isAnest(m) ? 'anestesiologo' : 'medico';
 VIEWS.usuarios = () => {
-  const t = UI.usTab || 'usuarios';
-  const seg = `<div class="seg sec" role="group" aria-label="Sección" style="margin-bottom:14px">${US_TABS.map(([k, n]) => `<button data-act="usTab" data-k="${k}" aria-pressed="${t === k}">${n}</button>`).join('')}</div>`;
-  if (t === 'usuarios') return usersList().replace('<div class="grid g4">', seg + '<div class="grid g4">');
-  if (t === 'medicos') {
-    const all = (S.doctors || []).filter(d => !d.example); const grp = k => all.filter(d => d.active !== false && docKind(d) === k);
-    const rows = l => l.map(d => `<button class="row" data-act="staffDoc" data-id="${d.id}"><span class="avatar">${initials(d.name.replace(/^(Dra?|Lic)\. /, ''))}</span><div class="grow"><div class="t">${esc(d.name)}</div><div class="s">${esc(d.esp)} · ${esc(hoursText(d.id))}</div></div>${d.active === false ? '<span class="pill">Inactivo</span>' : ''}</button>`).join('');
-    return header('Usuarios', 'Personal clínico de la clínica', `<button class="btn primary" data-act="staffDoc">+ Agregar médico</button>`) + seg +
-      `<div class="banner" style="margin-bottom:14px">Esta lista alimenta la agenda, "Médico tratante", "Médico que solicita" y la guardia. Para que un médico entre al sistema, créele además un usuario y vincúlelo.</div>
-      ${Object.keys(DOC_KIND).map(k => grp(k).length ? `<h3 class="small muted" style="margin:14px 0 6px">${{ medico: 'Médicos tratantes', residente: 'Médicos residentes', anestesiologo: 'Anestesiólogos' }[k]} (${grp(k).length})</h3><div class="list">${rows(grp(k))}</div>` : '').join('')}
-      ${all.some(d => d.active === false) ? `<h3 class="small muted" style="margin:14px 0 6px">Inactivos</h3><div class="list">${rows(all.filter(d => d.active === false))}</div>` : ''}`;
-  }
-  const ns = S.nurseStaff || [];
-  return header('Usuarios', 'Personal clínico de la clínica', `<button class="btn primary" data-act="staffNurse">+ Agregar enfermera</button>`) + seg +
-    `<div class="banner" style="margin-bottom:14px">Los días fijos ponen a cada enfermera de guardia automáticamente. Ese día se puede cambiar en la guardia (Hospitalización o Agenda).</div>
-    <div class="list">${ns.map((n, i) => `<button class="row" data-act="staffNurse" data-i="${i}"><span class="avatar" style="background:var(--good-soft);color:var(--good)">${initials(n.name)}</span><div class="grow"><div class="t">${esc(n.name)}</div><div class="s">${n.days?.length ? 'Guardia fija: ' + n.days.map(d => DAY_NAMES[d]).join(', ') : 'Sin días fijos'}</div></div>${n.active === false ? '<span class="pill">Inactiva</span>' : ''}</button>`).join('') || '<div class="empty">No hay enfermeras registradas.</div>'}</div>`;
+  if (!can('*')) return '<div class="empty">No tiene permiso para administrar usuarios.</div>';
+  return header('Usuarios', 'Personal y acceso al sistema, organizados por rol') + userRoles().map(r => {
+    const users = (S.users || []).filter(u => u.role === r);
+    const docs = ['medico', 'residente'].includes(r) ? (S.doctors || []).filter(d => !d.example && !!d.resident === (r === 'residente')) : [];
+    const nurses = r === 'enfermeria' ? (S.nurseStaff || []) : [];
+    const staff = docs.map(d => `<button class="row" data-act="staffDoc" data-id="${d.id}"><span class="avatar">${initials(d.name)}</span><div class="grow"><div class="t">${esc(d.name)}</div><div class="s">${esc(d.esp)} · ${esc(hoursText(d.id))}</div></div>${d.active === false ? '<span class="pill">Inactivo</span>' : ''}</button>`).join('') + nurses.map(n => `<button class="row" data-act="staffNurse" data-i="${S.nurseStaff.indexOf(n)}"><span class="avatar">${initials(n.name)}</span><div class="grow"><div class="t">${esc(n.name)}</div><div class="s">${n.days?.length ? 'Guardia fija: ' + n.days.map(d => DAY_NAMES[d]).join(', ') : 'Sin días fijos'}</div></div>${n.active === false ? '<span class="pill">Inactiva</span>' : ''}</button>`).join('');
+    const accounts = users.map(u => `<button class="row" data-act="userEdit" data-id="${u.id}"><span class="avatar">${initials(u.name)}</span><div class="grow"><div class="t">${esc(u.name)}${u.id === S.session?.uid ? ' <span class="pill info">Usted</span>' : ''}</div><div class="s">${esc(u.email || '')}${u.doc ? ' · ' + esc(med(u.doc)?.name || '') : ''}</div></div><div class="end"><span class="pill ${USER_ST[u.status]?.[1] || ''}">${USER_ST[u.status]?.[0] || esc(u.status)}</span><div class="small muted">${u.lastLogin ? 'Último acceso ' + esc(u.lastLogin) : 'Sin accesos'}</div></div></button>`).join('');
+    const count = users.length + ' usuario(s)' + (['medico', 'residente'].includes(r) ? ' · ' + docs.length + ' en personal' : r === 'enfermeria' ? ' · ' + nurses.length + ' en personal' : '');
+    const addStaff = ['medico', 'residente'].includes(r) ? `<button class="btn" data-act="staffDoc" data-kind="${r}">+ Agregar ${r === 'residente' ? 'residente' : 'médico'}</button>` : r === 'enfermeria' ? '<button class="btn" data-act="staffNurse">+ Agregar enfermera</button>' : '';
+    return `<section class="sec" data-user-role="${r}"><div class="between"><h2>${esc(userRoleTitle(r))} <span class="pill">${count}</span></h2><div class="hstack">${addStaff}<button class="btn primary" data-act="userNew" data-role="${r}">+ Agregar usuario</button></div></div>${staff ? '<div class="small muted">Personal · editar datos, estado y guardias. Horarios de consulta en Agenda.</div><div class="list" style="margin:8px 0 14px">' + staff + '</div><div class="small muted">Acceso al sistema · invitaciones, contraseñas y permisos</div>' : ''}<div class="list" style="margin-top:8px">${accounts || '<div class="empty">No hay usuarios de este rol.</div>'}</div></section>`;
+  }).join('');
 };
 ACTIONS.usTab = el => { UI.usTab = el.dataset.k; render(); };
 ACTIONS.staffDoc = el => { if (!can('*')) return; const d = (S.doctors || []).find(x => x.id === el.dataset?.id) || {};
   openSheet(d.id ? d.name : 'Agregar médico', `<div class="form">
     <div class="field"><label for="sd-n">Nombre (con Dr., Dra. o Lic.)</label><input class="input" id="sd-n" value="${esc(d.name || '')}" placeholder="Ej. Dr. Pedro Gómez"></div>
     <div class="field"><label for="sd-e">Especialidad</label><input class="input" id="sd-e" value="${esc(d.esp || '')}" placeholder="Ej. Traumatología"></div>
-    <div class="field"><label for="sd-k">Tipo</label><select class="input" id="sd-k">${Object.entries(DOC_KIND).map(([k, t]) => `<option value="${k}" ${d.id && docKind(d) === k ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+    <div class="field"><label for="sd-k">Tipo</label><select class="input" id="sd-k">${Object.entries(DOC_KIND).map(([k, t]) => `<option value="${k}" ${(d.id ? docKind(d) : el.dataset?.kind || 'medico') === k ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
     <label class="field hstack small" style="align-self:end"><input type="checkbox" id="sd-a" ${d.active !== false ? 'checked' : ''}> Activo (aparece en las listas)</label></div>
     <div class="small muted">Su historial se conserva aunque lo desactive. El horario de consulta se carga en Agenda › Consultas › Horarios de médicos.</div><span class="note" id="sd-msg"></span>`,
     `<button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="staffDocSave" data-id="${d.id || ''}">Guardar</button>`); };

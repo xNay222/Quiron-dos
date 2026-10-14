@@ -20,7 +20,7 @@ const TOURS = {
       { go: 'quirofano', el: '.main [data-act="kitsOpen"]', t: 'Kits de cirugía', d: 'Arme aquí los kits (sevoflurano, fentanilo, kit de cama…). Al programar la cirugía se elige el kit y la solicitud al almacén llega precargada.' },
       { go: 'hospitalizacion', el: '.bedgrid', t: 'Hospitalización', d: 'Mapa de camas. Toque una cama ocupada para ver evoluciones, medicación y exámenes del ingreso.' },
       { go: 'emergencias', el: '.bedgrid', t: 'Emergencias', d: 'Las 3 camas de emergencia, con medicación, evoluciones y exámenes como en hospitalización. Si el paciente se queda, use "Pasar a hospitalización".' },
-      { go: 'atencion', el: '#side [data-go="atencion"]', t: 'Presupuestos', d: 'Presupuestos por paquete: se entregan al paciente y, aprobados, pasan a Contabilidad.' },
+      { go: 'atencion', el: '#side [data-go="atencion"]', t: 'Presupuestos', d: 'Presupuestos por paquete: se guardan y se envían directamente a Contabilidad.' },
       { go: 'contabilidad', el: '#side [data-go="contabilidad"]', t: 'Contabilidad', d: 'Lo que hay por confirmar (presupuestos, compras, recurrentes), los cobros y el resumen en USD y Bs.' },
       { go: 'usuarios', el: '#side [data-go="usuarios"]', t: 'Usuarios', d: 'Crea e invita a cada persona con su rol. Solo usted tiene acceso.' },
       { go: 'ajustes', el: '#side [data-go="ajustes"]', t: 'Ajustes', d: 'Tasa BCV, datos de la clínica y copias de seguridad.' },
@@ -28,9 +28,9 @@ const TOURS = {
     { id: 'adm-presupuesto', title: 'Hacer un presupuesto', desc: 'De la elección del paquete al envío a Contabilidad.', steps: [
       { go: 'atencion', el: '.main [data-act="newAttention"][data-budget="1"]', t: 'Nuevo presupuesto', d: 'Empieza aquí. Los presupuestos son quirúrgicos, de emergencia o de procedimientos.' },
       { go: 'atencion', open: () => ACTIONS.newBudget(), el: '.sheet', t: 'Tres pasos', d: '1) Paciente. 2) Tipo y paquete: un clic arma todo. 3) Ajuste solo lo que cambie: horas, días, honorarios y material.' },
-      { go: 'atencion', el: '.main .seg', t: 'Seguimiento', d: 'Cada presupuesto pasa por: pendiente del paciente → en revisión por Contabilidad → aprobado → cobro registrado.' }] },
+      { go: 'atencion', el: '.main .seg', t: 'Seguimiento', d: 'Cada presupuesto pasa por: guardado → enviado a Contabilidad → pago recibido o no pagado / rechazado.' }] },
     { id: 'adm-contab', title: 'Contabilidad y cobros', desc: 'Confirmar, cobrar con o sin factura fiscal y recurrentes.', steps: [
-      { go: 'contabilidad', setup: () => { UI.acTab = 'confirmar'; }, el: '.main [data-act="acTab"][data-k="confirmar"]', t: 'Por confirmar', d: 'Presupuestos aprobados por el paciente, órdenes de compra del almacén y gastos o ingresos recurrentes vencidos.' },
+      { go: 'contabilidad', setup: () => { UI.acTab = 'confirmar'; }, el: '.main [data-act="acTab"][data-k="confirmar"]', t: 'Por confirmar', d: 'Presupuestos enviados a Contabilidad, órdenes de compra del almacén y gastos o ingresos recurrentes vencidos.' },
       { go: 'contabilidad', setup: () => { UI.acTab = 'facturas'; }, el: '.main [data-act="acTab"][data-k="facturas"]', t: 'Cobros', d: 'Todas las cuentas. La factura fiscal es opcional y se puede emitir después.' },
       { go: 'contabilidad', setup: () => { UI.acTab = 'recurrentes'; }, el: '.main [data-act="acTab"][data-k="recurrentes"]', t: 'Recurrentes', d: 'Alcaldía, Fospuca, alquileres, nómina… Cada vencimiento se confirma con su fecha, referencia y tasa.' }] },
     { id: 'adm-usuarios', title: 'Usuarios y copias de seguridad', desc: 'Invitar personal y proteger la información.', steps: [
