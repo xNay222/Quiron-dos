@@ -5,7 +5,7 @@
 const fromMin = m => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 const qxEnd = a => fromMin(toMin(a.time) + Math.round((a.hours || 1) * 60));
 const qxOrders = a => (S.medOrders || []).filter(o => o.apptId === a.id).sort((x, y) => x.at.localeCompare(y.at));
-const canQxDone = a => can('*') || role() === 'enfermeria' || (!!myDoc() && myDoc() === a.doc);
+const canQxDone = a => can('*') || role() === 'enfermeria_plus' || (!!myDoc() && myDoc() === a.doc);
 const kitOf = id => (S.kits || []).find(k => k.id === id);
 const qxDayList = day => S.appts.filter(a => a.kind === 'cirugia' && a.date === day && isActive(a)).sort((x, y) => x.time.localeCompare(y.time));
 
@@ -19,7 +19,7 @@ VIEWS.quirofano = () => {
   const statusCard = today ? `<div class="card between" style="margin-bottom:16px;${current ? 'border-color:var(--bad)' : ''}"><div><h2 style="margin:0 0 2px">${current ? '<span class="pill bad"><span class="dot"></span>En uso</span>' : '<span class="pill good"><span class="dot"></span>Disponible</span>'}</h2>
       <div class="small muted" style="margin-top:6px">${current ? `${esc(pat(current.pid).name)} · ${esc(current.proc)} · hasta las ${qxEnd(current)} aprox.` : next ? `Próxima cirugía a las ${next.time}: ${esc(next.proc)}` : 'No hay más cirugías programadas hoy.'}</div></div></div>` : '';
   return header('Quirófano', today ? fday(day).replace(/^./, c => c.toUpperCase()) : fday(day),
-    `<button class="btn" data-act="qxShift" data-n="-1" aria-label="Día anterior">‹</button><button class="btn" data-act="qxShift" data-n="0">Hoy</button><button class="btn" data-act="qxShift" data-n="1" aria-label="Día siguiente">›</button>${can('*') ? `<button class="btn" data-act="kitsOpen">Kits de cirugía</button>` : ''}${can('agenda.programar') ? `<button class="btn primary" data-act="qxSchedule">Programar cirugía</button>` : ''}`) +
+    `<button class="btn" data-act="qxShift" data-n="-1" aria-label="Día anterior">‹</button><button class="btn" data-act="qxShift" data-n="0">Hoy</button><button class="btn" data-act="qxShift" data-n="1" aria-label="Día siguiente">›</button>${can('*') ? `<button class="btn" data-act="kitsOpen">Kits de cirugía</button>` : ''}${canScheduleQx() ? `<button class="btn primary" data-act="qxSchedule">Programar cirugía</button>` : ''}`) +
   statusCard + (role() === 'almacen' ? '<div class="banner" style="margin-bottom:16px">Vista de consulta para almacén: aquí ve lo que se pidió para cada cirugía. Las solicitudes se despachan en Inventario › Órdenes pendientes.</div>' : '') +
   `<div class="grid g4" style="margin-bottom:16px">${kpi('Cirugías', list.length)}${kpi('Tiempo reservado', hrs(booked), 'de 12 h disponibles')}${kpi('Solicitudes al almacén', pend, 'pendientes de despacho', pend ? 'alert' : '')}</div>
   <div class="stack">${list.map(qxCard).join('') || '<div class="card empty">No hay cirugías programadas para este día.</div>'}</div>`;

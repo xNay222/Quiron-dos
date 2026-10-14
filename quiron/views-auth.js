@@ -6,9 +6,9 @@
 // Importante: en este prototipo todo vive en el navegador; en el sistema definitivo la validación la hace el servidor.
 
 const SESSION_KEY = 'quiron-sesion';
-const ROLE_ORDER = ['admin', 'medico', 'residente', 'enfermeria', 'almacen', 'recepcion', 'laboratorio', 'imagen'];
+const ROLE_ORDER = ['admin', 'medico', 'residente', 'enfermeria_plus', 'enfermeria', 'almacen', 'recepcion', 'laboratorio', 'imagen'];
 const userRoles = () => [...ROLE_ORDER.filter(r => ROLES[r]), ...Object.keys(ROLES).filter(r => !ROLE_ORDER.includes(r))];
-const userRoleTitle = r => ({ admin: 'Administradores', medico: 'Médicos', residente: 'Residentes', enfermeria: 'Enfermeras', almacen: 'Almacén', recepcion: 'Recepción', laboratorio: 'Laboratorio', imagen: 'Imagen/Radiología' })[r] || ROLES[r]?.name || r;
+const userRoleTitle = r => ({ admin: 'Administradores', medico: 'Médicos', residente: 'Residentes', enfermeria_plus: 'Enfermeras+', enfermeria: 'Enfermeras', almacen: 'Almacén', recepcion: 'Recepción', laboratorio: 'Laboratorio', imagen: 'Imagen/Radiología' })[r] || ROLES[r]?.name || r;
 const roleLabel = r => r === 'admin' ? 'Administrador · control maestro' : ROLES[r]?.name || r;
 const USER_ST = { activo: ['Activo', 'good'], invitado: ['Invitación pendiente', 'warn'], desactivado: ['Desactivado', ''] };
 const b64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
@@ -183,7 +183,7 @@ function userForm(u) {
     <div id="us-docbox">${docSelect(u.role, u.doc)}</div></div>
     <div class="small muted" id="us-rolehelp">${roleHelp(u.role)}</div>`;
 }
-const roleHelp = r => ({ admin: 'Acceso total, incluidos usuarios, contabilidad, presupuestos y ajustes.', recepcion: 'Agenda completa (citas y cirugías) y fichas de pacientes: datos de contacto, consentimientos y preoperatorios externos. No ve historias clínicas.', medico: 'Su consulta y su agenda: programa sus propias citas y cirugías; quirófano, hospitalización, pacientes, historias clínicas, informes y sus exámenes.', residente: 'Hospitalización completa; consulta de pacientes, exámenes e historias.', enfermeria: 'Hospitalización y quirófano: solicita medicación y material, registra aplicaciones y devoluciones, y lee las evoluciones.', almacen: 'Inventario, compras y despacho. Ve qué se pidió en quirófano y hospitalización, sin modificar. No ve el valor total del inventario.', laboratorio: 'Laboratorio completo (sin rayos X) y pacientes: alergias, antecedentes y exámenes.', imagen: 'Rayos X e imagen: órdenes, estudios e informes.' })[r] || '';
+const roleHelp = r => ({ enfermeria_plus: 'Todo lo de enfermería (hospitalización, emergencias, medicación y material de quirófano) y además programa cirugías desde Quirófano. No agenda consultas.', admin: 'Acceso total, incluidos usuarios, contabilidad, presupuestos y ajustes.', recepcion: 'Agenda completa (citas y cirugías) y fichas de pacientes: datos de contacto, consentimientos y preoperatorios externos. No ve historias clínicas.', medico: 'Su consulta y su agenda: programa sus propias citas y cirugías; quirófano, hospitalización, pacientes, historias clínicas, informes y sus exámenes.', residente: 'Hospitalización completa; consulta de pacientes, exámenes e historias.', enfermeria: 'Hospitalización y emergencias: solicita medicación y material, registra aplicaciones y lee las evoluciones. No entra a Quirófano (eso es de Enfermeras+).', almacen: 'Inventario, compras y despacho. Ve qué se pidió en quirófano y hospitalización, sin modificar. No ve el valor total del inventario.', laboratorio: 'Laboratorio completo (sin rayos X) y pacientes: alergias, antecedentes y exámenes.', imagen: 'Rayos X e imagen: órdenes, estudios e informes.' })[r] || '';
 ACTIONS.usRole = el => { document.getElementById('us-docbox').innerHTML = docSelect(el.value, null); document.getElementById('us-rolehelp').textContent = roleHelp(el.value); };
 ACTIONS.userNew = (el = {}) => { if (!can('*')) return;
   UI.usMode = 'invite';

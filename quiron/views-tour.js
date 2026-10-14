@@ -97,14 +97,21 @@ const TOURS = {
       ACCOUNT, BACK_HERE()] },
   ],
   enfermeria: [
-    { id: 'enf-general', title: 'Primeros pasos', desc: 'Medicación en hospitalización y quirófano.', steps: [MENU,
+    { id: 'enf-general', title: 'Primeros pasos', desc: 'Medicación en hospitalización y emergencias.', steps: [MENU,
       { go: 'hospitalizacion', el: '.bedgrid', t: 'Mapa de camas', d: 'Toque una cama ocupada para ver al paciente.' },
       { go: 'emergencias', el: '.bedgrid', t: 'Emergencias', d: 'Igual que en hospitalización: toque la cama, solicite la medicación y registre cada aplicación.' },
       { go: 'hospitalizacion', param: firstAdm, setup: () => { UI.hospTab = 'indicaciones'; }, el: '.main [data-act="hospTab"][data-k="indicaciones"]', t: 'Indicaciones del médico', d: 'Qué colocar, cuánto y cada cuánto, con la hora de la próxima dosis (rojo si está atrasada). Registre cada aplicación, o "No se aplicó" con el motivo.' },
       { go: 'hospitalizacion', param: firstAdm, el: '.main [data-act="newMedOrder"]', t: 'Solicitar medicación o material', d: 'Elija el medicamento, la cantidad y la frecuencia, y elija de la lista al médico que lo indicó. Llega al almacén.' },
       { go: 'hospitalizacion', param: firstAdm, setup: () => { UI.hospTab = 'medicacion'; }, el: '.main [data-act="hospTab"][data-k="medicacion"]', t: 'Aplicaciones', d: 'Cuando el almacén entrega, aparece "Registrar aplicación" en cada medicamento: hora y enfermera que la aplicó.' },
       { go: 'hospitalizacion', param: firstAdm, setup: () => { UI.hospTab = 'evoluciones'; }, el: '.main [data-act="hospTab"][data-k="evoluciones"]', t: 'Evoluciones', d: 'Lea lo que indicó el médico antes de pedir o aplicar.' },
-      { go: 'quirofano', el: '.main [data-act="qxMedOrder"]', t: 'Quirófano', d: 'Pida el material de cada cirugía. Después registre la devolución de lo que no se usó.' },
+      ACCOUNT, BACK_HERE()] },
+  ],
+  enfermeria_plus: [
+    { id: 'enfp-general', title: 'Primeros pasos', desc: 'Medicación en hospitalización y quirófano, y programación de cirugías.', steps: [MENU,
+      { go: 'hospitalizacion', el: '.bedgrid', t: 'Mapa de camas', d: 'Toque una cama ocupada para ver al paciente, sus indicaciones y su medicación.' },
+      { go: 'emergencias', el: '.bedgrid', t: 'Emergencias', d: 'Igual que en hospitalización: toque la cama, solicite la medicación y registre cada aplicación.' },
+      { go: 'quirofano', el: '.main [data-act="qxSchedule"]', t: 'Programar cirugía', d: 'Usted puede programar cirugías: elija paciente, cirugía, cirujano, anestesiólogo, duración y kit. El sistema impide choques de quirófano o de médicos.' },
+      { go: 'quirofano', el: '.main [data-act="qxMedOrder"], .main .head', t: 'Material de la cirugía', d: 'Pida la medicación y los insumos de cada cirugía y, al terminar, registre la devolución de lo que no se usó.' },
       ACCOUNT, BACK_HERE()] },
   ],
   almacen: [

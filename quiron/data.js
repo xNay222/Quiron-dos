@@ -266,7 +266,7 @@ const ageTxt = p => p.birth ? `${age(p.birth)} años` : p.ageAt ? `${+p.ageAt.ag
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const nowStamp = () => { const d = new Date(); return iso(d) + ' ' + d.toTimeString().slice(0, 5); };
 // Quién hace la acción: el médico, el laboratorio o rayos X que esté usando el sistema
-const actor = () => { const s = S.session || {}; return s.name ? s.name : s.role === 'enfermeria' ? 'Enfermería' : ['medico', 'residente'].includes(s.role) ? (med(s.doc)?.name || 'Médico') : s.role === 'almacen' ? 'Almacén' : s.role === 'laboratorio' ? 'Laboratorio' : s.role === 'imagen' ? 'Rayos X e imagen' : s.role === 'recepcion' ? 'Recepción' : 'Administrador'; };
+const actor = () => { const s = S.session || {}; return s.name ? s.name : s.role === 'enfermeria' ? 'Enfermería' : s.role === 'enfermeria_plus' ? 'Enfermería+' : ['medico', 'residente'].includes(s.role) ? (med(s.doc)?.name || 'Médico') : s.role === 'almacen' ? 'Almacén' : s.role === 'laboratorio' ? 'Laboratorio' : s.role === 'imagen' ? 'Rayos X e imagen' : s.role === 'recepcion' ? 'Recepción' : 'Administrador'; };
 function log(action, ref) { S.audit.unshift({ at: nowStamp(), user: actor(), action, ref }); }
 
 // ---------- Inventario (siempre por lote) ----------

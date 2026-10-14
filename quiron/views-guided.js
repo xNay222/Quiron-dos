@@ -1409,7 +1409,7 @@ ACTIONS.evSymptomOpen = el => {
 
 // La misma captura rápida sirve en consulta, perfil, pulsera y ficha de ingreso.
 function canRecordAllergy() {
-  return ['medico', 'residente', 'enfermeria', 'admin'].includes(role());
+  return ['medico', 'residente', 'enfermeria', 'enfermeria_plus', 'admin'].includes(role());
 }
 // Si alguien sin permiso toca una alergia, se le explica (antes no pasaba nada y parecía un error)
 function allergyDenied() {

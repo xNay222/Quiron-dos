@@ -502,7 +502,7 @@ const CONSULT = (() => {
     at,
     by
   }) {
-    if (!['medico', 'residente', 'enfermeria', 'admin'].includes(role) || !data.substance?.trim()) return false;
+    if (!['medico', 'residente', 'enfermeria', 'enfermeria_plus', 'admin'].includes(role) || !data.substance?.trim()) return false;
     migratePatient(p);
     const h = p.history,
       substance = data.substance.trim();

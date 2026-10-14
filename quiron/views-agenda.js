@@ -154,7 +154,7 @@ ACTIONS.agendaDate = el => { if (el.value) { UI.agendaDay = el.value; animNext =
 
 // ---------- Nueva cita / cirugía ----------
 function apptForm(f) {
-  const kindSeg = `<div class="seg" role="group" aria-label="Tipo"><button data-act="apKind" data-k="consulta" aria-pressed="${f.kind === 'consulta'}">Consulta</button><button data-act="apKind" data-k="cirugia" aria-pressed="${f.kind === 'cirugia'}">Cirugía</button></div>`;
+  const kindSeg = !can('agenda.programar') ? '' : `<div class="seg" role="group" aria-label="Tipo"><button data-act="apKind" data-k="consulta" aria-pressed="${f.kind === 'consulta'}">Consulta</button><button data-act="apKind" data-k="cirugia" aria-pressed="${f.kind === 'cirugia'}">Cirugía</button></div>`;
   const common = `<div class="full">${sheetStep(1, 'Paciente')}</div><div class="field full"><label for="ap-p">Paciente</label><select class="input" id="ap-p">${patientOptions(f.pid)}</select></div>
     <div class="full">${sheetStep(2, 'Fecha y hora')}</div><div class="field"><label for="ap-date">Fecha</label><input class="input" type="date" id="ap-date" value="${f.date}"></div>
     <div class="field"><label for="ap-time">Hora de inicio</label><input class="input" type="time" id="ap-time" step="900" value="${f.time}"></div>`;
@@ -173,8 +173,9 @@ function apptForm(f) {
 // Médicos que se pueden elegir al agendar: el médico solo se agenda a sí mismo
 const apDocs = () => agendaOwn() ? consultDocs().filter(m => m.id === myDoc()) : consultDocs();
 ACTIONS.newAppt = el => {
-  if (!can('agenda.programar')) { toast('Las citas las programa recepción'); return; }
   const ds = el?.dataset || {};
+  const qxOnly = !can('agenda.programar') && can('qx.programar');   // Enfermeras+: solo cirugías
+  if (!can('agenda.programar') && !(qxOnly && ds.kind === 'cirugia')) { toast('Las citas las programa recepción'); return; }
   UI.ap = { ref: ds.ref || null, kind: ds.kind || (UI.agTab === 'quirurgica' ? 'cirugia' : 'consulta'), pid: ds.pid || S.patients[0]?.id || '', date: UI.agendaDay || dAt(0), time: ds.time || (UI.agTab === 'quirurgica' ? '07:00' : '10:00'), doc: agendaOwn() ? myDoc() : ds.doc || consultDocs()[0].id, svc: 'v1', hours: 2, anest: anesthDocs()[0]?.id || '', proc: '' };
   openSheet(UI.ap.kind === 'cirugia' ? 'Programar cirugía' : 'Nueva cita', apptForm(UI.ap), `<button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="saveAppt">Agendar</button>`);
 };
@@ -200,6 +201,7 @@ ACTIONS.saveAppt = () => {
   apKeep(); const f = UI.ap; const msg = document.getElementById('ap-msg');
   if (!f.pid || !pat(f.pid)) { msg.innerHTML = 'Elija el paciente o regístrelo primero. <button class="btn ghost sm" data-act="newPatient">Registrar paciente</button>'; return; }
   if (agendaOwn() && f.doc !== myDoc()) { msg.textContent = 'Solo puede agendar a su nombre.'; return; }
+  if (!can('agenda.programar') && !(can('qx.programar') && f.kind === 'cirugia')) { msg.textContent = 'Solo puede programar cirugías.'; return; }
   if (!f.date || !f.time) { msg.textContent = 'Indica fecha y hora.'; return; }
   if (f.kind === 'cirugia' && !f.proc.trim()) { msg.textContent = 'Escribe qué cirugía se va a realizar.'; return; }
   // El kit es obligatorio; los kits solo los crea Administración (Quirófano › Kits de cirugía)
@@ -212,7 +214,8 @@ ACTIONS.saveAppt = () => {
   const ref = f.ref && (S.referrals || []).find(r => r.id === f.ref);
   if (ref) { a.ref = ref.id; Object.assign(ref, { status: 'agendada', apptId: a.id, closedAt: nowStamp(), closedBy: actor() }); }
   S.appts.push(a); log(a.kind === 'cirugia' ? 'Cirugía programada' : 'Cita agendada', `${pat(a.pid).name} · ${a.date} ${a.time}${a.proc ? ' · ' + a.proc : ''}${ref ? ' · derivación ' + ref.num : ''}`); save();
-  UI.agendaDay = a.date; UI.agTab = a.kind === 'cirugia' ? 'quirurgica' : 'consultas'; closeSheet(); go('agenda'); toast(a.kind === 'cirugia' ? 'Cirugía programada' : 'Cita agendada');
+  UI.agendaDay = a.date; UI.agTab = a.kind === 'cirugia' ? 'quirurgica' : 'consultas'; closeSheet();
+  if (canSee('agenda')) go('agenda'); else { UI.qxDay = a.date; go('quirofano'); }   // Enfermeras+ no tiene Agenda: vuelve a Quirófano toast(a.kind === 'cirugia' ? 'Cirugía programada' : 'Cita agendada');
 };
 
 // ---------- Detalle de la cita ----------
@@ -236,14 +239,14 @@ ACTIONS.apKitChange = el => { const a = byId(S.appts, el.dataset.id);
   openSheet(`Kit de cirugía · ${a.proc}`, `${patientBand(a.pid)}<div class="field"><label for="ak-k">Kit</label><select class="input" id="ak-k">${S.kits.map(k => `<option value="${k.id}" ${k.id === a.kit ? 'selected' : ''}>${esc(k.name)} · ${k.items.length} artículo(s)</option>`).join('')}</select></div>
     ${qxOrders(a).length ? '<div class="small muted">Ya hay solicitudes enviadas al almacén para esta cirugía: el cambio no las modifica.</div>' : '<div class="small muted">La solicitud al almacén de esta cirugía llegará precargada con el kit elegido.</div>'}`,
     `<button class="btn" data-act="openAppt" data-id="${a.id}">Volver</button><button class="btn primary" data-act="apKitSave" data-id="${a.id}">Guardar</button>`); };
-ACTIONS.apKitSave = el => { const a = byId(S.appts, el.dataset.id); const k = kitOf(val('ak-k')); if (!k || !can('agenda.programar')) return;
+ACTIONS.apKitSave = el => { const a = byId(S.appts, el.dataset.id); const k = kitOf(val('ak-k')); if (!k || !(can('agenda.programar') || can('qx.programar'))) return;
   a.kit = k.id; log('Kit de cirugía cambiado', `${pat(a.pid).name} · ${a.proc} · ${k.name}`); save(); render(); ACTIONS.openAppt({ dataset: { id: a.id } }); toast('Kit actualizado'); };
 ACTIONS.openQx = el => { const a = byId(S.appts, el.dataset.id); UI.qxDay = a.date; closeSheet(); go('quirofano');
 };
 // Orden de la cita: Reservada → Confirmada → Llegó (en espera) → Atendida. No se vuelve atrás (antes "Confirmar" deshacía "Llegó").
 const APPT_NEXT = { reservada: ['confirmada', 'en_espera', 'atendida', 'no_asistio'], confirmada: ['en_espera', 'atendida', 'no_asistio'], en_espera: ['atendida'] };
 const APPT_BTN = { confirmada: 'Confirmar', en_espera: 'Llegó', atendida: 'Atendida', no_asistio: 'No asistió' };
-const apptEditable = a => can('agenda.programar') && (!agendaOwn() || a.doc === myDoc() || a.anest === myDoc());
+const apptEditable = a => (can('agenda.programar') || (can('qx.programar') && a.kind === 'cirugia')) && (!agendaOwn() || a.doc === myDoc() || a.anest === myDoc());
 function apptFooter(a, p, btn, extra) {
   if (a.kind === 'consulta' && can('consulta.clinico') && (!agendaOwn() || a.doc === myDoc()) && !['cancelada', 'no_asistio'].includes(a.status)) {
     extra += '<button class="btn primary" data-act="beginConsult" data-id="' + a.id + '">Comenzar consulta</button>';

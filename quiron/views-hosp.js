@@ -43,7 +43,7 @@ function bedsView(area) {
 function admissionView(a) {
   const guided = evolutionOf(UI.evolutionId);
   if (guided && guided.admId === a.id && evolutionEditable(guided)) return evolutionView(guided);
-  const p = pat(a.pid); const clin = can('hosp.clinico'); const tab = clin ? (UI.hospTab || (role() === 'enfermeria' ? 'indicaciones' : 'evoluciones')) : 'medicacion'; const live = a.status === 'ingresado';   // almacén: solo lo que se pidió
+  const p = pat(a.pid); const clin = can('hosp.clinico'); const tab = clin ? (UI.hospTab || (isNurse() ? 'indicaciones' : 'evoluciones')) : 'medicacion'; const live = a.status === 'ingresado';   // almacén: solo lo que se pidió
   const notes = S.hc.filter(n => n.admId === a.id && (n.status === 'firmada' || n.doc === myDoc())).sort((x, y) => (y.date + y.time).localeCompare(x.date + x.time));
   const orders = S.medOrders.filter(o => o.admId === a.id).sort((x, y) => y.at.localeCompare(x.at));
   const kardex = S.mar.filter(k => k.admId === a.id).sort((x, y) => y.at.localeCompare(x.at));

@@ -39,12 +39,15 @@ const ROLES = {
   medico: { name: 'Médico', nav: ['Clínica', ['consultas', 'Consultas'], ['consultorio', 'Mi consulta'], ['agenda', 'Agenda'], ['quirofano', 'Quirófano'], ['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], 'Pacientes', ['pacientes', 'Pacientes'], ['examenes', 'Exámenes'], ['historias', 'Historias'], null, ['tutorial', 'Tutorial']] },
   residente: { name: 'Médico residente', nav: ['Clínica', ['consultas', 'Consultas'], ['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], 'Pacientes', ['pacientes', 'Pacientes'], ['examenes', 'Exámenes'], ['historias', 'Historias'], null, ['tutorial', 'Tutorial']] },
   almacen: { name: 'Almacén', nav: [['inventario', 'Inventario'], ['quirofano', 'Quirófano'], ['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], null, ['tutorial', 'Tutorial']] },
-  enfermeria: { name: 'Enfermería', nav: [['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], ['quirofano', 'Quirófano'], ['pacientes', 'Pacientes'], null, ['tutorial', 'Tutorial']] },
+  enfermeria_plus: { name: 'Enfermería+', nav: [['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], ['quirofano', 'Quirófano'], ['pacientes', 'Pacientes'], null, ['tutorial', 'Tutorial']] },
+  enfermeria: { name: 'Enfermería', nav: [['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], ['pacientes', 'Pacientes'], null, ['tutorial', 'Tutorial']] },   // sin Quirófano (eso es de Enfermeras+)
   laboratorio: { name: 'Laboratorio', nav: [['examenes', 'Laboratorio'], ['pacientes', 'Pacientes'], null, ['tutorial', 'Tutorial']] },
   imagen: { name: 'Rayos X e imagen', nav: [['examenes', 'Rayos X e imagen'], ['pacientes', 'Pacientes'], null, ['tutorial', 'Tutorial']] },
 };
 const role = () => S.session?.role || 'admin';
-const isClin = () => ['medico', 'residente'].includes(role());   // médicos tratantes y residentes
+const isClin = () => ['medico', 'residente'].includes(role());
+const isNurse = (r = role()) => r === 'enfermeria' || r === 'enfermeria_plus';   // Enfermeras y Enfermeras+
+const canScheduleQx = () => can('agenda.programar') || can('qx.programar');   // médicos tratantes y residentes
 const myDoc = () => isClin() ? S.session.doc : null;
 // Quién escribe evoluciones: médicos y residentes, y el administrador que también es médico (cuenta vinculada a su ficha)
 const evDoc = () => isClin() ? myDoc() : role() === 'admin' ? S.session?.doc || null : null;
@@ -53,7 +56,7 @@ const NAV_FOR = () => ROLES[role()].nav;
 const NAV_ITEMS = () => NAV_FOR().filter(Array.isArray);   // solo las secciones (sin títulos de grupo ni separadores)
 const canSee = r => NAV_ITEMS().some(n => n[0] === r) || (role() === 'admin' && r === 'consultorio');
 // Qué puede HACER cada rol dentro de las secciones que ve (el menú decide qué secciones ve).
-//  agenda.programar: citas y cirugías · agenda.propia: solo la agenda a su nombre
+//  agenda.programar: citas y cirugías · agenda.propia: solo la agenda a su nombre · qx.programar: solo cirugías (Enfermeras+)
 //  hosp.clinico: evoluciones, exámenes y diagnóstico del ingreso · hosp.ingresar · hosp.solicitar: pedir medicación/material · hosp.aplicar: registrar aplicaciones
 //  qx.solicitar · qx.devolver (cirugía realizada: canQxDone, solo el tratante, enfermería o Administración) · pac.clinico: antecedentes, alergias y exámenes · pac.historia: historia clínica · pac.escribir: historias e informes
 //  guardia.editar: asignar el médico y la enfermera de guardia
@@ -62,7 +65,9 @@ const PERMS = {
   admin: ['*'],
   medico: ['consulta.estado', 'consulta.clinico', 'consulta.crear', 'consulta.registrar', 'consulta.agendar', 'agenda.propia', 'agenda.programar', 'qx.solicitar', 'qx.devolver', 'hosp.clinico', 'hosp.ingresar', 'hosp.solicitar', 'hosp.aplicar', 'pac.clinico', 'pac.historia', 'pac.escribir', 'pac.papeles', 'pac.registrar', 'examen.pedir', 'imagen.subir'],
   residente: ['consulta.estado', 'consulta.clinico', 'consulta.crear', 'consulta.registrar', 'consulta.agendar', 'consulta.ver_todas', 'hosp.clinico', 'hosp.ingresar', 'hosp.solicitar', 'hosp.aplicar', 'pac.clinico', 'pac.historia', 'pac.escribir', 'examen.pedir', 'imagen.subir'],
-  enfermeria: ['hosp.clinico', 'hosp.solicitar', 'hosp.aplicar', 'qx.solicitar', 'qx.devolver'],
+  enfermeria: ['hosp.clinico', 'hosp.solicitar', 'hosp.aplicar'],
+  // Enfermeras+: todo lo de enfermería y además programan cirugías (no agendan consultas)
+  enfermeria_plus: ['hosp.clinico', 'hosp.solicitar', 'hosp.aplicar', 'qx.solicitar', 'qx.devolver', 'qx.programar'],
   almacen: ['inv.gestionar', 'guardia.editar'],
   laboratorio: ['pac.clinico', 'pac.registrar', 'examen.pedir'],
   imagen: ['examen.pedir', 'imagen.subir'],
@@ -79,7 +84,7 @@ function navCount(k) {
   if (k === 'contabilidad') return S.orders.filter(o => o.status === 'por_aprobar').length + (typeof pendingDues === 'function' ? pendingDues().length : 0) + S.budgets.filter(b => ['enviado', 'aceptado'].includes(b.status)).length;
   const mineOnly = role() === 'medico';   // el médico tratante: solo sus pacientes; residentes y enfermería ven a todos
   if (k === 'quirofano') return S.appts.filter(a => a.kind === 'cirugia' && a.date === dAt(0) && isActive(a) && !a.done && (!mineOnly || a.doc === myDoc() || a.anest === myDoc())).length;
-  if ((k === 'hospitalizacion' || k === 'emergencias') && role() === 'enfermeria') return nurseDue((S.admissions || []).filter(a => a.status === 'ingresado' && AREAS[admArea(a)].route === k).map(a => a.id)).length;
+  if ((k === 'hospitalizacion' || k === 'emergencias') && isNurse()) return nurseDue((S.admissions || []).filter(a => a.status === 'ingresado' && AREAS[admArea(a)].route === k).map(a => a.id)).length;
   if (k === 'hospitalizacion' || k === 'emergencias') return (S.admissions || []).filter(a => a.status === 'ingresado' && AREAS[admArea(a)].route === k && (!mineOnly || a.doc === myDoc())).length;
   if (k === 'agenda') return S.appts.filter(a => a.date === dAt(0) && ['en_espera'].includes(a.status) && (!myDoc() || a.doc === myDoc())).length + (typeof refsToHandle === 'function' ? refsToHandle().length : 0);
   if (k === 'atencion') return S.budgets.filter(b => budStatus(b) === 'abierto').length;
