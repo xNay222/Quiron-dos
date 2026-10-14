@@ -858,7 +858,8 @@ async function test(name, fn) {
     assert.equal(evolutionSign(e), true);
     const id = e.noteId,
       signed = e.report.signedText;
-    S.session.role = 'admin';
+    const linkedDoc = S.session.doc;
+    S.session.role = 'admin'; S.session.doc = null;   // administrador sin ficha de médico
     lastSheet = null;
     ACTIONS.addendum({
       dataset: {
@@ -880,6 +881,10 @@ async function test(name, fn) {
     });
     assert.equal(S.hc.find(n => n.id === id).addenda.length, 0);
     assert.equal(S.hc.find(n => n.id === id).actual, signed);
+    // Administrador que también es médico (cuenta vinculada a su ficha): sí puede escribir evoluciones
+    S.session.role = 'admin'; S.session.doc = linkedDoc;
+    assert.equal(evCanWrite(), true);
+    assert.equal(evDoc(), linkedDoc);
     S.session.role = 'medico';
     startEvolution();
     assert.equal(e.diagnosisUpdates.length, 0);

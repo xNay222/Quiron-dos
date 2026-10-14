@@ -307,6 +307,9 @@ function credsCard(u) {
   const req = CREDS_REQUIRED.includes(u.role), c = credsOf(u);
   return `<div class="card" style="display:grid;gap:10px"><b class="small">Datos profesionales ${req ? '<span class="pill warn">Obligatorios para firmar</span>' : '<span class="pill">Opcional</span>'}</b>
     ${req && credsMissing(u) ? '<div class="banner warn">Registre su N.º MPPS y su Colegio de Médicos: sin ellos no puede firmar consultas, evoluciones ni récipes.</div>' : ''}
+    ${u.role === 'admin' ? `<div class="field"><label for="mc-doc">Su ficha de médico <span class="small muted">(si también atiende pacientes)</span></label><select class="input" id="mc-doc">
+      <option value="">No atiendo pacientes</option>${(S.doctors || []).filter(d => !d.resident && !(S.users || []).some(x => x.id !== u.id && x.doc === d.id)).map(d => `<option value="${d.id}" ${u.doc === d.id ? 'selected' : ''}>${esc(d.name)}${d.esp ? ' · ' + esc(d.esp) : ''}</option>`).join('')}</select>
+      <div class="small muted" style="margin-top:4px">Con su ficha vinculada puede escribir y firmar evoluciones y consultas con su nombre.</div></div>` : ''}
     <div class="form">
       <div class="field"><label for="mc-ci">Cédula</label><input class="input" id="mc-ci" value="${esc(c.ci)}" placeholder="Ej. V-12.345.678"></div>
       <div class="field"><label for="mc-mpps">N.º de registro MPPS${req ? ' *' : ''}</label><input class="input" id="mc-mpps" inputmode="numeric" value="${esc(c.mpps)}" placeholder="Ej. 54321"></div>
@@ -322,7 +325,14 @@ ACTIONS.myCredsSave = () => {
   if (CREDS_REQUIRED.includes(u.role) && (!mpps || !cm)) return bad('El N.º MPPS y el Colegio de Médicos son obligatorios para médicos y residentes.');
   if (mpps && !/^\d{3,8}$/.test(mpps)) return bad('El N.º MPPS lleva solo números (entre 3 y 8 cifras).');
   if (cm && !/\d/.test(cm)) return bad('Indique el número de colegiado (y, si quiere, el colegio).');
-  Object.assign(u, { ci, mpps, cm });
+  if (u.role === 'admin') {
+    const docId = val('mc-doc') || null, d = docId && (S.doctors || []).find(x => x.id === docId);
+    if (d && docId !== u.doc) { u.doc = docId; S.session.doc = docId; log('Administrador vinculado a su ficha de médico', u.name + ' · ' + d.name);
+      // Al vincularse, los datos que ya tiene la ficha no se pierden si las casillas están vacías
+      Object.assign(u, { ci: ci || d.ci || '', mpps: mpps || d.mpps || '', cm: cm || d.cm || '' }); }
+    else if (!docId && u.doc) { log('Administrador desvinculado de su ficha de médico', u.name); u.doc = null; S.session.doc = null; Object.assign(u, { ci, mpps, cm }); }
+    else Object.assign(u, { ci, mpps, cm });
+  } else Object.assign(u, { ci, mpps, cm });
   syncCredsToDoctor(u);
   log('Datos profesionales actualizados', u.name + (mpps ? ' · MPPS ' + mpps : ''));
   save(); m.textContent = 'Guardado'; m.style.color = 'var(--good)'; render();

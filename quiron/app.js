@@ -46,6 +46,9 @@ const ROLES = {
 const role = () => S.session?.role || 'admin';
 const isClin = () => ['medico', 'residente'].includes(role());   // médicos tratantes y residentes
 const myDoc = () => isClin() ? S.session.doc : null;
+// Quién escribe evoluciones: médicos y residentes, y el administrador que también es médico (cuenta vinculada a su ficha)
+const evDoc = () => isClin() ? myDoc() : role() === 'admin' ? S.session?.doc || null : null;
+const evCanWrite = () => (isClin() && can('hosp.clinico')) || (role() === 'admin' && !!S.session?.doc);
 const NAV_FOR = () => ROLES[role()].nav;
 const NAV_ITEMS = () => NAV_FOR().filter(Array.isArray);   // solo las secciones (sin títulos de grupo ni separadores)
 const canSee = r => NAV_ITEMS().some(n => n[0] === r) || (role() === 'admin' && r === 'consultorio');

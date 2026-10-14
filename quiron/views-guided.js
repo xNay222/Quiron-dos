@@ -4,8 +4,8 @@ function evolutionOf(id) {
 }
 
 function evolutionEditable(e) {
-  return !!e && e.status !== 'firmada' && isClin() && can('hosp.clinico') &&
-    e.doc === myDoc() && admOf(e.admId)?.status === 'ingresado';
+  return !!e && e.status !== 'firmada' && evCanWrite() &&
+    e.doc === evDoc() && admOf(e.admId)?.status === 'ingresado';
 }
 
 function guidedCurrent() {
@@ -1103,13 +1103,19 @@ function evolutionSurgical(a) {
     S.appts.some(x => x.admId === a.id && x.kind === 'cirugia') || !!a.surgeryId || S.appts.some(x => x.id === a.apptId && x.kind === 'cirugia');
 }
 
+// Administrador sin ficha de médico: cómo vincularla para escribir y firmar evoluciones con su nombre
+ACTIONS.evLinkHelp = () => openSheet('Evoluciones con su nombre',
+  '<p style="margin:0 0 10px">La evolución se firma con el nombre, la cédula, el MPPS y el Colegio de Médicos de quien la escribe. Para escribirlas desde su cuenta de administrador, vincule su usuario a su ficha de médico.</p>' +
+  '<p class="small muted" style="margin:0">En <b>Mi cuenta</b> elija "Su ficha de médico" y guarde. Si aún no tiene ficha, créela en <b>Usuarios › Médicos</b> con "+ Agregar médico".</p>',
+  '<button class="btn" data-act="close">Ahora no</button><button class="btn primary" data-act="switchUser">Ir a Mi cuenta</button>');
 ACTIONS.evNew = el => {
   const a = admOf(el.dataset.id);
-  if (!a || a.status !== 'ingresado' || !isClin() || !can('hosp.clinico')) return;
+  if (!a || a.status !== 'ingresado') return;
+  if (!evCanWrite()) { if (role() === 'admin') ACTIONS.evLinkHelp(); return; }
   // Un borrador por autor se retoma; cada nota firmada permite iniciar otra.
-  let e = (S.evolutions || []).find(x => x.admId === a.id && x.doc === myDoc() && x.status !== 'firmada');
+  let e = (S.evolutions || []).find(x => x.admId === a.id && x.doc === evDoc() && x.status !== 'firmada');
   if (!e) {
-    e = EVOLUTION.create({ id: uid('ev'), admission: a, doc: myDoc(), specialty: med(myDoc())?.esp || '', initial: !hasIngreso(a.id) });
+    e = EVOLUTION.create({ id: uid('ev'), admission: a, doc: evDoc(), specialty: med(evDoc())?.esp || '', initial: !hasIngreso(a.id) });
     const previous = S.hc.filter(n => n.admId === a.id && n.status === 'firmada').sort((x, y) => (y.date + y.time).localeCompare(x.date + x.time))[0];
     if (previous?.structured?.kind === 'evolution') {
       const data = previous.structured;
@@ -1268,7 +1274,7 @@ function evolutionBody(e) {
 }
 
 function evolutionView(e) {
-  if (!isClin() || !can('hosp.clinico') || e.doc !== myDoc()) return header('Evolución', 'No tiene acceso al borrador.');
+  if (!evCanWrite() || e.doc !== evDoc()) return header('Evolución', 'No tiene acceso al borrador.');
   if (e.status === 'firmada') return header('Evolución firmada', 'Solo lectura') + '<div class="card freeview">' + esc(e.report.signedText) + '</div>';
   return guidedShell(e, e.initial ? 'Valoración inicial del ingreso' : 'Nueva evolución', EVOLUTION.steps(e), evolutionBody(e), evolutionEditable(e));
 }
@@ -1385,12 +1391,12 @@ const evolutionOriginalAddendum = ACTIONS.addendum;
 const evolutionOriginalSaveAddendum = ACTIONS.saveAddendum;
 ACTIONS.addendum = el => {
   const n = S.hc.find(x => x.id === el.dataset.id);
-  if (n?.evolutionId && !isClin()) { toast('Solo médicos y residentes pueden agregar adendas.'); return; }
+  if (n?.evolutionId && !evCanWrite()) { toast('Solo los médicos pueden agregar adendas a una evolución.'); return; }
   return evolutionOriginalAddendum(el);
 };
 ACTIONS.saveAddendum = el => {
   const n = S.hc.find(x => x.id === el.dataset.id);
-  if (n?.evolutionId && !isClin()) { toast('Solo médicos y residentes pueden agregar adendas.'); return; }
+  if (n?.evolutionId && !evCanWrite()) { toast('Solo los médicos pueden agregar adendas a una evolución.'); return; }
   return evolutionOriginalSaveAddendum(el);
 };
 

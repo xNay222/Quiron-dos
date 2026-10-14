@@ -36,7 +36,7 @@ function qxCard(a) {
     ${orders.length ? `<div class="tablewrap"><table><thead><tr><th>Solicitud</th><th>Medicación e insumos</th><th>Estado</th><th></th></tr></thead><tbody>${orders.map(o => `<tr><td class="mono">${o.num}</td>
       <td>${o.items.map(it => `${esc(prod(it.pid).name)} <span class="muted">${moServed(o) ? `· entregadas ${it.qty}${it.qty < (it.req ?? it.qty) ? ` de ${it.req}` : ''}${it.returned ? ` · devueltas ${it.returned} · usadas ${it.qty - it.returned}` : ''}` : `×${it.req ?? it.qty}`}</span>`).join('<br>')}</td>
       <td>${moPill(o)}</td><td>${moServed(o) && cq.ret && o.items.some(it => (it.returned || 0) < it.qty) ? `<button class="btn sm" data-act="qxReturn" data-id="${o.id}">Registrar devolución</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : ''}
-    <div class="hstack" style="justify-content:flex-end">${canSee('pacientes') ? `<button class="btn sm" data-go="pacientes" data-param="${p.id}">Ver perfil del paciente</button>` : ''}${a.done ? `<span class="pill good">Realizada${a.done.durationMin ? ` · ${a.done.durationMin} min` : ''}</span>` : cq.done && a.date <= dAt(0) ? `<button class="btn sm" data-act="qxDone" data-id="${a.id}">Registrar cirugía realizada</button>` : ''}${cq.req && !a.done ? `<button class="btn sm primary" data-act="qxMedOrder" data-id="${a.id}">Solicitar medicación e insumos</button>` : ''}</div></div>`;
+    <div class="hstack" style="justify-content:flex-end">${qxEvolutionButton(a)}${canSee('pacientes') ? `<button class="btn sm" data-go="pacientes" data-param="${p.id}">Ver perfil del paciente</button>` : ''}${a.done ? `<span class="pill good">Realizada${a.done.durationMin ? ` · ${a.done.durationMin} min` : ''}</span>` : cq.done && a.date <= dAt(0) ? `<button class="btn sm" data-act="qxDone" data-id="${a.id}">Registrar cirugía realizada</button>` : ''}${cq.req && !a.done ? `<button class="btn sm primary" data-act="qxMedOrder" data-id="${a.id}">Solicitar medicación e insumos</button>` : ''}</div></div>`;
 }
 ACTIONS.qxShift = el => { const n = +el.dataset.n; UI.qxDay = n ? iso(new Date(new Date((UI.qxDay || dAt(0)) + 'T00:00').getTime() + n * DAY)) : dAt(0); render(); };
 ACTIONS.qxSchedule = () => { UI.agendaDay = UI.qxDay || dAt(0); UI.agTab = 'quirurgica'; ACTIONS.newAppt({ dataset: { kind: 'cirugia' } }); };
@@ -121,3 +121,12 @@ ACTIONS.kitDel = () => { const k = kitOf(UI.kit.id); if (!k) return;
     `<button class="btn" data-act="kitEdit" data-id="${k.id}">Volver</button><button class="btn danger" data-act="kitDelSave" data-id="${k.id}">Eliminar</button>`); };
 ACTIONS.kitDelSave = el => { const k = kitOf(el.dataset.id); if (!k || !can('*')) return; S.kits = S.kits.filter(x => x !== k);
   S.appts.forEach(a => { if (a.kit === k.id) a.kit = null; }); log('Kit de cirugía eliminado', k.name); save(); toast('Kit eliminado'); ACTIONS.kitsOpen(); };
+
+// Evolución desde Quirófano: si el paciente está ingresado se evoluciona en su ingreso; si no, se ofrece ingresarlo
+function qxEvolutionButton(a) {
+  if (a.date > dAt(0) || ['cancelada', 'no_asistio'].includes(a.status)) return '';
+  if (!evCanWrite() && role() !== 'admin') return '';
+  const adm = S.admissions.find(x => x.pid === a.pid && x.status === 'ingresado');
+  if (adm) return evolutionBedButton(adm);
+  return canAdmit() ? `<button class="btn sm" data-act="admitNew" data-pid="${a.pid}" data-area="hosp" title="La evolución se escribe dentro del ingreso">Ingresar para evolucionar</button>` : '';
+}
