@@ -225,8 +225,15 @@ const labPanels = () => (typeof S !== 'undefined' && S.labCatalog) || LAB_PANELS
 const isLabTest = t => !!(labPanels()[t] || LAB_COMBOS[t]);
 // Un perfil se desglosa en los exámenes que incluye; cada uno trae sus parámetros y referencias
 const panelsOf = tests => [...new Set(tests.flatMap(t => { const parts = typeof S !== 'undefined' && S.labCatalogMeta?.[t]?.parts; return parts?.length ? parts : labPanels()[t] ? [t] : LAB_COMBOS[t] || [t]; }))];
-// sex: 'M' | 'F' del paciente → se usa su rango ("Hombres: … · Mujeres: …")
-function blankResults(tests, sex) { const cat = labPanels(); return panelsOf(tests).filter(t => cat[t]?.length).flatMap(t => cat[t].map(([param, unit, ref]) => ({ test: t, param, unit, ref: typeof refFor === 'function' ? refFor(ref, sex) : ref, value: '', flag: '' }))); }
+// who: el paciente (o su sexo, 'M' | 'F'); date: fecha del examen. Se usa el tramo de referencia de su sexo y su edad,
+// y se guarda cuál fue ("Hombres 40–49 años") para mostrarlo junto al resultado.
+function blankResults(tests, who, date) {
+  const cat = labPanels(), sex = typeof who === 'string' ? who : who?.sex, ageY = typeof who === 'object' && typeof labAge === 'function' ? labAge(who, date) : null;
+  return panelsOf(tests).filter(t => cat[t]?.length).flatMap(t => cat[t].map(([param, unit, ref]) => {
+    const pick = typeof refPick === 'function' ? refPick(ref, sex, ageY) : { ref, band: '' };
+    return { test: t, param, unit, ref: pick.ref, band: pick.band, value: '', flag: '' };
+  }));
+}
 
 function seedClinical() {
   const notes = [

@@ -462,6 +462,7 @@ function migrate() {
   fix(!S.dues, () => { S.dues = []; });
   fix(!S.clinicLab2026, () => importClinicLab2026(S));
   fix(!S.labRefs2026 && typeof applyLabStandard === 'function', () => applyLabStandard(S));   // unidades y valores de referencia estándar
+  fix(!S.labRefs2026b && typeof applyLabAgeBands === 'function', () => applyLabAgeBands(S));   // tablas por edad (testosterona, PSA, DHEA-S…)
   fix(!S.imageStudiesV1, () => {
     (S.exams || []).filter(e => e.area === 'imagen').forEach(e => {
       if (!e.imageStudy) e.imageStudy = { type: null, region: '', date: e.date, requestingDoc: e.doc || null, legacy: true };

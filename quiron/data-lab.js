@@ -11,6 +11,9 @@
 
 const HS = (h, m) => `Hombres: ${h} · Mujeres: ${m}`;
 const NEG = 'Negativo', NR = 'No reactivo';
+// Tramos por edad: [etiqueta, rango] → "etiqueta: rango · etiqueta: rango"
+const AGE = (...t) => t.map(([l, r]) => `${l}: ${r}`).join(' · ');
+const PSA_EDAD = AGE(['Hombres <50 años', '<2,5'], ['Hombres 50–59 años', '<3,5'], ['Hombres 60–69 años', '<4,5'], ['Hombres ≥70 años', '<6,5']);
 const LAB_STANDARD = {
   'Hematología completa': [
     ['Glóbulos rojos', 'x10⁶/µL', HS('4,5–5,9', '4,0–5,2')],
@@ -28,7 +31,7 @@ const LAB_STANDARD = {
     ['Basófilos', '%', '0–1'],
     ['Plaquetas', 'x10³/µL', '150–450'],
     ['VPM', 'fL', '7,5–11,5']],
-  'VSG': [['VSG', 'mm/h', HS('0–15', '0–20')]],
+  'VSG': [['VSG', 'mm/h', AGE(['Hombres <50 años', '0–15'], ['Hombres ≥50 años', '0–20'], ['Mujeres <50 años', '0–20'], ['Mujeres ≥50 años', '0–30'])]],
   'Grupo sanguíneo (tipiaje)': [['Grupo ABO', '', ''], ['Factor Rh', '', '']],
   'Frotis de sangre periférica': [['Serie roja', '', 'Sin alteraciones'], ['Serie blanca', '', 'Sin alteraciones'], ['Plaquetas', '', 'Sin alteraciones']],
   'Reticulocitos': [['Reticulocitos', '%', '0,5–2,5']],
@@ -136,7 +139,7 @@ const LAB_STANDARD = {
   'Electrolitos en orina (sodio, potasio y cloro)': [['Sodio en orina', 'mmol/24 h', '40–220'], ['Potasio en orina', 'mmol/24 h', '25–125'], ['Cloro en orina', 'mmol/24 h', '110–250']],
   'Epstein-Barr (IgG)': [['Epstein-Barr IgG', '', 'Reactivo = infección pasada']],
   'Epstein-Barr (IgM)': [['Epstein-Barr IgM', '', NEG]],
-  'Pro-BNP': [['NT-proBNP', 'pg/mL', '<125']],
+  'Pro-BNP': [['NT-proBNP', 'pg/mL', AGE(['<75 años', '<125'], ['≥75 años', '<450'])]],
   'Rubéola (IgG)': [['Rubéola IgG', 'UI/mL', '≥10 = inmune']],
   'Rubéola (IgM)': [['Rubéola IgM', '', NEG]],
   'Herpes simplex I (IgG)': [['Herpes simplex I IgG', '', 'Reactivo = infección pasada']],
@@ -146,9 +149,9 @@ const LAB_STANDARD = {
   'TSH': [['TSH', 'µUI/mL', '0,4–4,5']],
   'T4 libre': [['T4 libre', 'ng/dL', '0,9–1,7']],
   'T3 libre': [['T3 libre', 'pg/mL', '2,3–4,2']],
-  'PSA total': [['PSA total', 'ng/mL', '<4,0']],
+  'PSA total': [['PSA total', 'ng/mL', PSA_EDAD]],
   'PSA libre': [['PSA libre', 'ng/mL', ''], ['Relación PSA libre/total', '%', '>25']],
-  'Antígeno prostático': [['PSA total (antígeno prostático específico)', 'ng/mL', '<4,0']],
+  'Antígeno prostático': [['PSA total (antígeno prostático específico)', 'ng/mL', PSA_EDAD]],
   'Saturación de transferrina': [['Saturación de transferrina', '%', '20–50']],
   'Transferrina': [['Transferrina', 'mg/dL', '200–360']],
   'Ferritina': [['Ferritina', 'ng/mL', HS('24–336', '11–307')]],
@@ -161,7 +164,7 @@ const LAB_STANDARD = {
   'Péptido C': [['Péptido C', 'ng/mL', '1,1–4,4']],
   'Somatomedina C': [['IGF-1 (somatomedina C)', 'ng/mL', 'Según edad']],
   'Homocisteína': [['Homocisteína', 'µmol/L', '5–15']],
-  'Hormona antimülleriana': [['Hormona antimülleriana', 'ng/mL', 'Según edad']],
+  'Hormona antimülleriana': [['Hormona antimülleriana', 'ng/mL', AGE(['Mujeres 20–24 años', '1,22–11,7'], ['Mujeres 25–29 años', '0,89–9,85'], ['Mujeres 30–34 años', '0,58–8,13'], ['Mujeres 35–39 años', '0,15–7,49'], ['Mujeres 40–44 años', '0,03–5,47'], ['Mujeres 45–50 años', '0,01–2,71'], ['Hombres', '0,77–14,5'])]],
   'Estrógeno': [['Estrógenos totales', 'pg/mL', 'Según sexo y fase del ciclo']],
   'Anticuerpos antinucleares (ANA)': [['ANA', '', 'Negativo (<1:80)']],
   'Anti-DNA': [['Anti-DNA de doble cadena', '', NEG]],
@@ -184,9 +187,18 @@ const LAB_STANDARD = {
   'FSH': [['FSH', 'mUI/mL', HS('1,5–12,4', 'según fase (folicular 3,5–12,5; ovulatoria 4,7–21,5; lútea 1,7–7,7; posmenopausia 25,8–134,8)')]],
   'LH': [['LH', 'mUI/mL', HS('1,7–8,6', 'según fase (folicular 2,4–12,6; ovulatoria 14–95,6; lútea 1,0–11,4; posmenopausia 7,7–58,5)')]],
   '17-OH progesterona': [['17-OH progesterona', 'ng/mL', HS('0,5–2,1', 'según fase (folicular 0,1–0,8; lútea 0,6–2,3)')]],
-  'DHEA-S': [['DHEA-S', 'µg/dL', 'Según edad y sexo']],
-  'Testosterona total': [['Testosterona total', 'ng/dL', HS('264–916', '8–60')]],
-  'Testosterona libre': [['Testosterona libre', 'pg/mL', HS('8,7–25,1', '0,0–4,2')]],
+  'DHEA-S': [['DHEA-S', 'µg/dL', AGE(
+    ['Hombres 15–19 años', '70,2–492'], ['Hombres 20–24 años', '211–492'], ['Hombres 25–34 años', '160–449'], ['Hombres 35–44 años', '88,9–427'],
+    ['Hombres 45–54 años', '44,3–331'], ['Hombres 55–64 años', '51,7–295'], ['Hombres 65–74 años', '33,6–249'], ['Hombres ≥75 años', '16,2–123'],
+    ['Mujeres 15–19 años', '65,1–368'], ['Mujeres 20–24 años', '148–407'], ['Mujeres 25–34 años', '98,8–340'], ['Mujeres 35–44 años', '60,9–337'],
+    ['Mujeres 45–54 años', '35,4–256'], ['Mujeres 55–64 años', '18,9–205'], ['Mujeres 65–74 años', '9,4–246'], ['Mujeres ≥75 años', '12,0–154'])]],
+  'Testosterona total': [['Testosterona total', 'ng/dL', AGE(
+    ['1–9 años', '0–20'],
+    ['Hombres 10–11 años', '0–130'], ['Hombres 12–13 años', '0–800'], ['Hombres 14 años', '0–1200'], ['Hombres 15–16 años', '100–1200'], ['Hombres 17–18 años', '300–1200'], ['Hombres ≥19 años', '264–916'],
+    ['Mujeres 10–11 años', '0–44'], ['Mujeres 12–16 años', '0–75'], ['Mujeres 17–18 años', '20–75'], ['Mujeres ≥19 años', '8–60'])]],
+  'Testosterona libre': [['Testosterona libre', 'pg/mL', AGE(
+    ['Hombres 18–29 años', '9,3–26,5'], ['Hombres 30–39 años', '8,7–25,1'], ['Hombres 40–49 años', '6,8–21,5'], ['Hombres 50–59 años', '7,2–24,0'], ['Hombres ≥60 años', '6,6–18,1'],
+    ['Mujeres ≥18 años', '0,0–4,2'])]],
   'Cortisol AM o PM': [['Cortisol (mañana)', 'µg/dL', '6,2–19,4'], ['Cortisol (tarde)', 'µg/dL', '2,3–11,9']],
   'Adenovirus en heces': [['Adenovirus', '', NEG]],
   'Rotavirus en heces': [['Rotavirus', '', NEG]],
@@ -220,6 +232,16 @@ const LAB_PROFILE_PARTS = {
 // Exámenes que los perfiles necesitan y que no estaban en la lista de la clínica
 const LAB_SUPPORT = ['Proteínas totales y fraccionadas', 'Bilirrubina total y fraccionada', 'LH'];
 
+// Primera versión (sin tramos por edad): si el laboratorio no la cambió, se reemplaza por la tabla por edad
+const LAB_V1_REFS = { 'VSG': HS('0–15', '0–20'), 'NT-proBNP': '<125', 'PSA total': '<4,0', 'PSA total (antígeno prostático específico)': '<4,0',
+  'Hormona antimülleriana': 'Según edad', 'DHEA-S': 'Según edad y sexo', 'Testosterona total': HS('264–916', '8–60'), 'Testosterona libre': HS('8,7–25,1', '0,0–4,2') };
+function applyLabAgeBands(state) {
+  Object.entries(state.labCatalog || {}).forEach(([panel, rows]) => rows.forEach(r => {
+    const std = (LAB_STANDARD[panel] || []).find(x => x[0] === r[0]);
+    if (std && LAB_V1_REFS[r[0]] !== undefined && r[2] === LAB_V1_REFS[r[0]]) r[2] = std[2];
+  }));
+  state.labRefs2026b = true; return state;
+}
 // Un panel "sin tocar" es el que vino vacío de la lista de la clínica o igual al de arranque: ese se reemplaza.
 // Lo que el laboratorio ya editó a mano se respeta.
 const labUntouched = (rows, name) => !rows || !rows.length || rows.every(r => !r[1] && !r[2]) ||
@@ -238,16 +260,50 @@ function applyLabStandard(state) {
     if (Object.hasOwn(cat, k) && !labUntouched(cat[k], k) && !(meta[k]?.parts)) return;   // perfil editado a mano: se deja
     cat[k] = []; meta[k] = { ...meta[k], kind: 'perfil', parts: parts.map(keyOf) };
   });
-  state.labRefs2026 = true;
+  state.labRefs2026 = true; state.labRefs2026b = true;
   return state;
 }
 
-// Rango que corresponde al paciente: "Hombres: … · Mujeres: …" → el de su sexo; sin sexo registrado, el texto completo
-function refFor(ref, sex) {
-  ref = String(ref || '');
-  if (!/Hombres:|Mujeres:/.test(ref) || !['M', 'F'].includes(sex)) return ref;
-  const seg = ref.split(' · ').find(s => s.trim().startsWith(sex === 'M' ? 'Hombres:' : 'Mujeres:'));
-  return seg ? seg.split(':').slice(1).join(':').trim() : ref;
+// ---------- Rango que corresponde al paciente ----------
+// La referencia puede venir en tramos separados por " · ", cada uno con su etiqueta, como en los informes de laboratorio:
+//   "Hombres: 13,5–17,5 · Mujeres: 12,0–15,5"                       (por sexo)
+//   "<75 años: <125 · ≥75 años: <450"                                (por edad)
+//   "Hombres 10–11 años: 0–130 · Hombres ≥19 años: 264–916 · Mujeres ≥19 años: 8–60"   (por sexo y edad)
+// También "meses" para lactantes ("0–6 meses: …"). Se elige el tramo del paciente; si no hay datos para elegir, se
+// muestra el texto completo y el sistema no marca alto/bajo por su cuenta.
+const LAB_NUM = t => parseFloat(String(t).replace(',', '.'));
+function refBand(label) {
+  const l = labNameKey(label), out = { sex: /^hombres?\b/.test(l) ? 'M' : /^mujer(es)?\b/.test(l) ? 'F' : null, min: null, max: null };
+  const unit = /mes/.test(l) ? 1 / 12 : 1;
+  let m;
+  if ((m = l.match(/(\d+(?:,\d+)?)\s*[–-]\s*(\d+(?:,\d+)?)\s*(anos|ano|meses|mes)/))) { out.min = LAB_NUM(m[1]) * unit; out.max = (LAB_NUM(m[2]) + 1) * unit; }   // "20–29 años" incluye hasta el día antes de cumplir 30
+  else if ((m = l.match(/(?:≥|>=|mayores de|desde)\s*(\d+(?:,\d+)?)\s*(anos|ano|meses|mes)/))) out.min = LAB_NUM(m[1]) * unit;
+  else if ((m = l.match(/(?:<|menores de)\s*(\d+(?:,\d+)?)\s*(anos|ano|meses|mes)/))) out.max = LAB_NUM(m[1]) * unit;
+  else if ((m = l.match(/(\d+(?:,\d+)?)\s*(anos|ano)\b/))) { out.min = LAB_NUM(m[1]); out.max = LAB_NUM(m[1]) + 1; }
+  out.age = out.min !== null || out.max !== null;
+  return out;
 }
+// Edad en años (con decimales) en la fecha del examen; null si no está registrada
+function labAge(p, date) {
+  if (!p) return null;
+  const on = new Date((date || (typeof dAt === 'function' ? dAt(0) : new Date().toISOString().slice(0, 10))) + 'T12:00');
+  if (p.birth) return (on - new Date(p.birth + 'T12:00')) / (365.25 * 864e5);
+  if (p.ageAt?.age != null) return +p.ageAt.age + Math.max(0, on.getFullYear() - (parseInt(p.ageAt.year, 10) || on.getFullYear()));
+  return null;
+}
+// Devuelve { ref, band }: el rango que se usa y la etiqueta del tramo elegido (para mostrarla junto al resultado)
+function refPick(ref, sex, ageY) {
+  ref = String(ref || '');
+  const segs = ref.split(' · ').map(t => { const k = t.indexOf(':'); return k > 0 ? { label: t.slice(0, k).trim(), value: t.slice(k + 1).trim(), band: refBand(t.slice(0, k)) } : null; });
+  if (!segs.length || segs.some(x => !x) || !segs.some(x => x.band.sex || x.band.age)) return { ref, band: '' };
+  const fits = segs.filter(x => (!x.band.sex || x.band.sex === sex) && (!x.band.age || (ageY != null && (x.band.min === null || ageY >= x.band.min) && (x.band.max === null || ageY < x.band.max))));
+  // Si el tramo exige un dato que falta (sexo o edad), no se adivina
+  const ok = fits.filter(x => (!x.band.sex || sex) && (!x.band.age || ageY != null));
+  if (!ok.length) return { ref, band: '' };
+  ok.sort((a, b) => (+!!b.band.age + +!!b.band.sex) - (+!!a.band.age + +!!a.band.sex));   // el tramo más específico primero
+  return { ref: ok[0].value, band: ok[0].label };
+}
+const refFor = (ref, sex, ageY) => refPick(ref, sex, ageY).ref;
+
 // ¿La referencia es numérica? (para el teclado del teléfono)
 const refNumeric = ref => /^\s*[<>]?\s*\d/.test(String(ref || '')) || /\d\s*–\s*\d/.test(String(ref || '')) && !/[a-zA-Z]{3,}/.test(String(ref || ''));
