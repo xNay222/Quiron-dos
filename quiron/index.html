@@ -1255,6 +1255,11 @@ body{background:
 }
 
 /* ---------- Vista previa de documentos ---------- */
+.catcard[hidden]{display:none}
+/* Catálogo: el parámetro arriba; unidad y referencia (que puede ser larga, por sexo o por fase) debajo */
+.cat-grid{display:grid;gap:14px;max-width:920px}
+.catrow{grid-template-columns:minmax(0,1.3fr) minmax(0,.55fr) minmax(0,2.2fr) auto}
+@media(max-width:700px){.catrow{grid-template-columns:minmax(0,.7fr) minmax(0,2fr) auto;padding-bottom:8px;border-bottom:.5px solid var(--lg-line)}.catrow>input:first-child{grid-column:1/-1;font-weight:600}.catrow:last-child{border-bottom:0}}
 .pdfv-seg{margin-bottom:8px}
 .sheet footer .btn{white-space:nowrap}
 .pdfv-note{margin:0 0 12px}
@@ -1350,6 +1355,7 @@ body{background:
 <script src="data-hist.js"></script>
 <script src="data-acct.js"></script>
 <script src="data-clin.js"></script>
+<script src="data-lab.js"></script>
 <script src="data-hosp.js"></script>
 <script src="data-budget.js"></script>
 <script src="data-consult.js"></script>

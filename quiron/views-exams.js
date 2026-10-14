@@ -96,9 +96,9 @@ function ewRest() {
   const labSel = w.tests.filter(isLabTest), imgSel = w.tests.filter(t => IMG_TESTS.includes(t));
   let results = '';
   if (fillsNow() && role() !== 'imagen' && labSel.length) {
-    const rows = blankResults(labSel); const groups = [...new Set(rows.map(r => r.test))];
+    const rows = blankResults(labSel, ewSex()); const groups = [...new Set(rows.map(r => r.test))];
     results = `<div><b>3. Resultados</b> <span class="small muted">puede llenarlos ahora o dejarlos para después</span>${groups.map(g => `<div style="margin-top:10px"><div class="small muted" style="margin-bottom:4px">${esc(g)}</div><div class="tablewrap"><table><thead><tr><th>Parámetro</th><th>Resultado</th><th>Unidad</th><th>Referencia</th><th></th></tr></thead><tbody>
-      ${rows.map((r, i) => r.test !== g ? '' : `<tr><td>${esc(r.param)}</td><td><input class="input" style="width:110px" id="ew-v${i}" value="${esc(w.values[r.param] || '')}" data-in="ewVal" data-i="${i}" data-p="${esc(r.param)}" data-ref="${esc(r.ref)}" inputmode="decimal" aria-label="${esc(r.param)}"></td><td class="muted">${esc(r.unit)}</td><td class="muted">${esc(r.ref || '—')}</td><td id="ew-f${i}">${flagCell(w.values[r.param], r.ref)}</td></tr>`).join('')}</tbody></table></div></div>`).join('')}</div>`;
+      ${rows.map((r, i) => r.test !== g ? '' : `<tr><td>${esc(r.param)}</td><td><input class="input" style="width:110px" id="ew-v${i}" value="${esc(w.values[r.param] || '')}" data-in="ewVal" data-i="${i}" data-p="${esc(r.param)}" data-ref="${esc(r.ref)}" inputmode="${refNumeric(r.ref) ? 'decimal' : 'text'}" aria-label="${esc(r.param)}"></td><td class="muted">${esc(r.unit)}</td><td class="muted">${esc(r.ref || '—')}</td><td id="ew-f${i}">${flagCell(w.values[r.param], r.ref)}</td></tr>`).join('')}</tbody></table></div></div>`).join('')}</div>`;
   }
   if (role() === 'imagen' && imgSel.length) results = `<div><b>3. Informe</b><textarea class="input" id="ew-rep" rows="7" style="margin-top:8px" placeholder="Hallazgos y conclusión">${esc(w.report || '')}</textarea></div>`;
   return `<div><b>2. ${role() === 'imagen' ? 'Estudio' : 'Exámenes'}</b>
@@ -125,10 +125,12 @@ ACTIONS.ewKeep = () => ewKeep();
 ACTIONS.ewSearch = el => { ewKeep(); UI.ew.query = el.value; const pos = el.selectionStart; document.getElementById('ew-rest').innerHTML = ewRest(); const input = document.getElementById('ew-search'); input.focus(); input.setSelectionRange(pos, pos); };
 ACTIONS.ewTest = el => { ewKeep(); const l = UI.ew.tests; const t = el.dataset.t; l.includes(t) ? l.splice(l.indexOf(t), 1) : l.push(t); document.getElementById('ew-rest').innerHTML = ewRest(); };
 ACTIONS.ewVal = el => { UI.ew.values[el.dataset.p] = el.value; document.getElementById('ew-f' + el.dataset.i).innerHTML = flagCell(el.value, el.dataset.ref); };
+// Sexo del paciente elegido en el formulario (para usar su rango de referencia)
+const ewSex = () => { const st = UI.pp?.ex; return st?.pid ? pat(st.pid)?.sex : st?.np?.sex; };
 ACTIONS.ewSave = el => {
   ewKeep(); const w = UI.ew; const msg = document.getElementById('ew-msg'); const validate = !!el.dataset.validate;
   // Valores más de 25 % por debajo de lo normal: se pide confirmación (segundo clic) antes de registrar nada
-  const lowNew = validate && role() !== 'imagen' ? checkList(blankResults(w.tests.filter(isLabTest)).map(r => ({ ...r, value: String(w.values[r.param] || '').trim() }))) : [];
+  const lowNew = validate && role() !== 'imagen' ? checkList(blankResults(w.tests.filter(isLabTest), ewSex()).map(r => ({ ...r, value: String(w.values[r.param] || '').trim() }))) : [];
   const sigNew = lowNew.map(r => r.param + '=' + r.value).join('|');
   if (lowNew.length && w.lowOk !== sigNew) { w.lowOk = sigNew;
     msg.innerHTML = `<span class="pill warn">⚠ Verifique</span> ${lowNew.map(r => `<b>${esc(r.param)}</b> ${esc(r.value)} ${esc(r.unit)} (normal ${esc(r.ref)})`).join(' · ')}: más de 25 % por debajo de lo normal. Revise la muestra y el valor; si es correcto, toque de nuevo el botón.`;
@@ -141,7 +143,7 @@ ACTIONS.ewSave = el => {
   const orders = createOrders({ id: null, pid: who.pid, doc: myDoc() || w.doc || null, tests: w.tests, urgent: w.urgent, dx: w.notes ? [w.notes] : [], admId: w.admId && admOf(w.admId)?.pid === who.pid ? w.admId : null, apptId: w.apptId || null });
   if (lowNew.length) log('Valores bajos confirmados por el bioanalista', `${pat(who.pid).name} · ${lowNew.map(r => `${r.param} ${r.value}`).join(', ')}`);
   if (validate) orders.forEach(o => {
-    if (o.area === 'laboratorio' && role() !== 'imagen') { o.results = blankResults(o.tests).map(r => { const v = String(w.values[r.param] || '').trim(); return { ...r, value: v, flag: flagOf(v, r.ref) }; }); o.status = 'listo'; o.readyAt = nowStamp(); o.by = actor(); o.seen = false; }
+    if (o.area === 'laboratorio' && role() !== 'imagen') { o.results = blankResults(o.tests, pat(who.pid)?.sex).map(r => { const v = String(w.values[r.param] || '').trim(); return { ...r, value: v, flag: flagOf(v, r.ref) }; }); o.status = 'listo'; o.readyAt = nowStamp(); o.by = actor(); o.seen = false; }
     if (o.area === 'imagen' && role() === 'imagen') { o.report = w.report.trim(); o.status = 'listo'; o.readyAt = nowStamp(); o.by = actor(); o.seen = false; }
   });
   log(validate ? 'Examen registrado con resultado' : isClin() ? 'Examen solicitado' : 'Examen registrado', `${pat(who.pid).name} · ${w.tests.join(', ')}`); save();
@@ -152,20 +154,31 @@ ACTIONS.ewSave = el => {
 // Catálogo de exámenes: el laboratorio define parámetros, unidades y valores de referencia
 function catalogView() {
   const cat = UI.cat = UI.cat || JSON.parse(JSON.stringify(labPanels()));
-  return `<div class="banner" style="margin-bottom:14px">Los cambios aplican a los resultados nuevos. Los resultados ya validados conservan el valor de referencia con que se emitieron.</div>
-  <div class="grid g2" style="align-items:start">${Object.entries(cat).map(([panel, rows], pi) => `<div class="card"><h2>${esc(panel)} <button class="btn ghost sm" data-act="catDelPanel" data-p="${esc(panel)}">Quitar</button></h2>
-    ${labMeta(panel)?.source === 'clinica' ? '<span class="pill info">Laboratorio de la clínica</span>' : ''}${labMeta(panel)?.includes ? `<p class="small"><b>Incluye:</b> ${esc(labMeta(panel).includes)}</p>` : ''}
-    <div class="stack">${rows.map((r, ri) => `<div class="catrow"><input class="input" id="cat-${pi}-${ri}-0" value="${esc(r[0])}" placeholder="Parámetro" aria-label="Parámetro"><input class="input" id="cat-${pi}-${ri}-1" value="${esc(r[1])}" placeholder="Unidad" aria-label="Unidad"><input class="input" id="cat-${pi}-${ri}-2" value="${esc(r[2])}" placeholder="Ej. 12–16, <200" aria-label="Valor de referencia"><button class="btn ghost" data-act="catDelRow" data-p="${esc(panel)}" data-i="${ri}" aria-label="Quitar parámetro">✕</button></div>`).join('')}</div>
-    <button class="btn sm" style="margin-top:10px" data-act="catAddRow" data-p="${esc(panel)}">Agregar parámetro</button></div>`).join('')}</div>
+  const card = ([panel, rows], pi) => {
+    const m = labMeta(panel) || {}, parts = m.parts || [], std = typeof LAB_STANDARD !== 'undefined' && LAB_STANDARD[panel];
+    return `<div class="card catcard" data-name="${esc(labNameKey([panel, ...rows.map(r => r[0]), ...parts].join(' ')))}"><h2>${esc(panel)} <button class="btn ghost sm" data-act="catDelPanel" data-p="${esc(panel)}">Quitar</button></h2>
+    ${m.source === 'clinica' ? '<span class="pill info">Laboratorio de la clínica</span>' : ''}
+    ${parts.length ? `<p class="small"><b>Incluye:</b> ${parts.map(t => `<span class="pill">${esc(t)}</span>`).join(' ')}</p><p class="small muted" style="margin:0">Es un perfil: los valores de referencia se editan en cada examen que incluye.</p>` :
+    `${m.includes ? `<p class="small"><b>Incluye:</b> ${esc(m.includes)}</p>` : ''}
+    <div class="stack">${rows.map((r, ri) => `<div class="catrow"><input class="input" id="cat-${pi}-${ri}-0" value="${esc(r[0])}" placeholder="Parámetro" aria-label="Parámetro"><input class="input" id="cat-${pi}-${ri}-1" value="${esc(r[1])}" placeholder="Unidad" aria-label="Unidad"><input class="input" id="cat-${pi}-${ri}-2" value="${esc(r[2])}" placeholder="Ej. 12–16 · <200 · Negativo" aria-label="Valor de referencia" title="${esc(r[2])}"><button class="btn ghost" data-act="catDelRow" data-p="${esc(panel)}" data-i="${ri}" aria-label="Quitar parámetro">✕</button></div>`).join('')}</div>
+    <div class="hstack" style="margin-top:10px"><button class="btn sm" data-act="catAddRow" data-p="${esc(panel)}">Agregar parámetro</button>${std ? `<button class="btn ghost sm" data-act="catStd" data-p="${esc(panel)}">Volver a los valores estándar</button>` : ''}</div>`}</div>`;
+  };
+  return `<div class="banner" style="margin-bottom:10px"><span>Valores de adultos de uso habitual en Venezuela y EE. UU.; ajústelos al método de su laboratorio. Los cambios aplican a los resultados nuevos: los ya validados conservan la referencia con que se emitieron.
+    Formatos: <b>12–16</b>, <b>&lt;200</b>, <b>&gt;40</b>, <b>Negativo</b> / <b>No reactivo</b>, o por sexo: <b>Hombres: 13,5–17,5 · Mujeres: 12,0–15,5</b>.</span></div>
+  <input class="input" type="search" placeholder="Buscar examen…" aria-label="Buscar examen" data-in="catFilter" style="margin-bottom:14px;max-width:420px">
+  <div class="cat-grid">${Object.entries(cat).map(card).join('')}</div>
   <div class="card sec between"><div class="hstack" style="flex:1"><input class="input" id="cat-new" placeholder="Nombre del examen nuevo, ej. Perfil tiroideo" style="max-width:360px" aria-label="Examen nuevo"><button class="btn" data-act="catAddPanel">Agregar examen</button></div><button class="btn primary" data-act="catSave">Guardar catálogo</button></div>`;
 }
+// Buscador del catálogo: oculta las tarjetas que no coinciden (sin volver a dibujar, así no se pierde lo escrito)
+ACTIONS.catFilter = el => { const q = labNameKey(el.value); document.querySelectorAll('.catcard').forEach(c => { c.hidden = !!q && !c.dataset.name.includes(q); }); };
+ACTIONS.catStd = el => { catRead(); UI.cat[el.dataset.p] = JSON.parse(JSON.stringify(LAB_STANDARD[el.dataset.p])); render(); toast('Valores estándar cargados. Toque "Guardar catálogo" para aplicarlos.'); };
 function catRead() { const cat = UI.cat; Object.keys(cat).forEach((panel, pi) => { cat[panel] = cat[panel].map((r, ri) => [0, 1, 2].map(k => document.getElementById(`cat-${pi}-${ri}-${k}`)?.value.trim() ?? r[k])); }); }
 ACTIONS.catAddRow = el => { catRead(); UI.cat[el.dataset.p].push(['', '', '']); render(); };
 ACTIONS.catDelRow = el => { catRead(); UI.cat[el.dataset.p].splice(+el.dataset.i, 1); render(); };
 ACTIONS.catDelPanel = el => { catRead(); delete UI.cat[el.dataset.p]; render(); };
 ACTIONS.catAddPanel = () => { catRead(); const n = val('cat-new').trim(); if (!n) { toast('Escribe el nombre del examen'); return; } if (Object.keys(UI.cat).some(k => labNameKey(k) === labNameKey(n))) { toast('Ese examen ya existe'); return; } UI.cat[n] = [['', '', '']]; render(); };
 ACTIONS.catSave = () => {
-  catRead(); const clean = {}; Object.entries(UI.cat).forEach(([p, rows]) => { const r = rows.filter(x => x[0]); if (r.length) clean[p] = r; });
+  catRead(); const clean = {}; Object.entries(UI.cat).forEach(([p, rows]) => { const r = rows.filter(x => x[0]); if (r.length || labMeta(p)?.parts?.length) clean[p] = r; });   // los perfiles no tienen parámetros propios
   S.labCatalog = clean; UI.cat = null; log('Catálogo de laboratorio actualizado', `${Object.keys(clean).length} exámenes`); save(); render(); toast('Catálogo guardado');
 };
 
@@ -186,7 +199,7 @@ ACTIONS.openExam = el => {
     openSheet(`${e.num} · ${areaName(e.area)}`, head + `<div class="banner">${EX_ST[e.status][0]}. El resultado aparecerá aquí y en el perfil del paciente en cuanto ${e.area === 'laboratorio' ? 'el laboratorio' : 'rayos X'} lo valide.</div>`,
       worker ? `<button class="btn primary" data-act="openExam" data-id="${e.id}" data-mode="work">Cargar resultado ahora</button>` : noteBtn, { wide: true }); return;
   }
-  UI.exr = { id: e.id, values: Object.fromEntries((e.results.length ? e.results : blankResults(e.tests)).map((r, i) => [i, r.value])), report: e.report || '', files: [...(e.files || [])], pending: [] };
+  UI.exr = { id: e.id, values: Object.fromEntries((e.results.length ? e.results : blankResults(e.tests, pat(e.pid)?.sex)).map((r, i) => [i, r.value])), report: e.report || '', files: [...(e.files || [])], pending: [] };
   openSheet(`${e.num} · ${areaName(e.area)}`, head + (e.area === 'imagen' && canUploadImage() ? `<button class="btn primary" data-act="imageUpload" data-order="${e.id}">Subir radiografía / estudio de imagen</button>` : '') + workForm(e), workFoot(e), { wide: true });
 };
 function resultView(e) {
@@ -207,15 +220,15 @@ function workForm(e) {
     <div class="hstack" style="margin-top:6px"><label class="btn sm" for="exr-files">Adjuntar archivos</label><input id="exr-files" type="file" multiple accept="image/*,application/pdf" hidden data-ch="exrFiles">${e.area === 'laboratorio' ? '<button class="btn sm" data-act="exrAI" id="exr-ai" disabled>Leer resultados de la foto con IA</button>' : ''}<span class="small muted" id="exr-msg"></span></div>
     <div class="hstack" id="exr-thumbs" style="margin-top:6px">${fileLinks(UI.exr.files)}</div></div>`;
   if (e.area !== 'laboratorio') return steps + files + `<div class="field"><label for="exr-rep">Informe del estudio</label><textarea class="input" id="exr-rep" rows="8" placeholder="Hallazgos y conclusión">${esc(UI.exr.report)}</textarea></div>`;
-  const rows = e.results.length ? e.results : blankResults(e.tests); const groups = [...new Set(rows.map(r => r.test))];
+  const rows = e.results.length ? e.results : blankResults(e.tests, pat(e.pid)?.sex); const groups = [...new Set(rows.map(r => r.test))];
   return steps + groups.map(g => `<div><b class="small">${esc(g)}</b><div class="tablewrap" style="margin-top:6px"><table><thead><tr><th>Parámetro</th><th>Resultado</th><th>Unidad</th><th>Referencia</th><th></th></tr></thead><tbody>
-    ${rows.map((r, i) => r.test !== g ? '' : `<tr><td>${esc(r.param)}</td><td><input class="input" style="width:110px" id="exv-${i}" value="${esc(UI.exr.values[i] || '')}" data-in="exVal" data-i="${i}" inputmode="decimal" aria-label="${esc(r.param)}"></td><td class="muted">${esc(r.unit)}</td><td class="muted">${esc(r.ref || '—')}</td><td id="exf-${i}">${flagCell(UI.exr.values[i], r.ref)}</td></tr>`).join('')}</tbody></table></div></div>`).join('') + files;
+    ${rows.map((r, i) => r.test !== g ? '' : `<tr><td>${esc(r.param)}</td><td><input class="input" style="width:110px" id="exv-${i}" value="${esc(UI.exr.values[i] || '')}" data-in="exVal" data-i="${i}" inputmode="${refNumeric(r.ref) ? 'decimal' : 'text'}" aria-label="${esc(r.param)}"></td><td class="muted">${esc(r.unit)}</td><td class="muted">${esc(r.ref || '—')}</td><td id="exf-${i}">${flagCell(UI.exr.values[i], r.ref)}</td></tr>`).join('')}</tbody></table></div></div>`).join('') + files;
 }
 const workFoot = e => `<span class="note" id="exw-msg">Al validar, el resultado llega al médico y queda en el perfil del paciente.</span><button class="btn" data-act="exSaveDraft" data-id="${e.id}">Guardar sin enviar</button><button class="btn primary" data-act="exSend" data-id="${e.id}">${e.area === 'laboratorio' ? 'Validar y enviar' : 'Enviar informe'}</button>`;
-ACTIONS.exVal = el => { const i = +el.dataset.i; UI.exr.values[i] = el.value; const e = S.exams.find(x => x.id === UI.exr.id); const r = (e.results.length ? e.results : blankResults(e.tests))[i]; document.getElementById('exf-' + i).innerHTML = flagCell(el.value, r.ref); };
+ACTIONS.exVal = el => { const i = +el.dataset.i; UI.exr.values[i] = el.value; const e = S.exams.find(x => x.id === UI.exr.id); const r = (e.results.length ? e.results : blankResults(e.tests, pat(e.pid)?.sex))[i]; document.getElementById('exf-' + i).innerHTML = flagCell(el.value, r.ref); };
 ACTIONS.exStatus = el => {
   const e = S.exams.find(x => x.id === el.dataset.id);
-  if (e.area === 'laboratorio') e.results = (e.results.length ? e.results : blankResults(e.tests)).map((r, i) => { const v = (document.getElementById('exv-' + i)?.value ?? r.value ?? '').trim(); return { ...r, value: v, flag: flagOf(v, r.ref) }; });
+  if (e.area === 'laboratorio') e.results = (e.results.length ? e.results : blankResults(e.tests, pat(e.pid)?.sex)).map((r, i) => { const v = (document.getElementById('exv-' + i)?.value ?? r.value ?? '').trim(); return { ...r, value: v, flag: flagOf(v, r.ref) }; });
   e.status = el.dataset.st; log('Examen: ' + EX_ST[e.status][0], `${e.num} · ${pat(e.pid).name}`); save(); renderSide();
   ACTIONS.openExam({ dataset: { id: e.id, mode: 'work' } }); toast(EX_ST[e.status][0]);
 };
@@ -225,7 +238,7 @@ ACTIONS.exrFiles = el => {
   const ai = document.getElementById('exr-ai'); if (ai) ai.disabled = !UI.exr.pending.some(f => f.type.startsWith('image/'));
 };
 function collectResults(e) {
-  const rows = e.results.length ? e.results : blankResults(e.tests);
+  const rows = e.results.length ? e.results : blankResults(e.tests, pat(e.pid)?.sex);
   return rows.map((r, i) => { const v = (document.getElementById('exv-' + i)?.value ?? UI.exr.values[i] ?? '').trim(); return { ...r, value: v, flag: flagOf(v, r.ref) }; });
 }
 async function uploadPending(msgEl) {
@@ -262,7 +275,7 @@ ACTIONS.exSend = el => persistWork(el.dataset.id, true);
 
 // Leer con IA la foto del resultado impreso por el equipo del laboratorio
 ACTIONS.exrAI = async btn => {
-  const e = S.exams.find(x => x.id === UI.exr.id); const rows = e.results.length ? e.results : blankResults(e.tests); const msg = document.getElementById('exr-msg');
+  const e = S.exams.find(x => x.id === UI.exr.id); const rows = e.results.length ? e.results : blankResults(e.tests, pat(e.pid)?.sex); const msg = document.getElementById('exr-msg');
   const sample = await getCap('sample'); const lim = sample ? await sample.limits().catch(() => null) : null;
   if (!lim?.images) { msg.textContent = 'La lectura con IA no está disponible en esta vista.'; return; }
   const imgs = UI.exr.pending.filter(f => f.type.startsWith('image/')).slice(0, lim.images.maxCount);

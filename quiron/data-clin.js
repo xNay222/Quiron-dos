@@ -16,9 +16,16 @@ const LAB_COMBOS = { 'Perfil preoperatorio': ['Hematología completa', 'Química
 const IMG_TESTS = ['Rayos X de tórax', 'Rayos X de columna', 'Rayos X de extremidades', 'Ecografía abdominal', 'Ecografía pélvica', 'Ecografía obstétrica', 'Ecografía mamaria', 'Ecografía de partes blandas', 'Electrocardiograma'];
 const EX_ST = { solicitado: ['Solicitado', 'warn'], muestra: ['Muestra tomada', 'info'], proceso: ['En proceso', 'info'], listo: ['Resultado listo', 'good'] };
 
-// Rango "a–b", "<x" o ">x" → 'alto' | 'bajo' | '' (sin rango o valor no numérico)
+// Rango "a–b", "<x" o ">x" → 'alto' | 'bajo' | ''. Referencia cualitativa ("Negativo", "No reactivo", "Ausente")
+// → 'anormal' si el resultado es positivo / reactivo / presente. Un texto que no es un rango no se marca solo.
+const QUAL_NORMAL = /^(negativo|no reactivo|ausente|no se observan|sin crecimiento|no detectado)/;
+const QUAL_ABNORMAL = /^(positivo|reactivo|presente|detectado|\+)/;
+const labNorm = t => labNameKey(t);   // sin tildes ni mayúsculas
 function flagOf(value, ref) {
-  const v = parseFloat(String(value).replace(',', '.')); if (isNaN(v) || !ref) return '';
+  if (!ref || String(value ?? '').trim() === '') return '';
+  if (QUAL_NORMAL.test(labNorm(ref))) return QUAL_ABNORMAL.test(labNorm(value)) ? 'anormal' : '';
+  if (/:/.test(ref)) return '';   // rango por sexo o por fase sin resolver: no se adivina
+  const v = parseFloat(String(value).replace(',', '.')); if (isNaN(v)) return '';
   const n = s => parseFloat(s.replace(',', '.'));
   if (ref.startsWith('<')) return v >= n(ref.slice(1)) ? 'alto' : '';
   if (ref.startsWith('>')) return v <= n(ref.slice(1)) ? 'bajo' : '';
@@ -29,7 +36,7 @@ function flagOf(value, ref) {
 // No bloquea: el bioanalista debe confirmar que el valor es correcto antes de validar.
 const VERIFY_LOW = 0.75;
 function needsCheck(value, ref) {
-  const v = parseFloat(String(value).replace(',', '.')); if (isNaN(v) || !ref || ref.startsWith('<')) return false;
+  const v = parseFloat(String(value).replace(',', '.')); if (isNaN(v) || !ref || ref.startsWith('<') || /:/.test(ref) || !/^[<>]?\d|\d–\d/.test(ref)) return false;
   const low = parseFloat((ref.startsWith('>') ? ref.slice(1) : ref.split('–')[0]).replace(',', '.'));
   return !isNaN(low) && low > 0 && v < low * VERIFY_LOW;
 }
@@ -216,8 +223,10 @@ const labTestNames = () => [...Object.keys(labPanels()), ...Object.keys(LAB_COMB
 // El catálogo vigente es el que mantiene el laboratorio (S.labCatalog); LAB_PANELS es solo el de partida
 const labPanels = () => (typeof S !== 'undefined' && S.labCatalog) || LAB_PANELS;
 const isLabTest = t => !!(labPanels()[t] || LAB_COMBOS[t]);
-const panelsOf = tests => [...new Set(tests.flatMap(t => labPanels()[t] ? [t] : LAB_COMBOS[t] || [t]))];
-function blankResults(tests) { const cat = labPanels(); return panelsOf(tests).filter(t => cat[t]).flatMap(t => cat[t].map(([param, unit, ref]) => ({ test: t, param, unit, ref, value: '', flag: '' }))); }
+// Un perfil se desglosa en los exámenes que incluye; cada uno trae sus parámetros y referencias
+const panelsOf = tests => [...new Set(tests.flatMap(t => { const parts = typeof S !== 'undefined' && S.labCatalogMeta?.[t]?.parts; return parts?.length ? parts : labPanels()[t] ? [t] : LAB_COMBOS[t] || [t]; }))];
+// sex: 'M' | 'F' del paciente → se usa su rango ("Hombres: … · Mujeres: …")
+function blankResults(tests, sex) { const cat = labPanels(); return panelsOf(tests).filter(t => cat[t]?.length).flatMap(t => cat[t].map(([param, unit, ref]) => ({ test: t, param, unit, ref: typeof refFor === 'function' ? refFor(ref, sex) : ref, value: '', flag: '' }))); }
 
 function seedClinical() {
   const notes = [
@@ -245,7 +254,8 @@ function seedClinical() {
   // Hemoglobina anterior de Ricardo Salazar, para ver la evolución
   exams.push({ id: 'ex0', num: 'EX-0012', pid: 'pt2', doc: 'm4', date: dAt(-180), area: 'laboratorio', tests: ['Hematología completa'], priority: 'normal', notes: 'Control anual.', status: 'listo', readyAt: dAt(-179) + ' 15:00', by: 'Laboratorio', seen: true, files: [], report: '',
     results: [R('Hematología completa', 'Hemoglobina', 'g/dL', '12–16', '13,6'), R('Hematología completa', 'Hematocrito', '%', '36–46', '40'), R('Hematología completa', 'Leucocitos', 'x10³/µL', '4,5–11', '6,9'), R('Hematología completa', 'Plaquetas', 'x10³/µL', '150–450', '240')] });
-  return importClinicLab2026({ notes, exams, exSeq: 36, labCatalog: JSON.parse(JSON.stringify(LAB_PANELS)) });
+  const st = importClinicLab2026({ notes, exams, exSeq: 36, labCatalog: JSON.parse(JSON.stringify(LAB_PANELS)) });
+  return typeof applyLabStandard === 'function' ? applyLabStandard(st) : st;
 }
 
 // Valor anterior del mismo parámetro para el paciente (para mostrar si subió o bajó)
