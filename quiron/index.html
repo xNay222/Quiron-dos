@@ -1253,6 +1253,65 @@ body{background:
   .app .side{z-index:35}
   .global-topbar::before{left:-256px}
 }
+
+/* ---------- Tutorial: resaltado que se mueve con muelle y explicación en vidrio ---------- */
+#tour-spot{left:0;top:0;transition:none;will-change:transform,width,height;border-radius:16px;outline:2px solid rgba(255,255,255,.92);outline-offset:0}
+#tour-tip{left:0;top:0;right:auto;bottom:auto;animation:none;will-change:transform;border-radius:22px;padding:16px 18px;
+  background:var(--lg-bg-strong);-webkit-backdrop-filter:blur(40px) saturate(190%);backdrop-filter:blur(40px) saturate(190%);
+  box-shadow:inset 0 1px 0 var(--lg-edge),inset 0 0 0 .5px var(--lg-line),var(--lg-shadow-big)}
+#tour-tip.center{left:50%;top:50%;transform:translate(-50%,-50%);width:min(380px,calc(100vw - 24px))}
+#tour-tip.docked{left:12px;right:12px;top:auto;bottom:calc(12px + env(safe-area-inset-bottom,0px));width:auto;transform:none}
+#tour-tip.docked.top{top:calc(12px + env(safe-area-inset-top,0px));bottom:auto}
+.tour-tip-in{display:grid;gap:6px;animation:tourTipIn .22s cubic-bezier(.32,.72,0,1) both}
+@keyframes tourTipIn{from{opacity:0;transform:translateY(4px)}}
+#tour-block.dim{background:rgba(10,12,20,.5);transition:background .25s ease}
+/* En el recorrido las pantallas aparecen ya colocadas: nada se mueve debajo del resaltado */
+.touring .main,.touring .main *,.touring .scrim,.touring .sheet{animation:none!important}
+@media (prefers-reduced-motion:reduce){.tour-tip-in{animation:none}}
+@media (prefers-reduced-transparency:reduce){#tour-tip{background:var(--card);-webkit-backdrop-filter:none;backdrop-filter:none}}
+
+/* ---------- Cuestionario: una sola barra de vidrio arriba, alineada con la tarjeta ---------- */
+.guide-wrap{margin-inline:auto}
+.guide-bar{position:sticky;top:10px;z-index:20;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;
+  min-height:52px;padding:6px 8px;margin:0 0 10px;border-radius:999px;overflow:hidden;
+  background:var(--lg-bg);-webkit-backdrop-filter:var(--lg-blur);backdrop-filter:var(--lg-blur);
+  box-shadow:inset 0 1px 0 var(--lg-edge),inset 0 0 0 .5px var(--lg-line),var(--lg-shadow)}
+.guide-bar .btn{min-height:40px;padding-inline:14px;white-space:nowrap}
+.guide-bar-title{display:flex;flex-direction:column;align-items:center;min-width:0;line-height:1.2;text-align:center}
+.guide-bar-title b{font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.guide-bar-title .small{font-size:12px}
+.guide-mode-gap{width:40px}
+.guide-bar .guide-progress{position:absolute;left:22px;right:22px;bottom:0;height:3px;margin:0;border-radius:999px;background:color-mix(in srgb,var(--fg) 7%,transparent)}
+@media(max-width:600px){.guide-bar{top:8px;min-height:48px}.guide-bar .btn{padding-inline:10px;min-height:36px}}
+@media (prefers-reduced-transparency:reduce){.guide-bar{background:var(--card);-webkit-backdrop-filter:none;backdrop-filter:none;box-shadow:0 0 0 1px var(--line)}}
+/* Teléfono y tableta: la barra de Continuar va encima de las pestañas y la tarjeta crece con la página (sin desplazamiento interno) */
+@media(max-width:1023px){
+  .guide-footer{bottom:calc(86px + env(safe-area-inset-bottom,0px))}
+  .guide-wrap{padding-bottom:calc(220px + env(safe-area-inset-bottom,0px))}
+  .guide-card{display:block;max-height:none}
+  .guide-card .cc-editor{display:block;overflow:visible}
+  .guide-editor-inner{display:block;height:auto}
+  .guide-card #guide-body{overflow:visible}
+  .guide-card .guide-options:not(.guide-scale){max-height:none}
+  .guide-card[data-question-type="review"],.guide-card[data-question-type="report"]{margin-bottom:0}
+}
+.guide-mode .short{display:none}
+/* Guardia: tarjeta limpia con su título arriba (sin la franja vertical) */
+.duty{display:block;border-radius:22px;padding:14px 16px;box-shadow:inset 0 0 0 .5px var(--lg-line),0 1px 2px rgba(0,0,0,.03)}
+.duty-tab{writing-mode:horizontal-tb;transform:none;background:none;color:var(--fg2);padding:0 0 10px;display:block;font-size:12px;font-weight:600;letter-spacing:.04em}
+.duty-body{padding:0;gap:12px 28px}
+@media(max-width:600px){.duty-body{display:grid;grid-template-columns:1fr;gap:12px}.duty-body>.hstack{margin-left:0!important}}
+/* Teléfono: pestañas en una sola fila deslizable y citas con sus etiquetas debajo del nombre */
+@media(max-width:600px){
+  .main .seg{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;max-width:100%}
+  .main .seg::-webkit-scrollbar{display:none}
+  .main .seg>*{flex:none}
+  .appt{flex-wrap:wrap;row-gap:6px}
+  .appt>.hstack{width:100%}
+}
+@media(max-width:600px){.guide-footer{gap:6px;padding:6px}.guide-footer .btn{white-space:nowrap;padding-inline:12px;min-height:46px}.guide-footer .guide-continue{flex:2}.guide-footer .btn:not(.guide-continue){flex:1}}
+@media(max-width:600px){.guide-mode .long{display:none}.guide-mode .short{display:inline}.guide-bar-title b{font-size:14px}}
+
 </style>
 </head>
 <body>

@@ -110,7 +110,7 @@ function surgeryView(list, day) {
       <div style="flex:none">${statusPill(a.status)}</div></button>`; }).join('') || `<div class="card empty">No hay cirugías programadas para este día. <button class="btn ghost sm" data-act="newAppt" data-kind="cirugia">Programar cirugía</button></div>`}</div>`;
 }
 
-function consultView(list, day) {
+function agendaConsultView(list, day) {
   const cons = list.filter(a => a.kind !== 'cirugia'); const surg = list.filter(a => a.kind === 'cirugia' && isActive(a));
   // Por defecto, solo los médicos que atienden ese día (o que tienen citas); "Ver todos" muestra el resto
   const all = agendaOwn() ? consultDocs().filter(d => d.id === myDoc()) : consultDocs(); const docs = UI.agAll ? all : all.filter(d => availRaw(d.id, day) || cons.some(a => a.doc === d.id));
@@ -136,7 +136,7 @@ VIEWS.agenda = () => {
   const day = UI.agendaDay || dAt(0); const tab = UI.agTab || 'general';
   const list = S.appts.filter(a => a.date === day && (!agendaOwn() || a.doc === myDoc() || a.anest === myDoc()));
   const nS = list.filter(a => a.kind === 'cirugia' && isActive(a)).length, nC = list.filter(a => a.kind !== 'cirugia' && isActive(a)).length;
-  const body = tab === 'quirurgica' ? surgeryView(list, day) : tab === 'consultas' ? consultView(list, day) : generalView(list);
+  const body = tab === 'quirurgica' ? surgeryView(list, day) : tab === 'consultas' ? agendaConsultView(list, day) : generalView(list);
   return header('Agenda', fday(day).replace(/^./, c => c.toUpperCase()),
     `<button class="btn" data-act="agendaShift" data-n="-1" aria-label="Día anterior">‹</button><button class="btn" data-act="agendaShift" data-n="0">Hoy</button><button class="btn" data-act="agendaShift" data-n="1" aria-label="Día siguiente">›</button><input class="input" type="date" style="width:auto" value="${day}" data-ch="agendaDate" aria-label="Ir a fecha"><button class="btn primary" data-act="newAppt">${tab === 'quirurgica' ? 'Programar cirugía' : 'Nueva cita'}</button>`) +
   dutyStrip(day) +

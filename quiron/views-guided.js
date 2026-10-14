@@ -63,17 +63,18 @@ function guidedShell(c, title, list, body, editable) {
   const i = GUIDE.current(c, list), s = list[i];
   const report = s.type === 'report', review = s.type === 'review';
   const warning = guidedWarnings(c, s);
-  const back = c.kind === 'evolution' ? ccButton('evBack', 'Volver al ingreso') :
-    '<button class="btn" data-go="consultas">Volver a Consultas</button>';
-  const heading = '<div class="guide-heading"><span class="small muted">' + esc(title) + '</span>' +
-    '<span id="consult-save" class="small muted" role="status" aria-live="polite">' +
-    esc(UI.consultSave || 'Guardado') + '</span>' + back + '</div>';
-  const needsContinue = true;
-  return heading + '<div class="guide-wrap">' + guidedBand(c) +
-    (c.kind !== 'evolution' && editable ? '<div class="guide-tools">' +
-      ccButton('ccMode', c.mode === 'quick' ? 'Ampliar a consulta completa' : 'Volver a consulta rápida', '', 'ghost') + '</div>' : '') +
+  const back = c.kind === 'evolution' ? '<button class="btn ghost guide-back" data-act="evBack" aria-label="Volver al ingreso">‹ Ingreso</button>' :
+    '<button class="btn ghost guide-back" data-go="consultas" aria-label="Volver a Consultas">‹ Consultas</button>';
+  // Barra de vidrio del cuestionario: volver, qué consulta es, si está guardado, cambio de modo y el progreso en el borde inferior
+  const heading = '<div class="guide-bar">' + back +
+    '<div class="guide-bar-title"><b>' + esc(title) + '</b><span id="consult-save" class="small muted" role="status" aria-live="polite">' +
+    esc(UI.consultSave || 'Guardado') + '</span></div>' +
+    (c.kind !== 'evolution' && editable ? ccButton('ccMode', c.mode === 'quick' ? '<span class="long">Ampliar a completa</span><span class="short">A completa</span>' : '<span class="long">Pasar a rápida</span><span class="short">A rápida</span>', 'title="' +
+      (c.mode === 'quick' ? 'Ampliar a consulta completa' : 'Volver a consulta rápida') + '"', 'ghost guide-mode') : '<span class="guide-mode-gap"></span>') +
     '<div class="guide-progress" role="progressbar" aria-label="Progreso del asistente" aria-valuemin="0" aria-valuemax="' +
-    list.length + '" aria-valuenow="' + (i + 1) + '"><span style="width:' + ((i + 1) * 100 / list.length) + '%"></span></div>' +
+    list.length + '" aria-valuenow="' + (i + 1) + '"><span style="width:' + ((i + 1) * 100 / list.length) + '%"></span></div></div>';
+  const needsContinue = true;
+  return '<div class="guide-wrap">' + heading + guidedBand(c) +
     '<section class="card guide-card" data-question-type="' + s.type + '"><div class="small muted guide-counter">' + esc(s.sectionName || title) +
     ' · Pantalla ' + (i + 1) + ' de ' + list.length + '</div><h1 id="guide-title" tabindex="-1">' + esc(s.title) +
     '</h1><p id="guide-warning" class="banner warn" role="status" ' + (warning ? '' : 'hidden') + '>' + esc(warning) + '</p>' +
