@@ -30,11 +30,14 @@ const icon = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" st
 // Cada tipo de usuario ve solo su parte del sistema. Los médicos no ven finanzas; el laboratorio y rayos X solo sus órdenes.
 const ROLES = {
   recepcion: { name: 'Recepción', nav: [['agenda', 'Agenda'], ['consultas', 'Consultas'], ['pacientes', 'Pacientes'], null, ['tutorial', 'Tutorial']] },
+  // Un texto en el menú es el título de un grupo; null es una línea separadora
   admin: { name: 'Administrador · control maestro', nav: [
-    ['inicio', 'Inicio'], ['agenda', 'Agenda'], ['consultas', 'Consultas'], ['quirofano', 'Quirófano'], ['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], ['pacientes', 'Pacientes'], ['historias', 'Historias'], ['examenes', 'Exámenes'], ['atencion', 'Presupuestos'], ['contabilidad', 'Contabilidad'],
-    null, ['inventario', 'Inventario'], ['servicios', 'Servicios'], null, ['usuarios', 'Usuarios'], ['ajustes', 'Ajustes'], null, ['tutorial', 'Tutorial']] },
-  medico: { name: 'Médico', nav: [['consultas', 'Consultas'], ['consultorio', 'Mi consulta'], ['agenda', 'Agenda'], ['quirofano', 'Quirófano'], ['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], ['pacientes', 'Pacientes'], ['examenes', 'Exámenes'], ['historias', 'Historias'], null, ['tutorial', 'Tutorial']] },
-  residente: { name: 'Médico residente', nav: [['consultas', 'Consultas'], ['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], ['pacientes', 'Pacientes'], ['examenes', 'Exámenes'], ['historias', 'Historias'], null, ['tutorial', 'Tutorial']] },
+    'Clínica', ['inicio', 'Inicio'], ['agenda', 'Agenda'], ['consultas', 'Consultas'], ['quirofano', 'Quirófano'], ['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'],
+    'Pacientes', ['pacientes', 'Pacientes'], ['historias', 'Historias'], ['examenes', 'Exámenes'],
+    'Gestión', ['atencion', 'Presupuestos'], ['contabilidad', 'Contabilidad'], ['inventario', 'Inventario'], ['servicios', 'Servicios'],
+    'Sistema', ['usuarios', 'Usuarios'], ['ajustes', 'Ajustes'], ['tutorial', 'Tutorial']] },
+  medico: { name: 'Médico', nav: ['Clínica', ['consultas', 'Consultas'], ['consultorio', 'Mi consulta'], ['agenda', 'Agenda'], ['quirofano', 'Quirófano'], ['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], 'Pacientes', ['pacientes', 'Pacientes'], ['examenes', 'Exámenes'], ['historias', 'Historias'], null, ['tutorial', 'Tutorial']] },
+  residente: { name: 'Médico residente', nav: ['Clínica', ['consultas', 'Consultas'], ['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], 'Pacientes', ['pacientes', 'Pacientes'], ['examenes', 'Exámenes'], ['historias', 'Historias'], null, ['tutorial', 'Tutorial']] },
   almacen: { name: 'Almacén', nav: [['inventario', 'Inventario'], ['quirofano', 'Quirófano'], ['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], null, ['tutorial', 'Tutorial']] },
   enfermeria: { name: 'Enfermería', nav: [['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], ['quirofano', 'Quirófano'], ['pacientes', 'Pacientes'], null, ['tutorial', 'Tutorial']] },
   laboratorio: { name: 'Laboratorio', nav: [['examenes', 'Laboratorio'], ['pacientes', 'Pacientes'], null, ['tutorial', 'Tutorial']] },
@@ -44,7 +47,8 @@ const role = () => S.session?.role || 'admin';
 const isClin = () => ['medico', 'residente'].includes(role());   // médicos tratantes y residentes
 const myDoc = () => isClin() ? S.session.doc : null;
 const NAV_FOR = () => ROLES[role()].nav;
-const canSee = r => NAV_FOR().some(n => n && n[0] === r) || (role() === 'admin' && r === 'consultorio');
+const NAV_ITEMS = () => NAV_FOR().filter(Array.isArray);   // solo las secciones (sin títulos de grupo ni separadores)
+const canSee = r => NAV_ITEMS().some(n => n[0] === r) || (role() === 'admin' && r === 'consultorio');
 // Qué puede HACER cada rol dentro de las secciones que ve (el menú decide qué secciones ve).
 //  agenda.programar: citas y cirugías · agenda.propia: solo la agenda a su nombre
 //  hosp.clinico: evoluciones, exámenes y diagnóstico del ingreso · hosp.ingresar · hosp.solicitar: pedir medicación/material · hosp.aplicar: registrar aplicaciones
@@ -88,7 +92,8 @@ function renderSide() {
     (window.LOGO ? `<div class="brand"><img class="brandlogo" src="${window.LOGO.url}" alt="Quirón Especialidades Médicas"></div>` : `<div class="brand"><i>Q</i>Quirón</div>`) +
     NAV_FOR().map((n, i, all) => {
       if (!n) return '<div class="sep" role="presentation"></div>';
-      const index = all.slice(0, i).filter(Boolean).length;
+      if (typeof n === 'string') return `<div class="nav-group" role="presentation">${esc(n)}</div>`;
+      const index = all.slice(0, i).filter(Array.isArray).length;
       return shellNav(n, index >= 5 ? 'nav-extra' + (index < 7 ? ' nav-tablet' : '') : '');
     }).join('') +
     '<button class="nav nav-more" id="more-sections-button" data-act="moreSections" aria-label="Más secciones" title="Más secciones" aria-haspopup="dialog" aria-expanded="false" aria-controls="more-sections">' + icon('menu') + '</button>' +
@@ -117,14 +122,26 @@ function updateThemeButton() {
 }
 ACTIONS.rotateTheme = () => setTheme(THEMES[(Math.max(0, THEMES.findIndex(([key]) => key === getTheme())) + 1) % 3][0]);
 const mobileSectionCount = () => matchMedia('(min-width:600px)').matches ? 7 : 5;
+// "Más" en teléfono y tableta: las secciones que no caben en la barra, por grupos y en cuadrícula de iconos grandes
+function moreSectionsHTML() {
+  const shown = mobileSectionCount(); let group = '', k = 0; const groups = [];
+  NAV_FOR().forEach(n => {
+    if (typeof n === 'string') { group = n; return; }
+    if (!Array.isArray(n)) return;
+    if (k++ < shown) return;
+    if (!groups.length || groups.at(-1).name !== group) groups.push({ name: group, items: [] });
+    groups.at(-1).items.push(n);
+  });
+  return groups.map(g => `<section class="more-group">${g.name ? `<h3>${esc(g.name)}</h3>` : ''}<div class="more-grid">${g.items.map(n => shellNav(n)).join('')}</div></section>`).join('') ||
+    '<p class="muted">Todas las secciones están en la barra inferior.</p>';
+}
 function closeShellDialogs() {
   document.querySelectorAll('.shell-dialog[open]').forEach(dialog => dialog.close());
 }
 ACTIONS.moreSections = () => {
   if (!S.session?.uid) return;
   const dialog = document.getElementById('more-sections');
-  const remaining = NAV_FOR().filter(Boolean).slice(mobileSectionCount());
-  dialog.innerHTML = `<div class="shell-panel"><header><h2 id="more-sections-title">Más secciones</h2><button class="btn" data-act="closeShellDialog">Cerrar</button></header>${remaining.map(n => shellNav(n)).join('') || '<p class="muted">Todas las secciones están en la barra inferior.</p>'}</div>`;
+  dialog.innerHTML = `<div class="shell-panel"><header><h2 id="more-sections-title">Más secciones</h2><button class="btn" data-act="closeShellDialog">Cerrar</button></header>${moreSectionsHTML()}</div>`;
   dialog.showModal();
   document.getElementById('more-sections-button').setAttribute('aria-expanded', 'true');
   dialog.querySelector('.nav, button').focus();
@@ -168,8 +185,8 @@ addEventListener('resize', () => {
   if (matchMedia('(min-width:1024px)').matches) { dialog.close(); return; }
   const focusedRoute = document.activeElement?.dataset.go;
   const panel = dialog.querySelector('.shell-panel');
-  panel.querySelectorAll('.nav, p').forEach(el => el.remove());
-  panel.insertAdjacentHTML('beforeend', NAV_FOR().filter(Boolean).slice(mobileSectionCount()).map(n => shellNav(n)).join('') || '<p class="muted">Todas las secciones están en la barra inferior.</p>');
+  panel.querySelectorAll('.more-group, .nav, p').forEach(el => el.remove());
+  panel.insertAdjacentHTML('beforeend', moreSectionsHTML());
   ([...panel.querySelectorAll('[data-go]')].find(el => el.dataset.go === focusedRoute) || panel.querySelector('button')).focus();
 });
 document.addEventListener('keydown', e => {
@@ -198,7 +215,7 @@ ACTIONS.switchUserDemo = () => {
 };
 ACTIONS.setUser = el => {
   S.session = { role: el.dataset.r, doc: el.dataset.doc || null }; save(); closeSheet();
-  const first = NAV_FOR().find(Boolean)[0]; go(first, null, { root: true });
+  const first = NAV_ITEMS()[0][0]; go(first, null, { root: true });
   toast(`Entraste como ${el.dataset.doc ? med(el.dataset.doc).name : ROLES[el.dataset.r].name}`);
 };
 
@@ -232,7 +249,7 @@ let lastView = '', animNext = false; const SEEN_VIEWS = new Set();
 function render() {
   if (!S.session?.uid) return;   // sin sesión iniciada solo se muestra la pantalla de acceso
   document.body.classList.toggle('no-agenda-write', !can('agenda.programar'));
-  if (!canSee(route)) { route = NAV_FOR().find(Boolean)[0]; param = null; }
+  if (!canSee(route)) { route = NAV_ITEMS()[0][0]; param = null; }
   renderSide();
   renderTopbar();
   const v = VIEWS[route] || VIEWS.inicio; const main = document.getElementById('main');

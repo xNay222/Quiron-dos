@@ -6,14 +6,14 @@
 const firstAdm = () => (S.admissions || []).find(a => a.status === 'ingresado')?.id || null;
 const surgPatient = () => (S.appts || []).find(a => a.kind === 'cirugia' && a.date >= dAt(0) && isActive(a))?.pid || S.patients[0]?.id;
 const anyPatient = () => S.patients[0]?.id;
-const MENU = { el: '#side', t: 'Su menú', d: 'Aquí están solo las secciones de su rol. Lo que no le corresponde no aparece.' };
+const MENU = { el: '#side', t: 'Su menú', d: 'Aquí están las secciones disponibles. Toque una para entrar.' };
 const ACCOUNT = { el: '.userbtn', t: 'Mi cuenta', d: 'Su nombre y rol. Desde aquí cambia su contraseña, el modo día o noche y cierra la sesión. Si es médico, aquí registra su cédula, MPPS y Colegio de Médicos.' };
 const BACK_HERE = r => ({ go: 'tutorial', el: '#side [data-go="tutorial"]', t: 'Vuelva cuando quiera', d: 'Los recorridos están siempre en "Tutorial". Puede repetirlos las veces que necesite.' });
 
 const TOURS = {
   admin: [
     { id: 'adm-general', title: 'Recorrido general', desc: 'Las secciones principales y para qué sirve cada una.', steps: [
-      { go: 'inicio', ...MENU, d: 'Como administrador (control maestro) ve todas las secciones del sistema.' },
+      { go: 'inicio', ...MENU, d: 'Aquí están las secciones disponibles, ordenadas en cuatro grupos: Clínica, Pacientes, Gestión y Sistema.' },
       { go: 'inicio', el: '.main .today-intro', t: 'Inicio', d: 'Una frase le dice cómo está la clínica ahora: el quirófano, las camas de hospitalización y UCI, y la medicación por despachar.' },
       { go: 'inicio', el: '.main .today-feed', t: 'Hoy en la clínica', d: 'Lo que requiere atención primero. Toque cualquier aviso para ir directo a resolverlo.' },
       { go: 'agenda', el: '.main .seg', setup: () => { UI.agTab = 'general'; }, t: 'Agenda', d: 'Agenda general, quirúrgica y de consultas por médico, con la guardia del día.' },
@@ -35,6 +35,11 @@ const TOURS = {
       { go: 'contabilidad', setup: () => { UI.acTab = 'confirmar'; }, el: '.main [data-act="acTab"][data-k="confirmar"]', t: 'Por confirmar', d: 'Presupuestos enviados a Contabilidad, órdenes de compra del almacén y gastos o ingresos recurrentes vencidos.' },
       { go: 'contabilidad', setup: () => { UI.acTab = 'facturas'; }, el: '.main [data-act="acTab"][data-k="facturas"]', t: 'Cobros', d: 'Todas las cuentas. La factura fiscal es opcional y se puede emitir después.' },
       { go: 'contabilidad', setup: () => { UI.acTab = 'recurrentes'; }, el: '.main [data-act="acTab"][data-k="recurrentes"]', t: 'Recurrentes', d: 'Alcaldía, Fospuca, alquileres, nómina… Cada vencimiento se confirma con su fecha, referencia y tasa.' }] },
+    { id: 'adm-servicios', title: 'Servicios: precios y paquetes', desc: 'Para qué sirve la lista de precios y cómo mantenerla al día.', steps: [
+      { go: 'servicios', setup: () => { UI.svTab = 'servicios'; UI.svArea = ''; }, el: '.main .head', t: 'Su lista de precios', d: 'Cada servicio tiene su precio y, si aplica, los insumos que gasta. Se usa sola al agendar una cita, al cobrar y al armar presupuestos.' },
+      { go: 'servicios', setup: () => { UI.svTab = 'servicios'; }, el: '.main [data-act="svPending"], .main .list', t: 'Precios pendientes', d: 'Si hay servicios con precio provisional de $1, aparece un aviso arriba: toque "Poner precios", escriba los que sepa y guarde todos de una vez.' },
+      { go: 'servicios', setup: () => { UI.svTab = 'servicios'; }, el: '.main .seg[aria-label="Área"]', t: 'Por área', d: 'Filtre por área o busque por nombre. Toque un servicio para cambiar su precio, cómo se cobra (por hora, por día) o los insumos que descuenta del inventario.' },
+      { go: 'servicios', setup: () => { UI.svTab = 'paquetes'; }, el: '.main [data-act="svTab"][data-k="paquetes"]', t: 'Paquetes', d: 'Combinaciones listas para presupuestos, por ejemplo una cirugía con su quirófano, días de hospitalización, honorarios y material. Al presupuestar se elige el paquete y todo queda armado.' }] },
     { id: 'adm-usuarios', title: 'Usuarios y copias de seguridad', desc: 'Invitar personal y proteger la información.', steps: [
       { go: 'usuarios', el: '.main [data-act="userNew"]', t: 'Nuevo usuario', d: 'Nombre, correo y rol. Elija código de invitación (la persona crea su contraseña) o contraseña temporal.' },
       { go: 'usuarios', el: '.main .list', t: 'Gestión', d: 'Toque un usuario para cambiar su rol, desactivarlo o generarle un acceso nuevo.' },
@@ -212,7 +217,7 @@ function tourAnimate(target, instant) {
   if (!A.raf) { A.last = performance.now(); A.raf = requestAnimationFrame(tourTick); }
 }
 function tourTick(now) {
-  const A = TOUR_ANIM; A.raf = 0; if (!TOUR || !A.tgt) return;
+  const A = TOUR_ANIM; A.raf = 0; if (!TOUR || !A.tgt || !A.cur) return;   // paso sin resaltado: no hay nada que mover
   let dt = Math.min(0.064, (now - A.last) / 1000); A.last = now;
   const w = 2 * Math.PI / 0.38; let moving = false;   // respuesta 0,38 s, amortiguación crítica
   while (dt > 0) { const h = Math.min(dt, 1 / 120); dt -= h;
@@ -230,7 +235,7 @@ function tourPlace(e) {
   if (!TOUR) return; const spot = document.getElementById('tour-spot'), tip = document.getElementById('tour-tip'), block = document.getElementById('tour-block'); if (!spot || !tip) return;
   const el = TOUR.el && TOUR.el.isConnected ? TOUR.el : null; const pad = 8; const vw = innerWidth, vh = innerHeight;
   const instant = e && e.type === 'scroll';   // al desplazarse el resaltado va pegado, sin muelle
-  if (!el) { spot.style.display = 'none'; block.classList.add('dim'); tip.classList.remove('docked'); tip.classList.add('center'); tip.style.transform = ''; TOUR_ANIM.cur = null; return; }
+  if (!el) { spot.style.display = 'none'; block.classList.add('dim'); tip.classList.remove('docked'); tip.classList.add('center'); tip.style.transform = ''; cancelAnimationFrame(TOUR_ANIM.raf); TOUR_ANIM.raf = 0; TOUR_ANIM.cur = null; return; }
   block.classList.remove('dim'); spot.style.display = 'block'; tip.classList.remove('center');
   const r = el.getBoundingClientRect();
   const x = Math.max(4, r.left - pad), y = Math.max(4, r.top - pad), w = Math.min(vw - x - 4, r.width + pad * 2), h = Math.min(vh - y - 4, r.height + pad * 2);

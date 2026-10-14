@@ -1254,6 +1254,19 @@ body{background:
   .global-topbar::before{left:-256px}
 }
 
+/* ---------- Menú por grupos (Clínica · Pacientes · Gestión · Sistema) ---------- */
+.side .nav-group{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--fg2);padding:16px 12px 4px;flex-shrink:0}
+.side .brand+.nav-group{padding-top:4px}
+@media(max-width:1023px){.app .side .nav-group{display:none}}
+/* "Más" en el teléfono: cuadrícula de iconos grandes por grupo */
+.more-group h3{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--fg2);margin:14px 4px 8px}
+.more-group:first-of-type h3{margin-top:0}
+.more-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
+.shell-panel .more-grid .nav{position:relative;flex-direction:column;justify-content:center;align-items:center;gap:8px;min-height:88px;padding:14px 6px;border-radius:18px;
+  background:color-mix(in srgb,var(--fg) 5%,transparent);text-align:center;font-size:13px}
+.shell-panel .more-grid .nav svg{width:26px;height:26px}
+.shell-panel .more-grid .nav .nav-label{flex:none;text-align:center}
+.shell-panel .more-grid .nav .count{position:absolute;top:8px;right:8px;margin:0}
 /* ---------- Vista previa de documentos ---------- */
 .catcard[hidden]{display:none}
 /* Catálogo: el parámetro arriba; unidad y referencia (que puede ser larga, por sexo o por fase) debajo */

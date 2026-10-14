@@ -300,24 +300,40 @@ ACTIONS.receiveOrder = el => { const o = byId(S.orders, el.dataset.id); if (!ocC
 const svcCost = s => r2(s.items.reduce((a, i) => a + avgCost(prod(i.pid)) * i.qty, 0));
 const pendingPrice = s => !s.tiers?.length && s.price <= 1;
 VIEWS.servicios = () => {
-  const svSeg = `<div class="seg" role="group" aria-label="Sección" style="margin-bottom:14px"><button data-act="svTab" data-k="servicios" aria-pressed="${UI.svTab !== 'paquetes'}">Servicios</button><button data-act="svTab" data-k="paquetes" aria-pressed="${UI.svTab === 'paquetes'}">Paquetes para presupuestos</button></div>`;
-  if (UI.svTab === 'paquetes') return header('Servicios', 'Paquetes quirúrgicos, de emergencia y de procedimientos', `<button class="btn primary" data-act="pkgEdit">Nuevo paquete</button>`) + svSeg + packagesView();
-  const f = UI.svF || 'todos'; const q = (UI.svQ || '').toLowerCase(); const pend = S.services.filter(pendingPrice);
-  const list = S.services.filter(s => (f === 'todos' || pendingPrice(s)) && (!q || (s.name + s.cat).toLowerCase().includes(q)));
+  const svSeg = `<div class="seg" role="group" aria-label="Sección" style="margin-bottom:14px"><button data-act="svTab" data-k="servicios" aria-pressed="${UI.svTab !== 'paquetes'}">Precios</button><button data-act="svTab" data-k="paquetes" aria-pressed="${UI.svTab === 'paquetes'}">Paquetes para presupuestos</button></div>`;
+  if (UI.svTab === 'paquetes') return header('Servicios', 'Paquetes: un presupuesto completo armado de un toque', `<button class="btn primary" data-act="pkgEdit">Nuevo paquete</button>`) + svSeg + packagesView();
+  const q = labNameKey(UI.svQ || ''), area = UI.svArea || '';
+  const pend = S.services.filter(pendingPrice);
+  const allCats = [...new Set(S.services.map(s => s.cat))];
+  const list = S.services.filter(s => (!area || s.cat === area) && (!q || labNameKey(s.name + ' ' + s.cat).includes(q)));
   const cats = [...new Set(list.map(s => s.cat))];
-  return header('Servicios', `${S.services.length} servicios · al facturarlos se descuentan solos sus insumos`, `<button class="btn primary" data-act="editService">Nuevo servicio</button>`) + svSeg +
-  (pend.length ? `<div class="banner warn" style="margin-bottom:14px">${pend.length} servicios tienen precio provisional de $1. Tócalos para ponerles su precio.</div>` : '') +
-  `<div class="between" style="margin-bottom:14px"><div class="seg" role="group" aria-label="Filtro"><button data-act="svF" data-k="todos" aria-pressed="${f === 'todos'}">Todos</button><button data-act="svF" data-k="pend" aria-pressed="${f === 'pend'}">Precio por definir (${pend.length})</button></div>
-    <div class="search" style="min-width:240px">${icon('buscar')}<input class="input" id="svQ" placeholder="Buscar servicio" value="${esc(UI.svQ || '')}" data-in="svSearch" aria-label="Buscar servicio"></div></div>
-  ${cats.map(cat => `<div class="sec" style="margin-top:18px"><h3>${esc(cat)}</h3><div class="tablewrap"><table><thead><tr><th>Servicio</th><th>Se cobra</th><th class="num">Precio</th><th>Insumos incluidos</th><th class="num">Margen</th></tr></thead><tbody>
-  ${list.filter(s => s.cat === cat).map(s => { const c = svcCost(s) * 1; const p = svcPrice(s, 1); const m = p ? (p - c) / p * 100 : 0;
-    return `<tr style="cursor:pointer" data-act="editService" data-id="${s.id}"><td><b style="font-weight:500">${esc(s.name)}</b></td><td class="muted">${s.unit && s.unit !== 'servicio' ? 'por ' + UNITS[s.unit][0] : 'por servicio'}</td>
-    <td class="num">${s.tiers?.length ? `<span class="small" style="white-space:normal">${tierText(s)}</span>` : pendingPrice(s) ? '<span class="pill warn">Por definir</span>' : fmt(s.price)}</td>
-    <td class="muted" style="white-space:normal;min-width:200px">${s.items.map(i => `${esc(prod(i.pid).name)} ×${i.qty}`).join(', ') || '—'}${s.perUnit ? ` <span class="small">(por ${UNITS[s.unit][0]})</span>` : ''}</td>
-    <td class="num">${pendingPrice(s) ? '—' : `<span class="pill ${m >= 60 ? 'good' : m >= 30 ? 'warn' : 'bad'}">${m.toFixed(0)}%</span>`}</td></tr>`; }).join('')}
-  </tbody></table></div></div>`).join('') || '<div class="empty">Ningún servicio coincide.</div>'}`;
+  const how = s => s.unit && s.unit !== 'servicio' ? 'por ' + UNITS[s.unit][0] : 'por servicio';
+  const row = s => { const p = svcPrice(s, 1), c = svcCost(s), m = p ? (p - c) / p * 100 : 0;
+    return `<button class="row" data-act="editService" data-id="${s.id}"><div class="grow"><div class="t">${esc(s.name)}</div>
+      <div class="s">Se cobra ${how(s)}${s.items.length ? ` · descuenta ${s.items.length} ${s.items.length === 1 ? 'insumo' : 'insumos'} del inventario` : ''}</div></div>
+      <div class="end"><div>${s.tiers?.length ? `<span class="small">${tierText(s)}</span>` : pendingPrice(s) ? '<span class="pill warn">Por definir</span>' : fmt(s.price)}</div>
+      ${!pendingPrice(s) && s.items.length ? `<span class="pill ${m >= 60 ? 'good' : m >= 30 ? 'warn' : 'bad'}" title="Ganancia sobre el costo de los insumos">margen ${m.toFixed(0)}%</span>` : ''}</div></button>`; };
+  return header('Servicios', 'Su lista de precios. Se usa sola al agendar citas, cobrar y armar presupuestos.', `<button class="btn primary" data-act="editService">Nuevo servicio</button>`) + svSeg +
+  (pend.length ? `<div class="banner warn between" style="margin-bottom:16px;gap:12px;flex-wrap:wrap"><span>${pend.length} ${pend.length === 1 ? 'servicio tiene' : 'servicios tienen'} un precio provisional de $1.</span><button class="btn sm primary" data-act="svPending">Poner precios</button></div>` : '') +
+  `<div class="hstack" style="margin-bottom:12px;flex-wrap:wrap"><div class="search" style="flex:1;min-width:220px">${icon('buscar')}<input class="input" id="svQ" placeholder="Buscar servicio" value="${esc(UI.svQ || '')}" data-in="svSearch" aria-label="Buscar servicio"></div></div>
+  <div class="seg" role="group" aria-label="Área" style="margin-bottom:6px"><button data-act="svArea" data-k="" aria-pressed="${!area}">Todas</button>${allCats.map(c => `<button data-act="svArea" data-k="${esc(c)}" aria-pressed="${area === c}">${esc(c)}</button>`).join('')}</div>
+  ${cats.map(cat => `<div class="sec" style="margin-top:16px"><h3>${esc(cat)}</h3><div class="list">${list.filter(s => s.cat === cat).map(row).join('')}</div></div>`).join('') || '<div class="empty">Ningún servicio coincide.</div>'}`;
 };
-ACTIONS.svF = el => { UI.svF = el.dataset.k; render(); };
+ACTIONS.svArea = el => { UI.svArea = el.dataset.k; render(); };
+// Poner precio a varios servicios a la vez (los que tenían $1 provisional), en una ventana aparte
+ACTIONS.svPending = () => {
+  const how = s => s.unit && s.unit !== 'servicio' ? 'por ' + UNITS[s.unit][0] : 'por servicio';
+  openSheet('Poner precios', `<p class="small muted" style="margin:0 0 10px">Escriba el precio en USD de los que ya sepa; los demás pueden esperar.</p>
+    <div class="list">${S.services.filter(pendingPrice).map(s => `<div class="row"><div class="grow"><div class="t">${esc(s.name)}</div><div class="s">${esc(s.cat)} · se cobra ${how(s)}</div></div>
+      <div class="end"><input class="input" type="number" min="0" step="0.01" inputmode="decimal" id="svq-${s.id}" placeholder="USD" aria-label="Precio de ${esc(s.name)} en USD" style="width:110px"></div></div>`).join('')}</div>`,
+    '<span class="note" id="svq-msg"></span><button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="svQuickSave">Guardar precios</button>', { wide: true });
+};
+ACTIONS.svQuickSave = () => {
+  const done = S.services.filter(pendingPrice).filter(s => { const v = num('svq-' + s.id); if (v > 1) { s.price = r2(v); return true; } return false; });
+  if (!done.length) { document.getElementById('svq-msg').textContent = 'Escriba al menos un precio (mayor que $1).'; return; }
+  log('Precios de servicios definidos', done.map(s => `${s.name} ${fmt(s.price)}`).join(' · ')); save(); closeSheet(); render();
+  toast(`${done.length} ${done.length === 1 ? 'precio guardado' : 'precios guardados'}`);
+};
 ACTIONS.svSearch = el => { UI.svQ = el.value; const pos = el.selectionStart; render(); const n = document.getElementById('svQ'); n.focus(); n.setSelectionRange(pos, pos); };
 
 function svcItemsHtml() {

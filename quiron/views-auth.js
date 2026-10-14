@@ -49,7 +49,7 @@ function authBoot() {
 function enterApp() {
   const box = document.getElementById('auth'); if (box) box.hidden = true;
   document.querySelector('.app').hidden = false;
-  go(NAV_FOR().find(Boolean)[0], null, { root: true });
+  go(NAV_ITEMS()[0][0], null, { root: true });
   setTimeout(() => window.tourOffer?.(), 700);   // primer ingreso: ofrece el recorrido de su rol
   if (typeof autoRate === 'function') autoRate(false);   // tasa BCV al día apenas se entra
 }
