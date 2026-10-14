@@ -563,3 +563,13 @@ applyTheme(getTheme());
   if (h && VIEWS[h]) route = h;
   if (authBoot()) render();   // sin sesión válida: pantalla de acceso
 })();
+
+// Menú lateral: el desvanecido de abajo desaparece cuando ya se ve la última opción
+(() => {
+  const side = document.getElementById('side');
+  if (!side) return;
+  const check = () => side.classList.toggle('at-end', side.scrollTop + side.clientHeight >= side.scrollHeight - 4);
+  side.addEventListener('scroll', check, { passive: true });
+  addEventListener('resize', check);
+  if (typeof MutationObserver === 'function') new MutationObserver(check).observe(side, { childList: true });
+})();

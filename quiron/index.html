@@ -1240,6 +1240,16 @@ body{background:
 
 /* Icono del buscador siempre legible (en teléfono el botón queda solo con la lupa) */
 .global-search-button svg{width:20px;height:20px;flex:none}
+
+/* Menú lateral flotante: la barra de desplazamiento del navegador no respeta las esquinas redondeadas
+   y se "salía" por arriba. Se oculta (el menú se sigue desplazando con rueda o dedo), el panel se recorta
+   a su forma y un desvanecido suave abajo indica que hay más opciones. */
+@media(min-width:1024px){
+  .app .side{scrollbar-width:none;clip-path:inset(0 round 26px)}
+  .app .side::-webkit-scrollbar{display:none}
+  .app .side{-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 36px),transparent);mask-image:linear-gradient(to bottom,#000 calc(100% - 36px),transparent)}
+  .app .side.at-end{-webkit-mask-image:none;mask-image:none}
+}
 </style>
 </head>
 <body>
