@@ -382,7 +382,10 @@ async function test(name, fn) {
     c.guide = { started: true, current: 'history', history: {}, omissions: {} };
     const before = JSON.stringify(pat(c.pid).history);
     const body = guidedConsultBody(c);
-    Object.values(GUIDE.historyGroups).forEach(label => assert.ok(body.includes(label)));
+    // Solo los grupos que aplican al paciente (gineco solo mujeres, pediátricos solo menores); alergias tienen su propia pantalla
+    guidedHistoryGroupsFor(c).forEach(g => assert.ok(body.includes(GUIDE.historyGroups[g])));
+    assert.ok(!guidedHistoryGroupsFor(c).includes('allergies'));
+    if (pat(c.pid).sex !== 'F') assert.ok(!body.includes(GUIDE.historyGroups.gyneco));
     ACTIONS.guideHistoryConfirm();
     assert.ok(c.historyConfirmedAt);
     assert.equal(c.guide.history.conditions, 'confirmed');
@@ -1570,6 +1573,8 @@ async function test(name, fn) {
     assert.ok(review.includes('data-path="type"'));
     assert.ok(review.includes('data-path="modality"'));
     await ACTIONS.ccGenerate();
+    assert.ok(c.report.draft.includes('No indica exámenes.'));
+    assert.ok(c.report.draft.includes('No indica medicamentos.'));
     ACTIONS.ccApprove();
     assert.equal(consultSign(c), true);
     const signed = JSON.stringify(c);
@@ -1673,7 +1678,7 @@ async function test(name, fn) {
     S.consults = S.consults.filter(x => x.id === c.id || x.pid !== c.pid || x.doc !== c.doc);
     GUIDE.steps(c, pat(c.pid));
     assert.equal(c.type, 'primera');
-    S.consults.push({ id: 'prior-signed', pid: c.pid, doc: c.doc, status: 'firmada' });
+    S.consults.push({ ...CONSULT.newConsult({ id: 'prior-signed', pid: c.pid, doc: c.doc }), status: 'firmada' });
     GUIDE.steps(c, pat(c.pid));
     assert.equal(c.type, 'control');
     ACTIONS.ccReasonAdd({ dataset: { key: 'control_postoperatorio' } });

@@ -457,7 +457,23 @@ ACTIONS.guideStart = el => {
 function guidedHistorySummary(c, group) {
   const h = pat(c.pid).history;
   if (group === 'allergies') return CONSULT.allergyText(h);
-  return guidedDisplay(h[group]) || 'No documentado';
+  const pending = x => /pendiente de confirmar|migrado/i.test(x?.note || '') ? 'por confirmar' : '';
+  const extra = (...xs) => { const t = xs.filter(Boolean).join(', '); return t ? ' (' + t + ')' : ''; };
+  const list = Array.isArray(h[group]) ? h[group] : [];
+  const lines = {
+    conditions: () => list.map(x => (x.name || '') + extra(x.state && x.state !== 'presente' ? x.state : '', x.since ? 'desde ' + x.since : '', x.tx ? 'tratamiento: ' + x.tx : '', pending(x))),
+    surgeries: () => list.map(x => (x.name || '') + extra(x.date, x.complications ? 'complicaciones: ' + x.complications : '')),
+    meds: () => list.map(x => [x.drug, x.dose, x.freq].filter(Boolean).join(' ') + extra(x.active === false ? 'suspendido' : '', pending(x))),
+    family: () => list.map(x => (x.disease || x.name || '') + extra(x.relative, x.age ? 'a los ' + x.age : ''))
+  }[group];
+  const text = lines ? lines().filter(t => t.trim()).join('; ') : guidedDisplay(h[group]);
+  return text || 'Ninguno registrado';
+}
+// Grupos de antecedentes que aplican a este paciente (gineco solo mujeres; pediátricos solo menores)
+function guidedHistoryGroupsFor(c) {
+  const p = pat(c.pid), age = CONSULT.age(p.birth, c.date);
+  return Object.keys(GUIDE.historyGroups).filter(g => g !== 'allergies' &&
+    (g !== 'gyneco' || p.sex === 'F') && (g !== 'pediatric' || (age !== null && age < 18)));
 }
 
 const guidedLabels = {
@@ -631,7 +647,7 @@ function guidedInlineQuestion(c, reason, q) {
       guidedChoices(c, key + '.unit', ['Horas', 'Días', 'Semanas', 'Meses', 'Años'], false, false);
   } else control = guidedInput(c, 'Respuesta' + (q.unit ? ' · ' + q.unit : ''), key,
     ['date', 'number'].includes(q.type) ? q.type : 'text');
-  const template = c.reasons[reason].template;
+  const template = c.reasons[reason].template || CONSULT.templateFor(c.reasons[reason].key);
   const observation = template.questions.some(x => x.id === q.id + '_free') ? guidedObservation(c, key + '_free') : '';
   return '<div class="guide-inline-question"><b>' + esc(GUIDE.title(q)) + '</b>' + control +
     (q.help ? '<p class="small muted">' + esc(q.help) + '</p>' : '') + observation + '</div>';
@@ -718,9 +734,9 @@ function guidedExamGroup(c, s) {
     if (e.state === 'normal') detail = ccButton('guideAllNormal', '✓ Todo lo de esta región', 'data-region="' + esc(region) + '"', 'primary') +
       CONSULT.exam[region].split('|').map(item => '<label class="guide-check"><input type="checkbox" data-ch="guideNormalItem" data-region="' +
         esc(region) + '" data-item="' + esc(item) + '" ' + (e.confirmed?.includes(item) ? 'checked' : '') + '> ' + esc(item) + '</label>').join('');
-    if (e.state === 'alterado') detail = CONSULT.exam[region].split('|').map(item =>
+    if (e.state === 'alterado') detail = '<div class="guide-options">' + CONSULT.exam[region].split('|').map(item =>
       ccButton('guideFinding', esc(item), 'data-region="' + esc(region) + '" data-item="' + esc(item) +
-        '" aria-pressed="' + CONSULT.filled(e.findings?.[item]) + '"')).join('') + guidedInput(c, 'Observación', key + '.note');
+        '" aria-pressed="' + CONSULT.filled(e.findings?.[item]) + '"')).join('') + '</div>' + guidedInput(c, 'Observación', key + '.note');
     if (region === 'Exploraciones íntimas' && ['normal', 'alterado'].includes(e.state)) detail +=
       '<p>Consentimiento</p>' + guidedChoices(c, key + '.consent', ['Sí', 'No', 'Desconocido'], false, false) +
       guidedInput(c, 'Acompañante', key + '.chaperone');
@@ -884,10 +900,10 @@ function guidedQuestionBody(c, s) {
   if (s.type === 'rosGroup') return guidedRosGroup(c);
   if (s.type === 'allergiesGroup') return guidedAllergiesGroup(c);
   if (s.type === 'historyGroup') return guidedHistoryGroup(c, s.group);
-  if (s.type === 'historySummary') return Object.keys(GUIDE.historyGroups).map(group => '<section><h2>' +
+  if (s.type === 'historySummary') return '<p class="small muted">¿Siguen igual los antecedentes registrados del paciente?</p>' +
+    guidedHistoryGroupsFor(c).map(group => '<section><h2>' +
     esc(GUIDE.historyGroups[group]) + '</h2><p>' + esc(guidedHistorySummary(c, group)) + '</p></section>').join('') +
-    '<div class="guide-options">' + ccButton('guideHistoryConfirm', 'Sí, siguen igual') + ccButton('guideHistoryUpdate', 'Actualizar…') +
-    ccButton('guideHistoryUpdate', 'Actualizar alergias', 'data-group="allergies"') + '</div>';
+    '<div class="guide-options">' + ccButton('guideHistoryConfirm', 'Sí, siguen igual', '', 'primary') + ccButton('guideHistoryUpdate', 'Actualizar…') + '</div>';
   if (s.type === 'rxDetails') return guidedRxDetails(c, s);
   if (s.type === 'orderDetails') return guidedOrderDetails(c, s);
   if (s.type === 'planGroup') return guidedPlanGroup(c);
@@ -941,7 +957,7 @@ function guidedQuestionBody(c, s) {
       '<div class="guide-selected">' + c.reasons.map((r, i) => '<div class="row"><span>' + esc(r.label) + (r.main ? ' · Principal' : '') +
         '</span>' + (r.main ? '' : ccButton('ccReasonMain', 'Principal', 'data-i="' + i + '"')) +
         ccButton('ccRemove', 'Quitar', 'data-list="reasons" data-i="' + i + '"') + '</div>').join('') + '</div>';
-  } else if (s.type === 'dxSearch') body += guidedSearch('cc-dx-search', 'guideDxSearch', UI.ccDxQuery, 'Diagnóstico, sinónimo o CIE-10',
+  } else if (s.type === 'dxSearch') body += (c.kind === 'evolution' ? guidedDiagnosisUpdates(c) : '') + guidedSearch('cc-dx-search', 'guideDxSearch', UI.ccDxQuery, 'Diagnóstico, sinónimo o CIE-10',
     guidedDxOptions(UI.ccDxQuery || ''), 'cc-dx-results') + guidedSelected(c, 'dx', 'label');
   else if (s.type === 'rxSearch') body += guidedSearch('guide-rx-search', 'guideRxSearch', UI.guideRxQuery, 'Busque o escriba el medicamento',
     guidedRxOptions(UI.guideRxQuery || ''), 'guide-rx-results', 'guide-rx-options') + '<p class="allergy">' + esc(CONSULT.allergyText(pat(c.pid).history)) +
@@ -1649,9 +1665,15 @@ function guidedDxIndex(c, dx) {
 
 function guidedDxOptions(query) {
   const c = guidedCurrent(), q = normQ(query || '').trim();
+  // Sin búsqueda: arriba lo que coincide con el motivo de consulta y lo que el paciente ya tenía diagnosticado
+  const reasonWords = c ? c.reasons.map(r => normQ(r.label)) : [];
+  const previous = c ? (S.consults || []).filter(x => x.pid === c.pid && x.id !== c.id && x.status === 'firmada').flatMap(x => x.dx || []).map(d => normQ(d.label)) : [];
+  const rank = d => { const t = normQ([d.label, ...(d.synonyms || [])].join(' '));
+    return reasonWords.some(w => w && (t.includes(w) || w.includes(normQ(d.label)))) ? 0 : previous.includes(normQ(d.label)) ? 1 : 2; };
   return CONSULT.diagnoses.map((d, i) => ({ d, i }))
     .filter(({ d }) => normQ([d.label, d.code, ...(d.synonyms || [])].join(' ')).includes(q))
-    .slice(0, 15).map(({ d, i }) => {
+    .sort((a, b) => q ? 0 : rank(a.d) - rank(b.d))
+    .slice(0, q ? 25 : 15).map(({ d, i }) => {
       const on = !!c && guidedDxIndex(c, d) >= 0;
       return ccButton('guideDxPick', (on ? '✓ ' : '') + esc(d.label) + (d.code ? ' · ' + esc(d.code) : ''),
         'data-i="' + i + '" aria-pressed="' + on + '"', on ? 'on' : '');

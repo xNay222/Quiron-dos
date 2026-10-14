@@ -444,7 +444,7 @@ function consultReasons(c, questions = false, only = null, questionIds = null) {
 }
 function consultReasonOptions(c, q) {
   const ordered = c.mode === 'quick' ? CONSULT.reasons.filter(r => r.group === 'Rápida').concat(CONSULT.reasons.filter(r => r.group !== 'Rápida')) : CONSULT.reasons;
-  const matches = ordered.filter(r => r.key !== 'otro_motivo' && normQ(r.label + ' ' + r.group).includes(normQ(q)) );
+  const matches = ordered.filter(r => r.key !== 'otro_motivo' && r.label !== 'Otro' && normQ(r.label + ' ' + r.group).includes(normQ(q)) );
   // "Otro motivo" siempre al final de la lista, aunque no se haya buscado nada
   const other = CONSULT.reasons.find(r => r.key === 'otro_motivo');
   const unique = [...new Map(matches.map(r => [r.key, r])).values()].slice(0, q ? 25 : 12).concat(other ? [other] : []);
@@ -944,7 +944,9 @@ function consultSign(c) {
     // En el asistente, lleva directo a la pregunta que hay que corregir
     if (c.guide && typeof guidedGo === 'function') {
       const region = Object.entries(c.exam).find(([, e]) => e.state === 'normal' && !e.confirmed?.length)?.[0];
+      const pendingOrder = (c.guide.orderDrafts || []).findIndex(Boolean);
       const target = region ? 'exam' :
+        pendingOrder >= 0 ? 'orders-' + pendingOrder :
         (p.history.allergies.status === 'desconocido' && c.guide.started && !c.guide.allergyReviewed) ? 'history-allergies' :
         (!c.reasons.length || c.reasons.filter(r => r.main).length !== 1) ? 'reasons' :
         (!c.dx.length || c.dx.filter(d => d.priority === 'principal').length !== 1 || c.dx.some(d => !d.certainty)) ? 'dx' : null;

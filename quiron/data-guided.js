@@ -163,8 +163,10 @@ const GUIDE = (() => {
     if (!g.modalityEdited) c.modality = 'presencial';
     c.reasons.forEach(r => {
       if ((r.template || CONSULT.templateFor(r.key)).id !== 'postop' || r.surgeryPrefilled) return;
+      const today = CONSULT.caracas().date;
       const surgery = appointments.filter(a => a.pid === c.pid && a.kind === 'cirugia' &&
-        (a.done === true || a.status === 'done')).sort((a, b) =>
+        !['cancelada', 'no_asistio'].includes(a.status) &&
+        (a.done === true || a.status === 'done' || (a.date && a.date <= today))).sort((a, b) =>
         (b.date + (b.time || '')).localeCompare(a.date + (a.time || '')))[0];
       if (!surgery) return;
       const service = typeof S === 'undefined' ? null : (S.services || []).find(x => x.id === surgery.svc);

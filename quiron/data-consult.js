@@ -576,6 +576,10 @@ const CONSULT = (() => {
         };
       }),
       history,
+      noIndication: {
+        orders: !!c.guide?.noIndication?.orders && !c.orders.length && !(c.guide.orderDrafts || []).some(Boolean),
+        rx: !!c.guide?.noIndication?.rx && !c.rx.length
+      },
       ros: clone(c.ros),
       rosNotes: clone(c.rosNotes || {}),
       vitals: c.vitals.map(v => ({
@@ -689,20 +693,43 @@ const CONSULT = (() => {
       const rest = e.filter(([k]) => LBL[k] !== '').map(([k, x]) => k === 'active' ? 'suspendido' : (LBL[k] || k) + ': ' + display(x));
       return head && rest.length ? head + ' (' + rest.join('; ') + ')' : head || rest.join('; ');
     };
+    // Redacción clínica: fechas dd/mm/aaaa, negativos agrupados ("Niega…"), examen normal en lenguaje claro
+    const fdt = v => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v.slice(8, 10) + '/' + v.slice(5, 7) + '/' + v.slice(0, 4) : v;
+    const listY = xs => xs.length < 2 ? xs.join('') : xs.slice(0, -1).join(', ') + ' y ' + xs.at(-1);
+    const listNi = xs => xs.length < 2 ? xs.join('') : xs.slice(0, -1).join(', ') + ' ni ' + xs.at(-1);
+    const low = s => s ? s.charAt(0).toLowerCase() + s.slice(1) : s;
+    const answersText = answers => {
+      const yes = [], no = [], rest = [];
+      answers.forEach(a => {
+        const v = Array.isArray(a.value) ? a.value : a.value;
+        if (v === 'Sí' || v === true) yes.push(low(a.label));
+        else if (v === 'No' || v === false) no.push(low(a.label));
+        else rest.push(a.label + ': ' + fdt(display(v)));
+      });
+      return rest.concat(yes.length ? ['Refiere ' + listY(yes)] : [], no.length ? ['Niega ' + listY(no)] : []).join('. ');
+    };
+    // En el examen, "Normal" en un hallazgo patológico significa que NO está presente
+    const PATHOLOGIC = /^(Eritema|Edemas?|Secreción|Dehiscencia|Sangrado|Dolor|Distensión|Dolor a la palpación|Defensa|Irritación peritoneal|Masas|Soplos|Sibilancias|Crepitantes|Roncus|Adenopatías|Deformidad|Lesiones|Equimosis|Heridas|Dificultad respiratoria|Limitación)$/;
+    const DETAIL_ONLY = /^(Localización|Intensidad|Superficial\/profundo|Región)$/;
+    const normalText = items => {
+      const good = items.filter(i => !PATHOLOGIC.test(i) && !DETAIL_ONLY.test(i)).map(i => /adecuad|normal/i.test(i) ? low(i) : low(i) + ' normal');
+      const bad = items.filter(i => PATHOLOGIC.test(i)).map(low);
+      return [good.join(', '), bad.length ? 'sin ' + listNi(bad) : ''].filter(Boolean).join('; ');
+    };
     const out = [];
     const section = (name, lines) => out.push(name + '\n' + (lines.filter(Boolean).join('\n') || 'No documentado.'));
-    section('Identificación', [(data.patient.initials || 'Paciente') + ' · ' + (data.patient.age == null ? 'Edad no documentada' : data.patient.age + ' años') + ' · ' + (data.date || 'Fecha no documentada') + ' ' + (data.time || '') + ' (Caracas)', (types[data.type] || 'Tipo no documentado') + ' · ' + (data.specialty || 'Especialidad no documentada') + ' · ' + (data.modality || 'Modalidad no documentada')]);
+    section('Identificación', [(data.patient.initials || 'Paciente') + ' · ' + (data.patient.age == null ? 'Edad no documentada' : data.patient.age + ' años') + ' · ' + (fdt(data.date) || 'Fecha no documentada') + ' ' + (data.time || '') + ' (Caracas)', (types[data.type] || 'Tipo no documentado') + ' · ' + (data.specialty || 'Especialidad no documentada') + ' · ' + (data.modality || 'Modalidad no documentada')]);
     section('Motivo', data.reasons.map(r => (r.main ? 'Principal: ' : 'Secundario: ') + r.label));
-    section(data.mode === 'quick' ? 'Evolución' : 'Enfermedad actual', data.reasons.map(r => r.label + ': ' + (r.answers.map(a => a.label + ': ' + display(a.value)).concat(r.ipss ? 'IPSS: ' + display(r.ipss) : [], filled(r.characterization) ? Object.entries(r.characterization).filter(([, v]) => filled(v)).map(([k, v]) => (charNames[k] || k) + ': ' + display(v)).join('; ') : []).join('; ') || 'No documentado.')));
+    section(data.mode === 'quick' ? 'Evolución' : 'Enfermedad actual', data.reasons.map(r => r.label + '. ' + ([answersText(r.answers)].concat(r.ipss ? 'IPSS: ' + display(r.ipss) : [], filled(r.characterization) ? Object.entries(r.characterization).filter(([, v]) => filled(v)).map(([k, v]) => (charNames[k] || k) + ': ' + fdt(display(v))).join('; ') : []).filter(Boolean).join('. ') || 'No documentado') + '.'));
     const h = data.history;
     section('Antecedentes', [allergyText(h), ...h.conditions.map(x => 'Patológico: ' + display(x)), ...h.surgeries.map(x => 'Cirugía: ' + display(x)), ...h.meds.map(x => 'Medicación habitual: ' + display(x)), ...h.family.map(x => 'Familiar: ' + display(x)), filled(h.habits) ? 'Hábitos: ' + display(h.habits) : '', filled(h.gyneco) ? 'Ginecoobstétricos: ' + display(h.gyneco) : '', filled(h.pediatric) ? 'Pediátricos: ' + display(h.pediatric) : '']);
-    section('Revisión por sistemas', Object.entries(data.ros).map(([s, items]) => s + ': ' + Object.entries(items).map(([item, state]) => item + ': ' + state.replace(/_/g, ' ')).join('; ')).concat(Object.entries(data.rosNotes || {}).filter(([, v]) => filled(v)).map(([s, n]) => s + ' · Observaciones: ' + n)));
-    section('Signos vitales', data.vitals.map(v => (v.at || 'Hora no documentada') + ' · ' + vitals.filter(([k]) => filled(v[k])).map(([k, label, unit]) => label + ' ' + v[k] + ' ' + unit).concat(v.bmi != null ? 'IMC ' + v.bmi : []).join('; ')));
-    section(data.mode === 'quick' ? 'Hallazgos / examen dirigido' : 'Examen físico', Object.entries(data.exam).map(([r, e]) => r + ': ' + (e.state === 'normal' ? 'Normal en ítems confirmados: ' + ((e.confirmed || []).join(', ') || 'ítems no documentados') : e.state === 'no_examinado' ? 'No examinado' : e.state === 'alterado' ? 'Alterado · ' + (display(e.findings || {}) || (!e.note ? 'Hallazgos no documentados.' : '')) + (e.note ? ' · ' + e.note : '') : 'No documentado') + (e.consent ? ' · Consentimiento: ' + e.consent : '') + (e.chaperone ? ' · Acompañante: ' + e.chaperone : '')));
+    if (!(data.mode === 'quick' && !Object.keys(data.ros || {}).length)) section('Revisión por sistemas', Object.entries(data.ros).map(([s, items]) => s + ': ' + Object.entries(items).map(([item, state]) => item + ': ' + state.replace(/_/g, ' ')).join('; ')).concat(Object.entries(data.rosNotes || {}).filter(([, v]) => filled(v)).map(([s, n]) => s + ' · Observaciones: ' + n)));
+    section('Signos vitales', data.vitals.map(v => (v.at ? fdt(v.at.slice(0, 10)) + v.at.slice(10) : 'Hora no documentada') + ' · ' + vitals.filter(([k]) => filled(v[k])).map(([k, label, unit]) => label + ' ' + v[k] + (unit === '0–10' ? '/10' : ' ' + unit)).concat(v.bmi != null ? 'IMC ' + v.bmi : []).join('; ')));
+    section(data.mode === 'quick' ? 'Hallazgos / examen dirigido' : 'Examen físico', Object.entries(data.exam).map(([r, e]) => r + ': ' + (e.state === 'normal' ? ((e.confirmed || []).length ? normalText(e.confirmed) : 'normal (ítems no documentados)') : e.state === 'no_examinado' ? 'No examinado' : e.state === 'alterado' ? 'Alterado · ' + (display(e.findings || {}) || (!e.note ? 'Hallazgos no documentados.' : '')) + (e.note ? ' · ' + e.note : '') : 'No documentado') + (e.consent ? ' · Consentimiento: ' + e.consent : '') + (e.chaperone ? ' · Acompañante: ' + e.chaperone : '')));
     section('Impresión diagnóstica', data.dx.map(diagnosisText));
-    section('Exámenes', data.orders.map(o => o.label + ' · ' + (o.status || 'estado no documentado') + (o.indication ? ' · Indicación: ' + o.indication : '')));
-    section('Tratamiento prescrito', data.rx.map(r => display(r)));
-    section('Conducta y seguimiento', Object.entries(data.plan || {}).filter(([k, x]) => filled(x)).map(([k, x]) => (LBL[k] || k) + ': ' + display(x)));
+    section('Exámenes', data.noIndication?.orders ? ['No indica exámenes.'] : data.orders.map(o => o.label + ' · ' + (o.status || 'estado no documentado') + (o.indication ? ' · Indicación: ' + o.indication : '')));
+    section('Tratamiento prescrito', data.noIndication?.rx ? ['No indica medicamentos.'] : data.rx.map(r => display(r)));
+    section('Conducta y seguimiento', Object.entries(data.plan || {}).filter(([k, x]) => filled(x) && k !== 'controlTime').map(([k, x]) => (LBL[k] || k) + ': ' + (k === 'nextControl' ? fdt(x) + (filled(data.plan.controlTime) ? ' a las ' + data.plan.controlTime : '') : display(x))));
     const omissions = Object.entries(data.steps || {}).filter(([, v]) => ['no aplica', 'no evaluado'].includes(v)).map(([i, v]) => (steps[i] || i) + ': ' + v);
     if (omissions.length) section('Evaluación documentada', omissions);
     return clinicalText(out.join('\n\n'));
@@ -740,6 +767,7 @@ const CONSULT = (() => {
     errors.push(...c.vitals.flatMap(validateVitals));
     if (p.history?.allergies?.status === 'conocidas' && !p.history.allergies.items.length) errors.push('Registre la sustancia de las alergias conocidas.');
     if (c.guide?.started && p.history?.allergies?.status === 'desconocido' && !c.guide.allergyReviewed) errors.push('Confirme el estado desconocido de alergias.');
+    if ((c.guide?.orderDrafts || []).some(Boolean) || c.guide?.orderDraft) errors.push('Complete o descarte las solicitudes de exámenes pendientes.');
     if (c.rx.some(r => !r.drug?.trim())) errors.push('Complete o quite los medicamentos sin nombre.');
     const normalEmpty = Object.entries(c.exam).filter(([, e]) => e.state === 'normal' && !e.confirmed?.length).map(([r]) => r);
     if (normalEmpty.length) errors.push('Indique qué verificó como normal en: ' + normalEmpty.join(', ') + '.');
