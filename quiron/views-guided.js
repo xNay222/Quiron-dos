@@ -1105,7 +1105,7 @@ function evolutionSurgical(a) {
 
 // Administrador sin ficha de médico: cómo vincularla para escribir y firmar evoluciones con su nombre
 ACTIONS.evLinkHelp = () => openSheet('Evoluciones con su nombre',
-  '<p style="margin:0 0 10px">La evolución se firma con el nombre, la cédula, el MPPS y el Colegio de Médicos de quien la escribe. Para escribirlas desde su cuenta de administrador, vincule su usuario a su ficha de médico.</p>' +
+  '<p style="margin:0 0 10px">La evolución se firma con el nombre, la cédula y el número de colegiado de quien la escribe. Para escribirlas desde su cuenta de administrador, vincule su usuario a su ficha de médico.</p>' +
   '<p class="small muted" style="margin:0">En <b>Mi cuenta</b> elija "Su ficha de médico" y guarde. Si aún no tiene ficha, créela en <b>Usuarios › Médicos</b> con "+ Agregar médico".</p>',
   '<button class="btn" data-act="close">Ahora no</button><button class="btn primary" data-act="switchUser">Ir a Mi cuenta</button>');
 ACTIONS.evNew = el => {

@@ -7,7 +7,11 @@ const firstAdm = () => (S.admissions || []).find(a => a.status === 'ingresado')?
 const surgPatient = () => (S.appts || []).find(a => a.kind === 'cirugia' && a.date >= dAt(0) && isActive(a))?.pid || S.patients[0]?.id;
 const anyPatient = () => S.patients[0]?.id;
 const MENU = { el: '#side', t: 'Su menú', d: 'Aquí están las secciones disponibles. Toque una para entrar.' };
-const ACCOUNT = { el: '.userbtn', t: 'Mi cuenta', d: 'Su nombre y rol. Desde aquí cambia su contraseña, el modo día o noche y cierra la sesión. Si es médico, aquí registra su cédula, MPPS y Colegio de Médicos.' };
+const ACCOUNT = { el: '.userbtn', t: 'Mi cuenta', d: 'Su nombre y rol. Desde aquí cambia su contraseña, el modo día o noche y cierra la sesión.' };
+// Médicos y residentes: también registran sus datos para firmar
+const ACCOUNT_CLIN = { ...ACCOUNT, d: 'Su nombre y rol. Aquí registra su cédula y su número de Colegio de Médicos (sin él no puede firmar), cambia su contraseña, el modo día o noche y cierra la sesión.' };
+// Administrador: si también atiende pacientes, vincula su ficha de médico
+const ACCOUNT_ADMIN = { ...ACCOUNT, d: 'Su nombre y rol. Si también atiende pacientes, elija aquí "Su ficha de médico" y registre su número de colegiado: así escribe y firma evoluciones y consultas con su nombre.' };
 const BACK_HERE = r => ({ go: 'tutorial', el: '#side [data-go="tutorial"]', t: 'Vuelva cuando quiera', d: 'Los recorridos están siempre en "Tutorial". Puede repetirlos las veces que necesite.' });
 
 const TOURS = {
@@ -16,7 +20,7 @@ const TOURS = {
       { go: 'inicio', ...MENU, d: 'Aquí están las secciones disponibles, ordenadas en cuatro grupos: Clínica, Pacientes, Gestión y Sistema.' },
       { go: 'inicio', el: '.main .today-intro', t: 'Inicio', d: 'Una frase le dice cómo está la clínica ahora: el quirófano, las camas de hospitalización y UCI, y la medicación por despachar.' },
       { go: 'inicio', el: '.main .today-feed', t: 'Hoy en la clínica', d: 'Lo que requiere atención primero. Toque cualquier aviso para ir directo a resolverlo.' },
-      { go: 'agenda', el: '.main .seg', setup: () => { UI.agTab = 'general'; }, t: 'Agenda', d: 'Agenda general, quirúrgica y de consultas por médico, con la guardia del día.' },
+      { go: 'agenda', el: '.main .seg', setup: () => { UI.agTab = 'general'; }, t: 'Agenda', d: 'Agenda general, quirúrgica y de consultas por médico, con la guardia del día, y el directorio de médicos para derivar pacientes.' },
       { go: 'consultas', el: '#side [data-go="consultas"]', t: 'Consultas', d: 'Consultas guiadas, una pregunta por pantalla (rápida o completa). Al firmar salen el informe, el récipe, las órdenes, constancias y reposo.' },
       { go: 'quirofano', el: '.main .head', t: 'Quirófano', d: 'Cirugías del día, solicitudes al almacén y registro de cirugías realizadas.' },
       { go: 'quirofano', el: '.main [data-act="kitsOpen"]', t: 'Kits de cirugía', d: 'Arme aquí los kits (sevoflurano, fentanilo, kit de cama…). Al programar la cirugía se elige el kit y la solicitud al almacén llega precargada.' },
@@ -25,8 +29,8 @@ const TOURS = {
       { go: 'atencion', el: '#side [data-go="atencion"]', t: 'Presupuestos', d: 'Presupuestos por paquete: se guardan y se envían directamente a Contabilidad.' },
       { go: 'contabilidad', el: '#side [data-go="contabilidad"]', t: 'Contabilidad', d: 'Lo que hay por confirmar (presupuestos, compras, recurrentes), los cobros y el resumen en USD y Bs.' },
       { go: 'usuarios', el: '#side [data-go="usuarios"]', t: 'Usuarios', d: 'Crea e invita a cada persona con su rol. Solo usted tiene acceso.' },
-      { go: 'ajustes', el: '#side [data-go="ajustes"]', t: 'Ajustes', d: 'Tasa BCV (se actualiza sola cada hora), datos de la clínica, importar inventario y copias de seguridad.' },
-      ACCOUNT, BACK_HERE()] },
+      { go: 'ajustes', el: '#side [data-go="ajustes"]', t: 'Ajustes', d: 'Tasa BCV (se actualiza sola cada hora), datos de la clínica, importar inventario y copias de seguridad cifradas con su clave.' },
+      ACCOUNT_ADMIN, BACK_HERE()] },
     { id: 'adm-presupuesto', title: 'Hacer un presupuesto', desc: 'De la elección del paquete al envío a Contabilidad.', steps: [
       { go: 'atencion', el: '.main [data-act="newAttention"][data-budget="1"]', t: 'Nuevo presupuesto', d: 'Empieza aquí. Los presupuestos son quirúrgicos, de emergencia o de procedimientos.' },
       { go: 'atencion', open: () => ACTIONS.newBudget(), el: '.sheet', t: 'Tres pasos', d: '1) Paciente. 2) Tipo y paquete: un clic arma todo. 3) Ajuste solo lo que cambie: horas, días, honorarios y material.' },
@@ -43,7 +47,7 @@ const TOURS = {
     { id: 'adm-usuarios', title: 'Usuarios y copias de seguridad', desc: 'Invitar personal y proteger la información.', steps: [
       { go: 'usuarios', el: '.main [data-act="userNew"]', t: 'Nuevo usuario', d: 'Nombre, correo y rol. Elija código de invitación (la persona crea su contraseña) o contraseña temporal.' },
       { go: 'usuarios', el: '.main .list', t: 'Gestión', d: 'Toque un usuario para cambiar su rol, desactivarlo o generarle un acceso nuevo.' },
-      { go: 'ajustes', el: '.main [data-act="exportData"]', t: 'Copia de seguridad', d: 'Descargue una copia con frecuencia y guárdela fuera de este equipo. Puede probarla y restaurarla aquí mismo.' }] },
+      { go: 'ajustes', el: '.main [data-act="exportData"]', t: 'Copia de seguridad', d: 'Descargue una copia con frecuencia y guárdela fuera de este equipo. Se cifra con su clave: sin ella no se puede abrir, así que no la pierda. Puede probarla y restaurarla aquí mismo.' }] },
   ],
   recepcion: [
     { id: 'rec-general', title: 'Primeros pasos', desc: 'Su menú y la agenda.', steps: [MENU,
@@ -66,21 +70,22 @@ const TOURS = {
   medico: [
     { id: 'med-general', title: 'Primeros pasos', desc: 'Su consulta y su menú.', steps: [MENU,
       { go: 'consultorio', el: '.main .grid.g4', t: 'Mi consulta', d: 'Sus pacientes de hoy, resultados nuevos de exámenes e historias sin firmar.' },
-      { go: 'agenda', el: '.main .seg', t: 'Su agenda', d: 'Solo ve sus citas y cirugías, y puede programarlas a su nombre.' },
+      { go: 'agenda', el: '.main .seg', t: 'Su agenda', d: 'Solo ve sus citas y cirugías, y puede programar consultas y cirugías a su nombre.' },
       { go: 'agenda', setup: () => { UI.agTab = 'directorio'; }, el: '.main .list', t: 'Directorio de médicos', d: 'Todos los médicos de la clínica con su especialidad y horario. Con "Derivar paciente" le envía un paciente a un colega: sale la hoja de referencia con su firma y la derivación llega para agendarle la cita.' },
-      ACCOUNT, BACK_HERE()] },
+      ACCOUNT_CLIN, BACK_HERE()] },
     { id: 'med-consulta', title: 'Hacer una consulta', desc: 'Del paciente a la consulta firmada, con sus documentos.', steps: [
       { go: 'consultas', el: '.main [data-act="ccNewMenu"]', t: 'Nueva consulta', d: 'Empiece aquí. Busque al paciente o regístrelo, y elija consulta rápida (control o seguimiento) o completa.' },
       { go: 'consultas', open: () => ACTIONS.ccNewMenu(), el: '.sheet', t: 'Elegir al paciente', d: 'Busque por nombre o cédula. Si es nuevo, regístrelo sin salir de aquí.' },
       { go: 'consultas', t: 'Una pregunta por pantalla', d: 'Responda tocando las opciones; "Continuar" está siempre abajo. Para un control puede usar una plantilla (postoperatorio, resultados, HTA) o "Repetir el tratamiento anterior".' },
-      { go: 'consultas', t: 'Firmar y entregar', d: 'Al firmar salen el informe, el récipe y las órdenes con su firma, cédula, MPPS y Colegio. Desde la consulta firmada también emite constancia de asistencia, reposo e indicaciones para el paciente.' },
-      { el: '.userbtn', t: 'Antes de firmar', d: 'Registre su N.º MPPS y su Colegio de Médicos en Mi cuenta. Sin ellos el sistema no le deja firmar.' }] },
+      { go: 'consultas', t: 'Firmar y entregar', d: 'Al firmar salen el informe, el récipe y las órdenes con su firma, cédula y número de colegiado. Desde la consulta firmada también emite constancia de asistencia, reposo e indicaciones para el paciente.' },
+      { el: '.userbtn', t: 'Antes de firmar', d: 'Registre su número de Colegio de Médicos en Mi cuenta. Sin él el sistema no le deja firmar.' }] },
     { id: 'med-historia', title: 'Historia clínica e informes', desc: 'Escribir, firmar y descargar.', steps: [
       { go: 'pacientes', param: anyPatient, setup: () => { UI.patTab = 'resumen'; }, el: '.main .head .actions, .main .actions', t: 'En el perfil del paciente', d: '"Nueva historia" (consulta, evolución, nota operatoria o libre), "Informe médico" y "Solicitar examen".' },
       { go: 'pacientes', param: anyPatient, setup: () => { UI.patTab = 'evoluciones'; }, el: '.main [data-act="patTab"][data-k="evoluciones"]', t: 'Historia clínica', d: 'Todo lo firmado queda aquí y en el archivo de Historias. Una historia firmada no se modifica: se agrega una nota aclaratoria.' },
       { go: 'pacientes', param: anyPatient, setup: () => { UI.patTab = 'examenes'; }, el: '.main [data-act="patTab"][data-k="examenes"]', t: 'Exámenes', d: 'Resultados de laboratorio e imagen del paciente, incluidos los externos.' }] },
     { id: 'med-qx', title: 'Quirófano y hospitalización', desc: 'Material, cirugía realizada, evolución y alta.', steps: [
-      { go: 'quirofano', el: '.main [data-act="qxMedOrder"]', t: 'Pedir medicación e insumos', d: 'Para cada cirugía. Elija de la lista al médico que solicita; cirujano y anestesiólogo quedan fijos.' },
+      { go: 'quirofano', el: '.main [data-act="qxSchedule"]', t: 'Programar su cirugía', d: 'Programe sus cirugías a su nombre: paciente, cirugía, anestesiólogo, duración y kit. El sistema impide choques de quirófano o de médicos.' },
+      { go: 'quirofano', el: '.main [data-act="qxMedOrder"], .main .head', t: 'Pedir medicación e insumos', d: 'Para cada cirugía. Cirujano y anestesiólogo quedan fijos; la solicitud llega al almacén.' },
       { go: 'emergencias', el: '.bedgrid', t: 'Emergencias', d: 'Las 3 camas de emergencia funcionan como hospitalización: evolución, medicación y exámenes. Si el paciente se queda, "Pasar a hospitalización".' },
       { go: 'quirofano', el: '.main [data-act="qxDone"], .main .head', t: 'Cirugía realizada', d: 'Al terminar, regístrela con su duración real. Así entra en las estadísticas.' },
       { go: 'hospitalizacion', param: firstAdm, el: '.main .actions', t: 'El ingreso', d: '"Generar informe evolutivo" (la evolución del día, guiada), "Solicitar medicación", "Pedir exámenes" y "Dar de alta".' },
@@ -94,7 +99,7 @@ const TOURS = {
       { go: 'hospitalizacion', param: firstAdm, el: '.main .actions', t: 'En el ingreso', d: 'Con "Generar informe evolutivo" el sistema le guía en la evolución del día. También solicita medicación y pide exámenes; todo queda ligado a este ingreso.' },
       { go: 'hospitalizacion', param: firstAdm, setup: () => { UI.hospTab = 'evoluciones'; }, el: '.main .seg', t: 'Evoluciones, medicación y exámenes', d: 'Lo que se hizo durante la estancia, en orden.' },
       { go: 'pacientes', el: '#patQ', t: 'Pacientes', d: 'Consulte la ficha, la historia clínica y los exámenes de cualquier paciente.' },
-      ACCOUNT, BACK_HERE()] },
+      ACCOUNT_CLIN, BACK_HERE()] },
   ],
   enfermeria: [
     { id: 'enf-general', title: 'Primeros pasos', desc: 'Medicación en hospitalización y emergencias.', steps: [MENU,
@@ -111,7 +116,7 @@ const TOURS = {
       { go: 'hospitalizacion', el: '.bedgrid', t: 'Mapa de camas', d: 'Toque una cama ocupada para ver al paciente, sus indicaciones y su medicación.' },
       { go: 'emergencias', el: '.bedgrid', t: 'Emergencias', d: 'Igual que en hospitalización: toque la cama, solicite la medicación y registre cada aplicación.' },
       { go: 'quirofano', el: '.main [data-act="qxSchedule"]', t: 'Programar cirugía', d: 'Usted puede programar cirugías: elija paciente, cirugía, cirujano, anestesiólogo, duración y kit. El sistema impide choques de quirófano o de médicos.' },
-      { go: 'quirofano', el: '.main [data-act="qxMedOrder"], .main .head', t: 'Material de la cirugía', d: 'Pida la medicación y los insumos de cada cirugía y, al terminar, registre la devolución de lo que no se usó.' },
+      { go: 'quirofano', el: '.main [data-act="qxMedOrder"], .main .head', t: 'Material de la cirugía', d: 'Pida la medicación y los insumos de cada cirugía. Al terminar, regístrela como realizada y registre la devolución de lo que no se usó.' },
       ACCOUNT, BACK_HERE()] },
   ],
   almacen: [
@@ -125,7 +130,7 @@ const TOURS = {
       { go: 'inventario', setup: () => { UI.invTab = 'ordenes'; }, el: '.main [data-act="invTab"][data-k="ordenes"]', t: 'Órdenes pendientes', d: 'Aquí llega todo lo que se pide para pacientes. Las urgentes aparecen primero.' },
       { go: 'inventario', setup: () => { UI.invTab = 'ordenes'; }, el: '.main .stepper', t: 'Cuánto sale', d: 'Con − y + ajuste lo que realmente entrega. Si no hay suficiente, se entrega lo que hay y el resto queda pendiente.' },
       { go: 'inventario', setup: () => { UI.invTab = 'ordenes'; }, el: '.main [data-act="moDispatch"]', t: 'Confirmar', d: 'Se descuenta del inventario, primero el lote que vence antes. Si algo no llegará, use "Cerrar faltante" con el motivo.' },
-      { go: 'quirofano', el: '.main .head', t: 'Ver lo que se pidió', d: 'En Quirófano y Hospitalización solo consulta qué se pidió para cada paciente; no puede modificar nada.' }] },
+      { go: 'quirofano', el: '.main .head', t: 'Ver lo que se pidió', d: 'En Quirófano y Hospitalización consulta qué se pidió para cada paciente; las solicitudes y las aplicaciones no las modifica.' }] },
     { id: 'alm-compras', title: 'Productos, compras y alertas', desc: 'Entradas, órdenes de compra y vencimientos.', steps: [
       { go: 'inventario', setup: () => { UI.invTab = 'productos'; }, el: '.main [data-act="newProduct"]', t: 'Producto o lote nuevo', d: 'Escriba el nombre, la concentración, el lote y el vencimiento. Si es un lote de un producto que ya existe, búsquelo y agregue solo el lote nuevo.' },
       { go: 'inventario', setup: () => { UI.invTab = 'alertas'; }, el: '.main [data-act="invTab"][data-k="alertas"]', t: 'Alertas', d: 'Lo que está bajo mínimo, vencido o por vencer.' },

@@ -131,8 +131,8 @@ const pdfTable = (doc, y, head, body, opts = {}) => {
   return doc.lastAutoTable.finalY + 18;
 };
 // Bloque de firma
-// Credenciales del médico bajo la firma: C.I. · MPPS · Colegio de Médicos
-const docCreds = d => [d?.ci && 'C.I. ' + d.ci, d?.mpps && 'MPPS ' + d.mpps, d?.cm && 'C.M. ' + d.cm].filter(Boolean).join(' · ');
+// Credenciales del médico bajo la firma: C.I. · Colegio de Médicos (el MPPS no se usa)
+const docCreds = d => [d?.ci && 'C.I. ' + d.ci, d?.cm && 'C.M. ' + d.cm].filter(Boolean).join(' · ');
 function pdfSignature(doc, y, name, sub, img, creds = '') {
   y = pdfEnsure(doc, y + 30, 90); const x = PG.R - 200;
   if (img) doc.addImage(img, 'PNG', x + 20, y - 4, 160, 40);

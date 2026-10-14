@@ -1778,18 +1778,19 @@ async function test(name, fn) {
     assert.ok(doctorFavorites(c.doc).rx[normQ('Losartán 50 mg')] >= 1);
     param = saved;
   });
-  await test('Un médico sin N.º MPPS ni Colegio no puede firmar; al registrarlos sí, y pasan a su ficha', () => {
+  await test('Un médico sin número de colegiado no puede firmar; al registrarlo sí, y pasa a su ficha (el MPPS ya no se usa)', () => {
     const me = meUser();
-    const saved = { mpps: me.mpps, cm: me.cm };
-    me.mpps = ''; me.cm = '';
+    const saved = { cm: me.cm };
+    me.cm = '';
     assert.equal(credsMissing(me), true);
     assert.equal(credsBlockSign(), true);
     Object.assign(me, saved);
     syncCredsToDoctor(me);
     assert.equal(credsMissing(me), false);
     assert.equal(credsBlockSign(), false);
-    assert.equal(med(me.doc).mpps, '54321');
-    assert.ok(docCreds(med(me.doc)).includes('MPPS 54321'));
+    assert.equal(med(me.doc).cm, saved.cm);
+    assert.ok(docCreds(med(me.doc)).includes('C.M. ' + saved.cm));
+    assert.ok(!docCreds({ ci: 'V-1', mpps: '54321', cm: '123' }).includes('MPPS'), 'el MPPS no se imprime');
     // Administración: los datos son opcionales y nunca bloquean
     assert.equal(credsMissing({ role: 'admin' }), false);
   });
