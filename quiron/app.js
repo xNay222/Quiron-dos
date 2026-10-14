@@ -38,7 +38,7 @@ const ROLES = {
     'Sistema', ['usuarios', 'Usuarios'], ['ajustes', 'Ajustes'], ['tutorial', 'Tutorial']] },
   medico: { name: 'Médico', nav: ['Clínica', ['consultas', 'Consultas'], ['consultorio', 'Mi consulta'], ['agenda', 'Agenda'], ['quirofano', 'Quirófano'], ['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], 'Pacientes', ['pacientes', 'Pacientes'], ['examenes', 'Exámenes'], ['historias', 'Historias'], null, ['tutorial', 'Tutorial']] },
   residente: { name: 'Médico residente', nav: ['Clínica', ['consultas', 'Consultas'], ['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], 'Pacientes', ['pacientes', 'Pacientes'], ['examenes', 'Exámenes'], ['historias', 'Historias'], null, ['tutorial', 'Tutorial']] },
-  almacen: { name: 'Almacén', nav: [['inventario', 'Inventario'], ['quirofano', 'Quirófano'], ['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], null, ['tutorial', 'Tutorial']] },
+  almacen: { name: 'Almacén', nav: [['inicio', 'Inicio'], ['inventario', 'Inventario'], ['agenda', 'Agenda'], ['quirofano', 'Quirófano'], ['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], null, ['tutorial', 'Tutorial']] },
   enfermeria_plus: { name: 'Enfermería+', nav: [['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], ['quirofano', 'Quirófano'], ['pacientes', 'Pacientes'], null, ['tutorial', 'Tutorial']] },
   enfermeria: { name: 'Enfermería', nav: [['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], ['pacientes', 'Pacientes'], null, ['tutorial', 'Tutorial']] },   // sin Quirófano (eso es de Enfermeras+)
   laboratorio: { name: 'Laboratorio', nav: [['examenes', 'Laboratorio'], ['pacientes', 'Pacientes'], null, ['tutorial', 'Tutorial']] },
@@ -68,7 +68,7 @@ const PERMS = {
   enfermeria: ['hosp.clinico', 'hosp.solicitar', 'hosp.aplicar'],
   // Enfermeras+: todo lo de enfermería y además programan cirugías (no agendan consultas)
   enfermeria_plus: ['hosp.clinico', 'hosp.solicitar', 'hosp.aplicar', 'qx.solicitar', 'qx.devolver', 'qx.programar'],
-  almacen: ['inv.gestionar', 'guardia.editar'],
+  almacen: ['inv.gestionar', 'guardia.editar', 'agenda.programar'],   // Inicio completo y Agenda (crea y edita citas y cirugías); el valor total del inventario solo lo ve el administrador
   laboratorio: ['pac.clinico', 'pac.registrar', 'examen.pedir'],
   imagen: ['examen.pedir', 'imagen.subir'],
   recepcion: ['consulta.estado', 'agenda.programar', 'pac.registrar', 'pac.papeles'],
@@ -488,7 +488,7 @@ async function copyText(text, okMsg) {
 // ---------- Delegación ----------
 document.addEventListener('click', e => {
   const g = e.target.closest('[data-go]');
-  if (g) { e.preventDefault(); closeShellDialogs(); closeSheet(); go(g.dataset.go, g.dataset.param || null, { root: !!g.closest('#side, #more-sections') }); return; }
+  if (g) { e.preventDefault(); if (!canSee(g.dataset.go)) { toast('Esa sección no está en su menú.'); return; } closeShellDialogs(); closeSheet(); go(g.dataset.go, g.dataset.param || null, { root: !!g.closest('#side, #more-sections') }); return; }
   const a = e.target.closest('[data-act]');
   if (!a) return;
   const name = a.dataset.act;

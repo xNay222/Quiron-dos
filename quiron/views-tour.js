@@ -115,9 +115,11 @@ const TOURS = {
       ACCOUNT, BACK_HERE()] },
   ],
   almacen: [
-    { id: 'alm-general', title: 'Primeros pasos', desc: 'Su menú y el inventario.', steps: [MENU,
+    { id: 'alm-general', title: 'Primeros pasos', desc: 'Su menú, Inicio, el inventario y la agenda.', steps: [MENU,
+      { go: 'inicio', el: '.main .today-intro', t: 'Inicio', d: 'Cómo está la clínica ahora y lo que requiere atención, igual que lo ve la administración.' },
       { go: 'inventario', setup: () => { UI.invTab = 'productos'; }, el: '.main .grid.g4', t: 'Resumen', d: 'Productos bajo mínimo y lotes por vencer.' },
       { go: 'inventario', el: '.main .seg.sec, .main [data-act="invTab"]', t: 'Secciones', d: 'Órdenes pendientes, productos, alertas, compras, mapa del almacén y movimientos.' },
+      { go: 'agenda', setup: () => { UI.agTab = 'general'; }, el: '.main [data-act="newAppt"]', t: 'Agenda', d: 'Puede crear y editar citas y cirugías. El sistema avisa si el médico no atiende a esa hora o si hay un choque.' },
       ACCOUNT, BACK_HERE()] },
     { id: 'alm-despacho', title: 'Despachar una solicitud', desc: 'Lo que piden hospitalización y quirófano.', steps: [
       { go: 'inventario', setup: () => { UI.invTab = 'ordenes'; }, el: '.main [data-act="invTab"][data-k="ordenes"]', t: 'Órdenes pendientes', d: 'Aquí llega todo lo que se pide para pacientes. Las urgentes aparecen primero.' },
