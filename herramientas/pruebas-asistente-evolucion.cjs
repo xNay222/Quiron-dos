@@ -827,35 +827,22 @@ async function test(name, fn) {
     ACTIONS.ccVitalAdd();
     assert.equal(c.guide.omissions['vital-0-sys'], undefined);
   });
-  await test('Gemini recibe JSON sin identificadores; su respuesta exige aprobación', async () => {
+  await test('El informe se redacta sin IA: no se envía nada fuera del equipo y exige aprobación', async () => {
     startEvolution();
     e.state = 'Sin cambios';
     e.diagnosisUpdates[0].action = 'mantener';
-    e.progressNotes = pat(e.pid).name + ' ' + pat(e.pid).ci;
     const previousFetch = fetch;
-    fetch = async (url, options) => {
-      const data = JSON.parse(options.body);
-      assert.equal(url, '/__ia');
-      assert.equal(data.type, 'ingreso');
-      assert.ok(!options.body.includes(pat(e.pid).name));
-      assert.ok(!options.body.includes(pat(e.pid).ci));
-      assert.equal(data.admId, undefined);
-      assert.equal(data.pid, undefined);
-      return {
-        ok: true,
-        json: async () => ({
-          text: 'Borrador sintético de Gemini'
-        })
-      };
-    };
+    let calls = 0;
+    fetch = async () => { calls++; throw new Error('No debe haber llamadas de red al redactar'); };
     try {
       await ACTIONS.evGenerate();
     } finally {
       fetch = previousFetch;
     }
-    assert.equal(e.report.source, 'gemini');
+    assert.equal(calls, 0);
+    assert.equal(e.report.source, 'plantillas');
+    assert.ok(e.report.draft.includes('Sin cambios'));
     assert.equal(e.report.approvedHash, undefined);
-    assert.equal(e.status, 'pendiente_revision');
     assert.equal(evolutionSign(e), false);
     ACTIONS.evApprove();
     assert.equal(evolutionSign(e), true);
@@ -1660,7 +1647,7 @@ async function test(name, fn) {
     pat(c.pid).history.conditions.push({ name: 'Condición registrada', note: 'Migrado; pendiente de confirmar' });
     c.dx = [{ label: 'Cefalea', code: 'R51' }, { label: 'En estudio' }];
     let report = CONSULT.report(CONSULT.clean(c, pat(c.pid)));
-    assert.ok(report.includes('Cefalea (R51) · principal · certeza no documentada'));
+    assert.ok(report.includes('Cefalea · CIE-10 R51 (principal, certeza no documentada)'));
     assert.ok(!report.includes('undefined'));
     assert.ok(!report.includes('Migrado'));
     assert.ok(!report.includes('(por confirmar)'));
@@ -1669,7 +1656,7 @@ async function test(name, fn) {
     startEvolution();
     e.dx = [{ label: 'Cefalea', code: 'R51' }];
     report = EVOLUTION.report(e, pat(e.pid), [], []);
-    assert.ok(report.includes('Cefalea (R51) · principal · certeza no documentada'));
+    assert.ok(report.includes('Cefalea · CIE-10 R51 (principal, certeza no documentada)'));
     assert.ok(!report.includes('undefined'));
     assert.ok(!report.includes('Migrado'));
   });

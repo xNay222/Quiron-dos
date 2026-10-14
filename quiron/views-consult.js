@@ -839,7 +839,7 @@ function consultReport(c) {
     dateStyle: 'medium',
     timeStyle: 'short'
   })) + ' (Caracas)</p><div class="freeview">' + esc(c.report.signedText) + '</div></div>';
-  return '<div class="stack"><div id="consult-stale" class="banner warn" ' + (stale ? '' : 'hidden') + '>Borrador desactualizado: la consulta cambió. Regenere y revise antes de aprobar.</div>' + ccButton('ccGenerate', UI.ccGenerating === c.id ? 'Redactando…' : c.report.draft ? 'Regenerar informe' : 'Generar informe', UI.ccGenerating === c.id ? 'disabled' : '', 'primary') + '<p class="small muted">' + esc(c.report.source === 'gemini' ? 'Borrador redactado con IA: requiere su revisión.' : c.report.draft ? 'Informe redactado sin IA' : 'Redactor por plantillas siempre disponible.') + '</p><div class="grid ' + (c.report.candidate ? 'g2' : '') + '"><section>' + ccText('Su borrador editable', 'report.draft', c.report.draft) + '</section>' + (c.report.candidate ? '<section><label class="small muted">Nuevo borrador para elegir o combinar</label><textarea class="input cc-report" readonly>' + esc(c.report.candidate.text) + '</textarea><div class="hstack">' + ccButton('ccCandidateUse', 'Usar el nuevo borrador') + ccButton('ccCandidateCombine', 'Combinar ambos') + ccButton('ccCandidateKeep', 'Conservar mi texto tras revisar') + '</div></section>' : '') + '</div><div class="hstack">' + ccButton('ccApprove', 'Aprobar borrador', stale || !c.report.draft || c.report.candidate ? 'disabled' : '') + (consultCanSign(c) ? ccButton('ccSign', 'Firmar consulta', c.report.approvedHash === CONSULT.hash(c, pat(c.pid)) ? '' : 'disabled', 'primary') : '') + '</div><div class="small muted">La aprobación no firma. Al firmar se congela el texto y se guarda en la historia clínica; salir nunca firma.</div><div id="cc-sign-msg" class="banner warn" hidden></div></div>';
+  return '<div class="stack"><div id="consult-stale" class="banner warn" ' + (stale ? '' : 'hidden') + '>Borrador desactualizado: la consulta cambió. Regenere y revise antes de aprobar.</div>' + ccButton('ccGenerate', UI.ccGenerating === c.id ? 'Redactando…' : c.report.draft ? 'Regenerar informe' : 'Generar informe', UI.ccGenerating === c.id ? 'disabled' : '', 'primary') + '<p class="small muted">' + esc(c.report.draft ? 'Redactado automáticamente a partir de sus respuestas. Revíselo y corríjalo si hace falta.' : 'El informe se redacta automáticamente con lo que usted registró.') + '</p><div class="grid ' + (c.report.candidate ? 'g2' : '') + '"><section>' + ccText('Su borrador editable', 'report.draft', c.report.draft) + '</section>' + (c.report.candidate ? '<section><label class="small muted">Nuevo borrador para elegir o combinar</label><textarea class="input cc-report" readonly>' + esc(c.report.candidate.text) + '</textarea><div class="hstack">' + ccButton('ccCandidateUse', 'Usar el nuevo borrador') + ccButton('ccCandidateCombine', 'Combinar ambos') + ccButton('ccCandidateKeep', 'Conservar mi texto tras revisar') + '</div></section>' : '') + '</div><div class="hstack">' + ccButton('ccApprove', 'Aprobar borrador', stale || !c.report.draft || c.report.candidate ? 'disabled' : '') + (consultCanSign(c) ? ccButton('ccSign', 'Firmar consulta', c.report.approvedHash === CONSULT.hash(c, pat(c.pid)) ? '' : 'disabled', 'primary') : '') + '</div><div class="small muted">La aprobación no firma. Al firmar se congela el texto y se guarda en la historia clínica; salir nunca firma.</div><div id="cc-sign-msg" class="banner warn" hidden></div></div>';
 }
 ACTIONS.ccGenerate = async () => {
   const c = ccCurrent();
@@ -858,34 +858,8 @@ ACTIONS.ccGenerate = async () => {
     render();
     return;
   }
-  UI.ccGenerating = id;
   render();
-  toast('Borrador listo. Si la IA está configurada, se mejorará la redacción en unos segundos.');
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 22000);
-  try {
-    const response = await fetch('/__ia', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(data),
-      signal: controller.signal
-    });
-    if (!response.ok) return;
-    const result = await response.json();
-    const current = consultOf(id);
-    if (!result.text?.trim() || !current || !consultCanEdit(current) || consultSession() !== user) return;
-    Object.assign(current, CONSULT.receiveReport(current, named(result.text.trim()), hash, 'gemini', new Date().toISOString()));
-    toast('Informe redactado con IA (Gemini). Revíselo antes de firmar.');
-    current.report.stale = current.report.sourceHash !== CONSULT.hash(current, pat(current.pid));
-    consultAudit(current, 'informe_generado', 'gemini');
-    consultFlush();
-  } catch (e) {/* respaldo local ya disponible; no se registra contenido clínico */} finally {
-    clearTimeout(timeout);
-    UI.ccGenerating = null;
-    if (route === 'consultas' && param === id) render();
-  }
+  toast('Informe redactado a partir de sus respuestas. Revíselo antes de firmar.');
 };
 function consultCandidate(action) {
   const c = ccCurrent(),

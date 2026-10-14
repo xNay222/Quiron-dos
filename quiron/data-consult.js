@@ -640,9 +640,9 @@ const CONSULT = (() => {
     return value == null ? '' : String(value).replace(/Migrado;?\s*pendiente de confirmar\.?/gi, '').trim();
   }
   function diagnosisText(d, index = 0) {
-    return clinicalText(d.label) + (d.code ? ' (' + clinicalText(d.code) + ')' : '') +
-      ' · ' + (d.priority || (index === 0 ? 'principal' : 'secundario')) + ' · ' +
-      (d.certainty || 'certeza no documentada');
+    return clinicalText(d.label) + (d.code ? ' · CIE-10 ' + clinicalText(d.code) : '') +
+      ' (' + (d.priority || (index === 0 ? 'principal' : 'secundario')) + ', ' +
+      (d.certainty || 'certeza no documentada') + ')';
   }
   function report(data) {
     // Texto clínico legible: nombre primero, luego datos con su etiqueta en español; sin claves internas.
@@ -704,8 +704,13 @@ const CONSULT = (() => {
         const v = Array.isArray(a.value) ? a.value : a.value;
         if (v === 'Sí' || v === true) yes.push(low(a.label));
         else if (v === 'No' || v === false) no.push(low(a.label));
-        else rest.push(a.label + ': ' + fdt(display(v)));
-      });
+    else rest.push(a.label + ': ' + (typeof v === 'string' && !/^\d/.test(v) ? low(fdt(v)) : fdt(display(v))));
+  });
+  const proc = rest.findIndex(t => t.startsWith('Procedimiento: ')), date = rest.findIndex(t => t.startsWith('Fecha de intervención: '));
+  if (proc >= 0) {
+    const text = 'Postoperatorio de ' + rest[proc].slice('Procedimiento: '.length) + (date >= 0 ? ' (' + rest[date].slice('Fecha de intervención: '.length) + ')' : '');
+    rest.splice(proc, 1, text); if (date >= 0) rest.splice(rest.indexOf(rest.find(t => t.startsWith('Fecha de intervención: '))), 1);
+  }
       return rest.concat(yes.length ? ['Refiere ' + listY(yes)] : [], no.length ? ['Niega ' + listY(no)] : []).join('. ');
     };
     // En el examen, "Normal" en un hallazgo patológico significa que NO está presente
@@ -720,9 +725,16 @@ const CONSULT = (() => {
     const section = (name, lines) => out.push(name + '\n' + (lines.filter(Boolean).join('\n') || 'No documentado.'));
     section('Identificación', [(data.patient.initials || 'Paciente') + ' · ' + (data.patient.age == null ? 'Edad no documentada' : data.patient.age + ' años') + ' · ' + (fdt(data.date) || 'Fecha no documentada') + ' ' + (data.time || '') + ' (Caracas)', (types[data.type] || 'Tipo no documentado') + ' · ' + (data.specialty || 'Especialidad no documentada') + ' · ' + (data.modality || 'Modalidad no documentada')]);
     section('Motivo', data.reasons.map(r => (r.main ? 'Principal: ' : 'Secundario: ') + r.label));
-    section(data.mode === 'quick' ? 'Evolución' : 'Enfermedad actual', data.reasons.map(r => r.label + '. ' + ([answersText(r.answers)].concat(r.ipss ? 'IPSS: ' + display(r.ipss) : [], filled(r.characterization) ? Object.entries(r.characterization).filter(([, v]) => filled(v)).map(([k, v]) => (charNames[k] || k) + ': ' + fdt(display(v))).join('; ') : []).filter(Boolean).join('. ') || 'No documentado') + '.'));
+    section(data.mode === 'quick' ? 'Evolución' : 'Enfermedad actual', data.reasons.map(r => r.label + '. ' + ([answersText(r.answers)].concat(r.ipss ? 'IPSS: ' + display(r.ipss) : [], filled(r.characterization) ? Object.entries(r.characterization).filter(([, v]) => filled(v)).map(([k, v]) => (charNames[k] || k) + ': ' + (typeof v === 'string' && !/^\d/.test(v) ? low(fdt(v)) : fdt(display(v)))).join('; ') : []).filter(Boolean).join('. ') || 'No documentado') + '.'));
     const h = data.history;
-    section('Antecedentes', [allergyText(h), ...h.conditions.map(x => 'Patológico: ' + display(x)), ...h.surgeries.map(x => 'Cirugía: ' + display(x)), ...h.meds.map(x => 'Medicación habitual: ' + display(x)), ...h.family.map(x => 'Familiar: ' + display(x)), filled(h.habits) ? 'Hábitos: ' + display(h.habits) : '', filled(h.gyneco) ? 'Ginecoobstétricos: ' + display(h.gyneco) : '', filled(h.pediatric) ? 'Pediátricos: ' + display(h.pediatric) : '']);
+    const pend = x => /pendiente de confirmar|migrado/i.test(x?.note || '');
+    const hx = (title, list, fmt) => list.length ? title + ': ' + list.map(fmt).filter(Boolean).join('; ') : '';
+    section('Antecedentes', [allergyText(h),
+      hx('Patológicos', h.conditions.filter(x => x.state !== 'ausente'), x => x.name + (x.since ? ' desde ' + fdt(x.since) : '') + (x.tx ? ', en tratamiento con ' + x.tx : '') + (pend(x) ? ' (por confirmar)' : '')),
+      hx('Quirúrgicos', h.surgeries, x => x.name + (x.date ? ' (' + fdt(x.date) + ')' : '') + (x.complications ? ', complicaciones: ' + x.complications : '')),
+      hx('Medicación habitual', h.meds.filter(x => x.active !== false), x => [x.drug, x.dose, x.freq].filter(Boolean).join(' ') + (pend(x) ? ' (por confirmar)' : '')),
+      hx('Familiares', h.family, x => (x.disease || x.name || '') + (x.relative ? ' (' + x.relative + ')' : '')),
+      filled(h.habits) ? 'Hábitos: ' + display(h.habits) : '', filled(h.gyneco) ? 'Ginecoobstétricos: ' + display(h.gyneco) : '', filled(h.pediatric) ? 'Pediátricos: ' + display(h.pediatric) : '']);
     if (!(data.mode === 'quick' && !Object.keys(data.ros || {}).length)) section('Revisión por sistemas', Object.entries(data.ros).map(([s, items]) => s + ': ' + Object.entries(items).map(([item, state]) => item + ': ' + state.replace(/_/g, ' ')).join('; ')).concat(Object.entries(data.rosNotes || {}).filter(([, v]) => filled(v)).map(([s, n]) => s + ' · Observaciones: ' + n)));
     section('Signos vitales', data.vitals.map(v => (v.at ? fdt(v.at.slice(0, 10)) + v.at.slice(10) : 'Hora no documentada') + ' · ' + vitals.filter(([k]) => filled(v[k])).map(([k, label, unit]) => label + ' ' + v[k] + (unit === '0–10' ? '/10' : ' ' + unit)).concat(v.bmi != null ? 'IMC ' + v.bmi : []).join('; ')));
     section(data.mode === 'quick' ? 'Hallazgos / examen dirigido' : 'Examen físico', Object.entries(data.exam).map(([r, e]) => r + ': ' + (e.state === 'normal' ? ((e.confirmed || []).length ? normalText(e.confirmed) : 'normal (ítems no documentados)') : e.state === 'no_examinado' ? 'No examinado' : e.state === 'alterado' ? 'Alterado · ' + (display(e.findings || {}) || (!e.note ? 'Hallazgos no documentados.' : '')) + (e.note ? ' · ' + e.note : '') : 'No documentado') + (e.consent ? ' · Consentimiento: ' + e.consent : '') + (e.chaperone ? ' · Acompañante: ' + e.chaperone : '')));

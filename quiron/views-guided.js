@@ -1270,7 +1270,7 @@ function evolutionReport(e) {
     issues.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul></div>' : '') + '<div id="ev-stale" class="banner warn" ' + (stale ? '' : 'hidden') +
     '>La nota quedó desactualizada. Regenere y revise antes de aprobar.</div>' +
     ccButton('evGenerate', e.report.draft ? 'Regenerar nota' : 'Redactar nota', UI.evGenerating === e.id ? 'disabled' : '', 'primary') +
-    '<p class="small muted">Plantillas siempre disponibles; Gemini si responde el servicio. El borrador requiere su revisión y firma.</p>' +
+    '<p class="small muted">Redactada automáticamente a partir de sus respuestas. Revísela y corríjala si hace falta antes de firmar.</p>' +
     ccText('Nota editable', 'report.draft', e.report.draft) + (e.report.candidate ? '<h2>Nuevo borrador para revisar</h2><div class="freeview">' +
       esc(e.report.candidate.text) + '</div><div class="hstack">' + ['use', 'combine', 'keep'].map(action =>
       ccButton('evCandidate', { use: 'Usar nuevo borrador', combine: 'Combinar ambos', keep: 'Conservar mi texto tras revisar' }[action], 'data-choice="' + action + '"')).join('') + '</div>' : '') +
@@ -1287,27 +1287,8 @@ ACTIONS.evGenerate = async () => {
   const local = EVOLUTION.report(e, pat(e.pid), S.exams, S.indications || []);
   Object.assign(e, CONSULT.receiveReport(e, local, hash, 'plantillas', new Date().toISOString()));
   if (!consultFlush()) { render(); return; }
-  UI.evGenerating = id;
   render();
-  const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 22000);
-  try {
-    const response = await fetch('/__ia', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data), signal: controller.signal });
-    if (!response.ok) return;
-    const result = await response.json(), current = evolutionOf(id);
-    if (!result.text?.trim() || !evolutionEditable(current) || consultSession() !== user) return;
-    const ini = data.patient?.initials, name = pat(current.pid)?.name;
-    const text = ini && ini.length >= 2 && name ? result.text.trim().split(ini).join(name) : result.text.trim();
-    Object.assign(current, CONSULT.receiveReport(current, text, hash, 'gemini', new Date().toISOString()));
-    current.report.stale = current.report.sourceHash !== evolutionHash(current);
-    consultFlush();
-  } catch (error) {
-    // El borrador por plantillas ya está disponible; no se registra contenido clínico.
-  } finally {
-    clearTimeout(timer);
-    UI.evGenerating = null;
-    if (guidedCurrent()?.id === id) render();
-  }
+  toast('Nota redactada a partir de sus respuestas. Revísela antes de firmar.');
 };
 
 ACTIONS.evCandidate = el => {
