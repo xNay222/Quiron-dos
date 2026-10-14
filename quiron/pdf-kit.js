@@ -20,6 +20,13 @@ window.LOGO = null;
   } catch (e) { window.LOGO = null; }
 })();
 
+// ---------- Dos salidas para cada documento ----------
+// 'membrete': el PDF que se guarda o se envía, con logo, datos de la clínica, marca de agua y pie de página.
+// 'contenido': lo que se imprime sobre las hojas membretadas: solo el texto del documento, exactamente en el mismo lugar.
+let PDF_MODE = 'membrete';
+const pdfPlain = doc => (doc?._mode || PDF_MODE) === 'contenido';   // cada documento recuerda con qué modo se armó
+function pdfBuild(build, mode) { const prev = PDF_MODE; PDF_MODE = mode; try { return build(mode); } finally { PDF_MODE = prev; } }
+
 // ---------- Plantilla A4 ----------
 const PG = { W: 595.28, H: 841.89, L: 48, R: 547.28, top: 176, bottom: 780 };
 const INK = [24, 24, 26], GREY = [112, 112, 118], SOFT = [246, 246, 248], LINE = [85, 85, 88], RED = [196, 32, 38];
@@ -35,13 +42,21 @@ function pdfNew(title, meta = []) {
   const doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'a4', compress: true });   // compresión: archivos livianos para enviar por WhatsApp o correo
   const rawText = doc.text.bind(doc); doc.text = (t, ...a) => rawText(pdfClean(t), ...a);
   const rawSplit = doc.splitTextToSize.bind(doc); doc.splitTextToSize = (t, ...a) => rawSplit(pdfClean(t), ...a);
-  doc._title = title; doc._meta = meta;
+  doc._title = title; doc._meta = meta; doc._mode = PDF_MODE;
   pdfHeader(doc, true);
   return doc;
 }
 // Encabezado: logo a la izquierda con el RIF debajo; título y datos del documento a la derecha
 function pdfHeader(doc, first) {
   const { L, R } = PG, c=PDF_CLINIC;
+  if (pdfPlain(doc)) {   // hoja membretada: solo los datos del documento y su título, en su lugar de siempre
+    doc.setTextColor(...INK); doc.setFont('helvetica','normal'); doc.setFontSize(9);
+    doc.text(doc._meta.flatMap(x=>doc.splitTextToSize(x,230)),R,79,{align:'right',lineHeightFactor:1.2});
+    doc.setFont('helvetica','bold'); doc.setFontSize(12);
+    const t=doc.splitTextToSize(pdfClean(doc._title.toUpperCase()),R-L-20); if(t.length>1) doc.setFontSize(9);
+    doc.text(t.slice(0,2),L+10,t.length>1?146:153,{lineHeightFactor:1.1});
+    return PG.top;
+  }
   // Marca de agua detrás del contenido, nunca en la impresión sobre imprenta.
   if(window.LOGO && doc.GState) {
     doc.saveGraphicsState(); doc.setGState(new doc.GState({opacity:.07}));
@@ -67,6 +82,7 @@ function pdfHeader(doc, first) {
   return PG.top;
 }
 function pdfFooters(doc) {
+  if (pdfPlain(doc)) { const n=doc.getNumberOfPages(); if (n>1) for(let i=1;i<=n;i++){ doc.setPage(i); doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(...GREY); doc.text(i+'/'+n,PG.R,PG.bottom+8,{align:'right'}); } return; }
   for(let i=1;i<=doc.getNumberOfPages();i++) {
     doc.setPage(i); doc.setDrawColor(...LINE);doc.setLineWidth(.5);doc.roundedRect(PG.L,793,PG.R-PG.L,33,4,4);
     doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...INK);
@@ -129,12 +145,23 @@ function pdfSignature(doc, y, name, sub, img, creds = '') {
 }
 // Nombre de archivo válido en Windows, macOS y teléfonos (sin / \\ : * ? " < > |)
 const safeName = n => String(n).replace(/[\\/:*?"<>|\u0000-\u001F]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 140);
-async function pdfSave(doc, filename) {
-  filename = safeName(filename);
-  // Metadatos: el visor y el explorador de archivos muestran título, autor y asunto; idioma para lectores de pantalla
-  doc.setProperties({ title: pdfClean(filename.replace(/\.pdf$/i, '')), subject: pdfClean(doc._title), author: pdfClean(S.clinic?.name || 'Quirón'), keywords: pdfClean(`RIF ${S.clinic?.rif || ''}`), creator: 'Quirón · sistema de gestión clínica' });
+function pdfFinish(doc, filename) {
+  if (doc._finished) return doc; doc._finished = true;
+  doc.setProperties({ title: pdfClean(String(filename).replace(/\.pdf$/i, '')), subject: pdfClean(doc._title), author: pdfClean(S.clinic?.name || 'Quirón'), keywords: pdfClean(`RIF ${S.clinic?.rif || ''}`), creator: 'Quirón · sistema de gestión clínica' });
   try { doc.setLanguage('es-VE'); } catch (e) {}
   if (!doc._preprinted) pdfFooters(doc);
+  return doc;
+}
+// Todos los documentos pasan por la vista previa: desde ahí se imprime (solo el contenido) o se descarga el PDF (con membrete).
+// "src" es una función que arma el documento para un modo ('membrete' o 'contenido'); también se acepta un documento ya armado.
+async function pdfSave(src, filename, opts = {}) {
+  if (typeof pdfPreview === 'function') return pdfPreview(src, safeName(filename), opts);
+  return pdfDownload(typeof src === 'function' ? pdfBuild(src, 'membrete') : src, filename);
+}
+async function pdfDownload(doc, filename) {
+  filename = safeName(filename);
+  // Metadatos: el visor y el explorador de archivos muestran título, autor y asunto; idioma para lectores de pantalla
+  pdfFinish(doc, filename);
   const dl = await getCap('downloads');
   if (!dl) { try { doc.save(filename); toast('PDF descargado'); return true; } catch (e) { toast('No se pudo descargar el PDF'); return false; } }
   try { await dl.save({ filename, data: doc.output('blob') }); toast('PDF guardado'); return true; }
@@ -296,11 +323,11 @@ function pdfConsent(p, c) {
 }
 
 // ---------- Botones ----------
-ACTIONS.pdfNote = async el => { if (!pdfReady()) return; const n = S.hc.find(x => x.id === el.dataset.id); await pdfSave(pdfNote(n), `${n.evolutionId ? clinicalNoteTitle(n) : n.type === 'informe' ? 'Informe médico' : 'Historia clínica'} ${pat(n.pid).name} ${n.date}.pdf`); };
-ACTIONS.pdfFull = async el => { if (!pdfReady()) return; const p = pat(el.dataset.id); await pdfSave(pdfFullHistory(p.id), `Historia clínica completa ${p.name}.pdf`); };
-ACTIONS.pdfExam = async el => { if (!pdfReady()) return; const e = S.exams.find(x => x.id === el.dataset.id); await pdfSave(pdfExam(e), `${e.area === 'laboratorio' ? 'Laboratorio' : 'Informe'} ${e.num} ${pat(e.pid).name}.pdf`); };
-ACTIONS.pdfConsent = async el => { if (!pdfReady()) return; const p = pat(el.dataset.id); const c = p.consents[+el.dataset.i]; await pdfSave(pdfConsent(p, c), `${c.type} ${p.name}.pdf`); };
-ACTIONS.rxPdf = async el => { if (!pdfReady()) return; const n = S.hc.find(x => x.id === el.dataset.id); await pdfSave(pdfRecipe(n), `Récipe ${pat(n.pid).name} ${n.date}.pdf`); };
+ACTIONS.pdfNote = async el => { if (!pdfReady()) return; const n = S.hc.find(x => x.id === el.dataset.id); await pdfSave(() => pdfNote(n), `${n.evolutionId ? clinicalNoteTitle(n) : n.type === 'informe' ? 'Informe médico' : 'Historia clínica'} ${pat(n.pid).name} ${n.date}.pdf`); };
+ACTIONS.pdfFull = async el => { if (!pdfReady()) return; const p = pat(el.dataset.id); await pdfSave(() => pdfFullHistory(p.id), `Historia clínica completa ${p.name}.pdf`); };
+ACTIONS.pdfExam = async el => { if (!pdfReady()) return; const e = S.exams.find(x => x.id === el.dataset.id); await pdfSave(() => pdfExam(e), `${e.area === 'laboratorio' ? 'Laboratorio' : 'Informe'} ${e.num} ${pat(e.pid).name}.pdf`); };
+ACTIONS.pdfConsent = async el => { if (!pdfReady()) return; const p = pat(el.dataset.id); const c = p.consents[+el.dataset.i]; await pdfSave(() => pdfConsent(p, c), `${c.type} ${p.name}.pdf`); };
+ACTIONS.rxPdf = async el => { if (!pdfReady()) return; const n = S.hc.find(x => x.id === el.dataset.id); await pdfSave(() => pdfRecipe(n), `Récipe ${pat(n.pid).name} ${n.date}.pdf`); };
 
 // Hoja de imprenta Carta. Origen arriba/izquierda; unidades pt (PNG 1275x1650, 150 dpi: px * 0.48).
 // Rectángulos de escritura: x, y, ancho, alto. Ningún elemento fijo se dibuja en el PDF de impresión.
@@ -316,6 +343,9 @@ const FACTURA_LAYOUT = {
   },
   table: { x: 33, y: 239, bottom: 635, descriptionWidth: 383, unitX: 425, unitWidth: 60, totalX: 495, totalWidth: 85, gap: 5 }
 };
+// Imagen de la hoja de factura para el PDF que se guarda (en la impresión no se usa: la hoja ya viene impresa)
+window.FACTURA_BG = null;
+(async () => { try { const b = await (await fetch(FACTURA_LAYOUT.background)).blob(); window.FACTURA_BG = await new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = no; r.readAsDataURL(b); }); } catch (e) {} })();
 const facturaCalibration = () => ({ x: Number(S.facturaPrint?.x) || 0, y: Number(S.facturaPrint?.y) || 0 });
 function facturaDoc() {
   const doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'letter', compress: true });
@@ -372,10 +402,18 @@ function facturaCommands(inv) {
     return commands;
   });
 }
-function pdfFacturaPrint(inv, test = false) {
-  const doc = facturaDoc(), offset = facturaCalibration(), dx = offset.x * 72 / 25.4, dy = offset.y * 72 / 25.4;
+// La factura: 'contenido' = solo los datos (con la calibración de la impresora); 'membrete' = datos sobre la imagen de la hoja
+const pdfFactura = inv => mode => mode === 'contenido' ? pdfFacturaPrint(inv) : pdfFacturaPrint(inv, false, true);
+function pdfFacturaPrint(inv, test = false, withSheet = false) {
+  const doc = facturaDoc(), offset = withSheet ? { x: 0, y: 0 } : facturaCalibration(), dx = offset.x * 72 / 25.4, dy = offset.y * 72 / 25.4;
   facturaCommands(inv).forEach((commands, page) => {
     if(page) doc.addPage('letter');
+    if(withSheet && window.FACTURA_BG) doc.addImage(window.FACTURA_BG,'PNG',0,0,FACTURA_LAYOUT.width,FACTURA_LAYOUT.height,'factura-hoja','FAST');
+    // Copia digital: el Nº de factura y el Nº de control que en papel ya vienen impresos por la imprenta
+    if(withSheet) { const h=inv.sheets?.[page]||{}; doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(...RED);
+      if(h.printedNumber) doc.text(String(h.printedNumber),124,133.5);
+      if(h.control) doc.text(String(h.control).replace(/^00-/,''),501,133.5);
+      doc.setFont('helvetica','normal'); doc.setFontSize(FACTURA_LAYOUT.fontSize); doc.setTextColor(0); }
     commands.forEach(c => doc.text(c.lines,c.x+dx,c.y+dy,{ align: c.right ? 'right' : 'left', lineHeightFactor: 1.3 }));
     if(test) {
       doc.setDrawColor(90); doc.setLineWidth(.3);

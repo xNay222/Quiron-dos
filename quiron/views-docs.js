@@ -39,22 +39,26 @@ function docHTML(m) {
 
 // El PDF (A4, con logo y RIF) se genera en pdf-kit.js
 
+// Factura fiscal: vista previa con la hoja completa; al imprimir solo salen los datos (la hoja ya trae su formato y su número)
+function facturaOpen(inv) {
+  if (!inv.sheets || inv.sheets.length !== facturaPages(inv).length) return openFacturaIssue({ id: inv.id });
+  const error = facturaSheetError(inv.sheets, inv.id); if (error) { toast(error); return; }
+  try { facturaCommands(inv); } catch (e) { toast(e.message); return; }
+  return pdfSave(pdfFactura(inv), 'Factura ' + inv.num + ' - ' + (inv.buyer?.name || pat(inv.pid).name) + '.pdf', {
+    title: 'Factura ' + inv.num, printLabel: 'Imprimir en la hoja de factura',
+    note: 'Al imprimir solo salen los datos: colóquela sobre la hoja de factura Nº de control ' + inv.sheets.map(h => h.control).join(', ') + '. El PDF se guarda con la hoja completa.',
+    after: facturaVoidHistory(inv.id),
+    extra: canSee('contabilidad') ? '<button class="btn" data-act="facturaReplace" data-id="' + inv.id + '">Hoja dañada · reemplazar</button>' : '' });
+}
+const docFileName = m => `${m.kind === 'budget' ? 'Presupuesto' : m.status === 'pagada' ? 'Recibo' : 'Nota de cobro'} ${m.num} - ${m.p.name}.pdf`;
 ACTIONS.showDoc = el => {
-  const m = docModel(el.dataset.kind, el.dataset.id); UI.docShown = { kind: el.dataset.kind, id: el.dataset.id };
-  if (m.fiscal) {
-    if (!pdfReady()) return;
-    if (!m.invoice.sheets || m.invoice.sheets.length !== facturaPages(m.invoice).length) return openFacturaIssue({ id: m.invoice.id });
-    try { openSheet('Factura · revisión sobre hoja preimpresa', facturaPreview(m.invoice) + facturaVoidHistory(m.invoice.id), '<button class="btn" data-act="facturaReplace" data-id="'+m.invoice.id+'">Hoja dañada / anulada · reemplazar</button><button class="btn" data-act="downloadDoc">Descargar copia digital</button><button class="btn primary" data-act="facturaPrint">Imprimir sobre hoja preimpresa</button>', { wide: true }); } catch(e) { toast(e.message); }
-    return;
-  }
-  openSheet(`${m.kind === 'budget' ? 'Presupuesto' : m.fiscal ? 'Factura' : 'Recibo'} ${m.num}`, patientBand(m.p.id) + docHTML(m),
-    `<span class="note" id="doc-msg">${m.kind === 'budget' ? 'Los aumentos por servicio no se muestran; la cortesía sí.' : ''}</span><button class="btn" data-act="close">Cerrar</button><button class="btn primary" data-act="downloadDoc">Descargar PDF</button>`, { wide: true });
-};
-ACTIONS.downloadDoc = async () => {
-  const msg = document.getElementById('doc-msg'); const m = docModel(UI.docShown.kind, UI.docShown.id);
   if (!pdfReady()) return;
-  await pdfSave(pdfBilling(m), `${m.kind === 'budget' ? 'Presupuesto' : m.fiscal ? 'Copia digital de factura' : 'Recibo'} ${m.num} - ${m.p.name}.pdf`);
+  const m = docModel(el.dataset.kind, el.dataset.id); UI.docShown = { kind: el.dataset.kind, id: el.dataset.id };
+  if (m.fiscal) return facturaOpen(m.invoice);
+  return pdfSave(() => pdfBilling(m), docFileName({ ...m, status: m.invoice?.status }), { title: `${m.kind === 'budget' ? 'Presupuesto' : 'Recibo'} ${m.num}`,
+    note: m.kind === 'budget' ? 'Los aumentos por servicio no se muestran; la cortesía sí.' : '' });
 };
+ACTIONS.downloadDoc = () => ACTIONS.showDoc({ dataset: UI.docShown || {} });
 
 // ---------- Presupuestos ----------
 // Guardar → enviar a Contabilidad → registrar dinero recibido o rechazo.
@@ -95,7 +99,7 @@ ACTIONS.openBudget = el => {
 // Descarga directa del PDF (sin pasar por la vista previa)
 ACTIONS.budDownload = async el => {
   if (!pdfReady()) return; const m = docModel('budget', el.dataset.id);
-  await pdfSave(pdfBilling(m), `Presupuesto ${m.num} - ${m.p.name}.pdf`);
+  await pdfSave(() => pdfBilling(m), `Presupuesto ${m.num} - ${m.p.name}.pdf`);
 };
 const budRefresh = b => { save(); closeSheet(); render(); };
 ACTIONS.budSend = el => {
@@ -119,10 +123,7 @@ ACTIONS.convertBudget = el => {
   openSheet(`Pago recibido · ${b.num}`, payBody(), '<span class="note" id="pay-msg"></span><button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="savePay">Confirmar pago recibido</button>');
 };
 
-ACTIONS.facturaPrint = async () => {
-  if(!pdfReady() || !canSee('contabilidad')) return;
-  const inv=byId(S.invoices,UI.docShown.id);
-  if(!inv.sheets || inv.sheets.length !== facturaPages(inv).length) return openFacturaIssue({id:inv.id});
-  const error=facturaSheetError(inv.sheets,inv.id); if(error) return toast(error);
-  try { await pdfSave(pdfFacturaPrint(inv),'Impresión en hoja preimpresa '+inv.num+'.pdf'); } catch(e) {toast(e.message);}
+ACTIONS.facturaPrint = () => {
+  if (!pdfReady() || !canSee('contabilidad')) return;
+  const inv = byId(S.invoices, UI.docShown?.id); if (inv) return facturaOpen(inv);
 };

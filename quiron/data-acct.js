@@ -80,7 +80,7 @@ function acctMoves(from = '0000', to = '9999') {
   const out = [];
   S.invoices.forEach(inv => inv.payments.forEach(p => {
     const d = p.at.slice(0, 10); const m = metodo(p.method);
-    out.push({ id: p.id, date: d, type: 'entrada', cat: 'Cobros a pacientes', concept: `${inv.num} · ${pat(inv.pid)?.name || ''}`, amount: p.amount, cur: p.cur, method: m?.name || p.method, rate: p.rate || S.rate, auto: 'Facturación' });
+    out.push({ id: p.id, date: d, type: 'entrada', cat: 'Cobros a pacientes', concept: `${inv.num} · ${pat(inv.pid)?.name || ''}`, amount: p.amount, cur: p.cur, method: m?.name || p.method, rate: p.rate || S.rate, auto: 'Facturación' , invId: inv.id });
     if (p.igtf) out.push({ id: p.id + '-igtf', date: d, type: 'entrada', cat: 'IGTF cobrado (por pagar al SENIAT)', concept: `IGTF de ${inv.num}`, amount: p.igtf, cur: 'USD', method: m?.name || p.method, rate: p.rate || S.rate, auto: 'Facturación' });
   }));
   // Compras: la salida se registra cuando Contabilidad confirma y paga la orden

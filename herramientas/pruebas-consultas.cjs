@@ -181,6 +181,7 @@ const test = (name, code) => {
       filename: 'jspdf.umd.min.js'
     });
     test('PDF reales: informe, récipe, orden y referencia con pdf-kit', "currentConsult.plan.referral='Medicina interna';for(const kind of ['report','recipe','orders','referral']){const doc=consultPdf(currentConsult,kind);const result=new Uint8Array(doc.output('arraybuffer'));assert.ok(result.length>1000);assert.equal(String.fromCharCode(...result.slice(0,5)),'%PDF-');assert.ok(doc.internal.getNumberOfPages()>=1);}");
+    test('Impresión sobre hoja membretada: solo el contenido; el PDF guardado lleva el membrete', "const text=d=>{pdfFinish(d,'x.pdf');return d.internal.pages.slice(1).map(p=>p.join('\\n')).join('\\n')};const full=text(pdfBuild(()=>consultPdf(currentConsult,'report'),'membrete'));const plain=text(pdfBuild(()=>consultPdf(currentConsult,'report'),'contenido'));assert.ok(full.includes('Quironespecialidadesmedicas'));assert.ok(full.includes('Choron'));assert.ok(!plain.includes('Quironespecialidadesmedicas'));assert.ok(!plain.includes('Choron'));assert.ok(!plain.includes('Tel'+'éfonos'));assert.ok(/INFORME/.test(plain));");
   }
   console.log(checks.map(n => 'OK ' + n).join('\n'));
   console.log(checks.length + ' grupos de pruebas correctos.');

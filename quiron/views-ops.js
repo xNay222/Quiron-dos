@@ -357,9 +357,9 @@ ACTIONS.consentCreate = async el => {
   c.clauses = consentClauses(c, p);
   p.consents.unshift(c); log('Consentimiento creado', `${p.name} · ${proc}`); save(); closeSheet(); UI.patTab = 'consentimientos'; render();
   toast('Consentimiento creado · pendiente de firma');
-  if (pdfReady()) await pdfSave(pdfConsentPrint(p, c), `Consentimiento ${p.name} ${c.d}.pdf`);
+  if (pdfReady()) await pdfSave(() => pdfConsentPrint(p, c), `Consentimiento ${p.name} ${c.d}.pdf`);
 };
-ACTIONS.consentPrint = async el => { if (!pdfReady()) return; const p = pat(el.dataset.id); const c = p.consents[+el.dataset.i]; await pdfSave(pdfConsentPrint(p, c), `Consentimiento ${p.name} ${c.d}.pdf`); };
+ACTIONS.consentPrint = async el => { if (!pdfReady()) return; const p = pat(el.dataset.id); const c = p.consents[+el.dataset.i]; await pdfSave(() => pdfConsentPrint(p, c), `Consentimiento ${p.name} ${c.d}.pdf`); };
 
 // Subir el documento firmado: foto (se reduce de tamaño) o PDF
 ACTIONS.consentUpload = el => { UI.csUp = { pid: el.dataset.id, i: +el.dataset.i }; document.getElementById('cs-file').click(); };

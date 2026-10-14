@@ -1013,9 +1013,7 @@ ACTIONS.ccSign = async () => {
   if (!c || !consultSign(c)) return;
   render();
   toast('Consulta firmada y guardada.');
-  await consultDownload(c, 'report');
-  if (c.rx.some(r => r.drug)) await consultDownload(c, 'recipe');
-  if (c.orders.length) await consultDownload(c, 'orders');
+  await consultDownload(c, 'report');   // se abre el informe; desde la vista previa se pasa al récipe y a las órdenes
 };
 ACTIONS.ccMode = () => {
   const c = ccCurrent();
@@ -1182,10 +1180,15 @@ function consultPdf(c, kind = 'report', opts = {}) {
   }
   return doc;
 }
+const CONSULT_DOC_NAMES = { report: 'Informe médico', recipe: 'Récipe', orders: 'Órdenes de exámenes', referral: 'Referencia médica' };
 async function consultDownload(c, kind) {
   try {
     if (!pdfReady()) return false;
-    return await pdfSave(consultPdf(c, kind), 'consulta-' + c.id + '-' + kind + '.pdf');
+    const name = (CONSULT_DOC_NAMES[kind] || 'Consulta') + ' ' + (pat(c.pid)?.name || '') + ' ' + c.date;
+    // Los demás documentos de la misma consulta, a un toque desde la vista previa
+    const others = ['report', 'recipe', 'orders', 'referral'].filter(k => k !== kind && (k === 'report' || (k === 'recipe' && c.rx.some(r => r.drug)) || (k === 'orders' && c.orders.length) || (k === 'referral' && c.plan.referral)))
+      .map(k => ccButton('ccPdf', CONSULT_DOC_NAMES[k], 'data-kind="' + k + '"')).join('');
+    return await pdfSave(() => consultPdf(c, kind), name + '.pdf', { title: CONSULT_DOC_NAMES[kind] || 'Documento', extra: others });
   } catch (e) {
     toast('La consulta está guardada. No se pudo descargar el PDF; puede reintentarlo.');
   }
@@ -1201,7 +1204,7 @@ const consultSigned = () => { const c = consultOf(param); return c && consultAcc
 ACTIONS.ccPatientSheet = async () => {
   const c = consultSigned(); if (!c || !pdfReady()) return;
   log('Indicaciones al paciente entregadas', pat(c.pid)?.code || '');
-  await pdfSave(consultPdf(c, 'patient'), 'Indicaciones ' + (pat(c.pid)?.name || '') + ' ' + c.date + '.pdf');
+  await pdfSave(() => consultPdf(c, 'patient'), 'Indicaciones ' + (pat(c.pid)?.name || '') + ' ' + c.date + '.pdf');
 };
 ACTIONS.ccCertAttendance = () => {
   const c = consultSigned(); if (!c) return;
@@ -1215,7 +1218,7 @@ ACTIONS.ccCertAttendanceDo = async () => {
   const until = val('cert-until');
   if (until && until <= c.time) { toast('La hora de salida debe ser posterior a la llegada (' + c.time + ').'); return; }
   closeSheet(); log('Constancia de asistencia emitida', pat(c.pid)?.code || '');
-  await pdfSave(consultPdf(c, 'attendance', { until }), 'Constancia de asistencia ' + (pat(c.pid)?.name || '') + ' ' + c.date + '.pdf');
+  await pdfSave(() => consultPdf(c, 'attendance', { until }), 'Constancia de asistencia ' + (pat(c.pid)?.name || '') + ' ' + c.date + '.pdf');
 };
 ACTIONS.ccCertRest = () => {
   const c = consultSigned(); if (!c) return;
@@ -1233,5 +1236,5 @@ ACTIONS.ccCertRestDo = async () => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(from)) { toast('Indique la fecha de inicio del reposo.'); return; }
   const showDx = document.getElementById('rest-dx')?.checked;
   closeSheet(); log('Constancia de reposo emitida', (pat(c.pid)?.code || '') + ' · ' + days + ' día(s) desde ' + from);
-  await pdfSave(consultPdf(c, 'rest', { days, from, showDx }), 'Reposo ' + (pat(c.pid)?.name || '') + ' ' + from + '.pdf');
+  await pdfSave(() => consultPdf(c, 'rest', { days, from, showDx }), 'Reposo ' + (pat(c.pid)?.name || '') + ' ' + from + '.pdf');
 };
