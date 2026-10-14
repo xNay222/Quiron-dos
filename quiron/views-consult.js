@@ -1087,7 +1087,7 @@ function consultPdf(c, kind = 'report') {
     orders: 'Orden de exámenes',
     referral: 'Referencia médica'
   };
-  const doc = pdfNew(titles[kind], [c.date + ' ' + c.time + ' · Caracas', d?.name || 'Médico no documentado', c.specialty]);
+  const doc = pdfNew(titles[kind], [fdate(c.date) + ' ' + c.time + ' · Caracas', d?.name || 'Médico no documentado', c.specialty]);
   let y = PG.top;
   y = pdfInfoBox(doc, y, [['Paciente', p.name], ['Documento', p.ci || 'Sin documento'], ['Historia', p.code], ['Edad', CONSULT.age(p.birth, c.date) === null ? 'No documentada' : CONSULT.age(p.birth, c.date) + ' años']], 2);
   y = pdfPara(doc, y, CONSULT.allergyText(c.historySnapshot || p.history), {
@@ -1133,7 +1133,7 @@ function consultPdf(c, kind = 'report') {
       y = pdfSection(doc, y, 'Adenda · ' + a.at + ' · ' + a.by);
       y = pdfPara(doc, y, a.text);
     });
-    pdfSignature(doc, y, d?.name || '', c.specialty + ' · firma y sello');
+    pdfSignature(doc, y, d?.name || '', c.specialty + ' · firma y sello', null, docCreds(d));
   }
   return doc;
 }

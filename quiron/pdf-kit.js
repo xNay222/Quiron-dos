@@ -115,12 +115,16 @@ const pdfTable = (doc, y, head, body, opts = {}) => {
   return doc.lastAutoTable.finalY + 18;
 };
 // Bloque de firma
-function pdfSignature(doc, y, name, sub, img) {
+// Credenciales del médico bajo la firma: C.I. · MPPS · Colegio de Médicos
+const docCreds = d => [d?.ci && 'C.I. ' + d.ci, d?.mpps && 'MPPS ' + d.mpps, d?.cm && 'C.M. ' + d.cm].filter(Boolean).join(' · ');
+function pdfSignature(doc, y, name, sub, img, creds = '') {
   y = pdfEnsure(doc, y + 30, 90); const x = PG.R - 200;
   if (img) doc.addImage(img, 'PNG', x + 20, y - 4, 160, 40);
   doc.setDrawColor(...INK); doc.setLineWidth(.6); doc.line(x, y + 40, PG.R, y + 40);
   doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...INK); doc.text(name, x + 100, y + 54, { align: 'center' });
   if (sub) { doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...GREY); doc.text(sub, x + 100, y + 66, { align: 'center' }); }
+  if (creds) { doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...GREY);
+    const lines = doc.splitTextToSize(creds, 200); lines.forEach((l, i) => doc.text(l, x + 100, y + 78 + i * 11, { align: 'center' })); return y + 92 + (lines.length - 1) * 11; }
   return y + 80;
 }
 // Nombre de archivo válido en Windows, macOS y teléfonos (sin / \\ : * ? " < > |)
@@ -194,7 +198,7 @@ function pdfNote(n) {
   y = pdfInfoBox(doc, y, patientPairs(p), 3);
   if (p.allergies.length) { doc.setFillColor(253, 236, 236); doc.roundedRect(PG.L, y - 8, PG.R - PG.L, 24, 5, 5, 'F'); doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...RED); doc.text(`ALERGIAS: ${p.allergies.join(', ')}`, PG.L + 12, y + 7.5); y += 30; }
   y = pdfNoteBody(doc, y, n, false);
-  pdfSignature(doc, y, d?.name || '', d?.esp || '');
+  pdfSignature(doc, y, d?.name || '', d?.esp || '', null, docCreds(d));
   return doc;
 }
 
@@ -229,7 +233,7 @@ function pdfRecipe(n) {
   n.recipe.forEach((r, i) => { y = pdfEnsure(doc, y, 44); doc.setFont('helvetica', 'bold'); doc.setFontSize(11.5); doc.setTextColor(...INK); doc.text(`${i + 1}.  ${r.med}`, PG.L + 6, y);
     const ind = [r.dosis, r.frec, r.dur].filter(Boolean).join('  ·  '); if (ind) { doc.setFont('helvetica', 'normal'); doc.setFontSize(9.8); doc.setTextColor(...GREY); doc.text(ind, PG.L + 22, y + 15); } y += ind ? 36 : 24; });
   if (n.indicaciones) { y = pdfSection(doc, y + 6, 'Indicaciones'); y = pdfPara(doc, y, n.indicaciones, { size: 9.8 }); }
-  pdfSignature(doc, Math.max(y, 560), d.name, `${d.esp} · firma y sello`);
+  pdfSignature(doc, Math.max(y, 560), d.name, `${d.esp} · firma y sello`, null, docCreds(d));
   return doc;
 }
 
