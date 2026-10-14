@@ -147,6 +147,7 @@ ACTIONS.switchUser = () => {
   const u = meUser(); if (!u) return;
   openSheet('Mi cuenta', `<div class="hstack" style="gap:14px"><span class="avatar" style="width:52px;height:52px;font-size:18px">${initials(u.name)}</span><div><b style="font-size:17px">${esc(u.name)}</b><div class="small muted">${esc(u.email)} · ${esc(roleLabel(u.role))}${u.doc ? ' · ' + esc(med(u.doc)?.name || '') : ''}</div></div></div>
     <div class="between"><span class="small muted">Apariencia</span>${themeSeg('setTheme')}</div>
+    ${credsCard(u)}
     <div class="card" style="display:grid;gap:10px"><b class="small">Cambiar contraseña</b><div class="form">
       <div class="field"><label for="mc-old">Contraseña actual</label><input class="input" type="password" id="mc-old" autocomplete="current-password"></div>
       <div class="field"><label for="mc-new">Nueva contraseña</label><input class="input" type="password" id="mc-new" autocomplete="new-password"></div>
@@ -266,11 +267,10 @@ ACTIONS.staffDoc = el => { if (!can('*')) return; const d = (S.doctors || []).fi
     <div class="field"><label for="sd-n">Nombre (con Dr., Dra. o Lic.)</label><input class="input" id="sd-n" value="${esc(d.name || '')}" placeholder="Ej. Dr. Pedro Gómez"></div>
     <div class="field"><label for="sd-e">Especialidad</label><input class="input" id="sd-e" value="${esc(d.esp || '')}" placeholder="Ej. Traumatología"></div>
     <div class="field"><label for="sd-k">Tipo</label><select class="input" id="sd-k">${Object.entries(DOC_KIND).map(([k, t]) => `<option value="${k}" ${(d.id ? docKind(d) : el.dataset?.kind || 'medico') === k ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
-    <div class="field"><label for="sd-ci">Cédula</label><input class="input" id="sd-ci" value="${esc(d.ci || '')}" placeholder="Ej. V-12.345.678"></div>
-    <div class="field"><label for="sd-mpps">N.º de registro MPPS</label><input class="input" id="sd-mpps" value="${esc(d.mpps || '')}" inputmode="numeric" placeholder="Ej. 54321"></div>
-    <div class="field"><label for="sd-cm">Colegio de Médicos (n.º y colegio)</label><input class="input" id="sd-cm" value="${esc(d.cm || '')}" placeholder="Ej. 12345 · CM Miranda"></div>
     <label class="field hstack small" style="align-self:end"><input type="checkbox" id="sd-a" ${d.active !== false ? 'checked' : ''}> Activo (aparece en las listas)</label></div>
-    <div class="small muted">La cédula, el MPPS y el Colegio de Médicos se imprimen bajo la firma de récipes, informes y órdenes.</div>
+    <div class="card small" style="margin-top:6px"><b>Datos profesionales</b><div class="muted">${d.id && (S.users || []).some(u => u.doc === d.id) ?
+      (d.mpps ? 'C.I. ' + esc(d.ci || '—') + ' · MPPS ' + esc(d.mpps) + ' · C.M. ' + esc(d.cm || '—') : 'Pendiente: el médico debe registrarlos en Mi cuenta.') :
+      'Este médico aún no tiene usuario. Cuando lo tenga, registrará su cédula, MPPS y Colegio en Mi cuenta.'}</div></div>
     <div class="small muted">Su historial se conserva aunque lo desactive. El horario de consulta se carga en Agenda › Consultas › Horarios de médicos.</div><span class="note" id="sd-msg"></span>`,
     `<button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="staffDocSave" data-id="${d.id || ''}">Guardar</button>`); };
 ACTIONS.staffDocSave = el => { if (!can('*')) return;
@@ -280,8 +280,7 @@ ACTIONS.staffDocSave = el => { if (!can('*')) return;
   if (!esp) { msg.textContent = 'Escriba la especialidad.'; return; }
   if ((S.doctors || []).some(x => x.id !== el.dataset.id && !x.example && x.name.toLowerCase() === name.toLowerCase())) { msg.textContent = 'Ya hay un médico con ese nombre.'; return; }
   let d = (S.doctors || []).find(x => x.id === el.dataset.id); const isNew = !d; if (isNew) { d = { id: uid('dr') }; S.doctors.push(d); }
-  Object.assign(d, { name, esp, resident: kind === 'residente', anest: kind === 'anestesiologo', active: document.getElementById('sd-a').checked,
-    ci: val('sd-ci').trim(), mpps: val('sd-mpps').trim(), cm: val('sd-cm').trim() });
+  Object.assign(d, { name, esp, resident: kind === 'residente', anest: kind === 'anestesiologo', active: document.getElementById('sd-a').checked });
   syncStaff(); log(isNew ? 'Médico agregado' : 'Médico modificado', `${name} · ${esp}${d.active ? '' : ' · inactivo'}`); save(); closeSheet(); render(); toast('Guardado'); };
 ACTIONS.staffNurse = el => { if (!can('*')) return; const i = el.dataset?.i; const n = i != null ? S.nurseStaff[+i] : { name: '', days: [], active: true };
   openSheet(i != null ? n.name : 'Agregar enfermera', `<div class="field"><label for="sn-n">Nombre</label><input class="input" id="sn-n" value="${esc(n.name)}"></div>
@@ -296,3 +295,50 @@ ACTIONS.staffNurseSave = el => { if (!can('*')) return;
   const data = { name, days, active: document.getElementById('sn-a').checked };
   if (i === '') S.nurseStaff.push(data); else Object.assign(S.nurseStaff[+i], data);
   syncStaff(); log('Enfermera guardada', `${name} · ${days.map(d => DAY_NAMES[d]).join(', ') || 'sin días fijos'}`); save(); closeSheet(); render(); toast('Guardado'); };
+
+// ---------- Datos profesionales del usuario (cédula, MPPS, Colegio de Médicos) ----------
+// Pertenecen a la cuenta de cada persona; si la cuenta está vinculada a un médico del personal, se copian a su ficha
+// para que salgan bajo la firma de récipes, informes y constancias.
+const CREDS_REQUIRED = ['medico', 'residente'];
+const credsOf = u => ({ ci: u?.ci || '', mpps: u?.mpps || '', cm: u?.cm || '' });
+const credsMissing = u => !!u && CREDS_REQUIRED.includes(u.role) && (!u.mpps || !u.cm);
+function credsCard(u) {
+  if (![...CREDS_REQUIRED, 'admin'].includes(u.role)) return '';
+  const req = CREDS_REQUIRED.includes(u.role), c = credsOf(u);
+  return `<div class="card" style="display:grid;gap:10px"><b class="small">Datos profesionales ${req ? '<span class="pill warn">Obligatorios para firmar</span>' : '<span class="pill">Opcional</span>'}</b>
+    ${req && credsMissing(u) ? '<div class="banner warn">Registre su N.º MPPS y su Colegio de Médicos: sin ellos no puede firmar consultas, evoluciones ni récipes.</div>' : ''}
+    <div class="form">
+      <div class="field"><label for="mc-ci">Cédula</label><input class="input" id="mc-ci" value="${esc(c.ci)}" placeholder="Ej. V-12.345.678"></div>
+      <div class="field"><label for="mc-mpps">N.º de registro MPPS${req ? ' *' : ''}</label><input class="input" id="mc-mpps" inputmode="numeric" value="${esc(c.mpps)}" placeholder="Ej. 54321"></div>
+      <div class="field"><label for="mc-cm">Colegio de Médicos: n.º y colegio${req ? ' *' : ''}</label><input class="input" id="mc-cm" value="${esc(c.cm)}" placeholder="Ej. 12345 · CM Miranda"></div></div>
+    <div class="small muted">Se imprimen bajo su firma en informes, récipes, órdenes y constancias.</div>
+    <div class="hstack"><button class="btn sm primary" data-act="myCredsSave">Guardar datos profesionales</button><span class="small" id="mc-creds-msg"></span></div></div>`;
+}
+ACTIONS.myCredsSave = () => {
+  const u = meUser(); if (!u) return;
+  const m = document.getElementById('mc-creds-msg');
+  const ci = val('mc-ci').trim(), mpps = val('mc-mpps').trim().replace(/\s+/g, ''), cm = val('mc-cm').trim().replace(/\s+/g, ' ');
+  const bad = t => { m.textContent = t; m.style.color = 'var(--bad)'; };
+  if (CREDS_REQUIRED.includes(u.role) && (!mpps || !cm)) return bad('El N.º MPPS y el Colegio de Médicos son obligatorios para médicos y residentes.');
+  if (mpps && !/^\d{3,8}$/.test(mpps)) return bad('El N.º MPPS lleva solo números (entre 3 y 8 cifras).');
+  if (cm && !/\d/.test(cm)) return bad('Indique el número de colegiado (y, si quiere, el colegio).');
+  Object.assign(u, { ci, mpps, cm });
+  syncCredsToDoctor(u);
+  log('Datos profesionales actualizados', u.name + (mpps ? ' · MPPS ' + mpps : ''));
+  save(); m.textContent = 'Guardado'; m.style.color = 'var(--good)'; render();
+};
+// La ficha del médico toma los números de la cuenta vinculada (no se escriben a mano en Usuarios)
+function syncCredsToDoctor(u) {
+  const d = u?.doc && (S.doctors || []).find(x => x.id === u.doc); if (!d) return;
+  Object.assign(d, credsOf(u)); syncStaff();
+}
+// Al abrir la app, la ficha de cada médico refleja los datos de su cuenta
+if (typeof S !== 'undefined' && S) (S.users || []).forEach(u => { if (u.doc && (u.mpps || u.cm || u.ci)) { const d = (S.doctors || []).find(x => x.id === u.doc); if (d) Object.assign(d, credsOf(u)); } });
+// Firma: un médico o residente sin sus números no puede firmar
+function credsBlockSign() {
+  const u = meUser();
+  if (!credsMissing(u)) return false;
+  toast('Antes de firmar, registre su N.º MPPS y su Colegio de Médicos en Mi cuenta.');
+  setTimeout(() => ACTIONS.switchUser(), 400);
+  return true;
+}

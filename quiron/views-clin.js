@@ -143,6 +143,7 @@ ACTIONS.saveNote = el => {
     if (sign && !n.motivo.trim()) { msg.textContent = `Para firmar, escriba al menos el ${n.type === 'ingreso' ? 'motivo de ingreso' : n.type === 'operatoria' ? 'nombre de la cirugía' : 'motivo de consulta'}.`; return; }
     if (sign && !n.dx.some(d => d.trim())) { msg.textContent = 'Para firmar, indica al menos un diagnóstico.'; return; }
   }
+  if (sign && typeof credsBlockSign === 'function' && credsBlockSign()) return;
   const now = nowStamp(); const data = { pid: n.pid, apptId: n.apptId, admId: n.admId || null, type: n.type, motivo: n.motivo.trim(), actual: n.actual.trim(), vitals: n.vitals, examen: n.examen.trim(), dx: n.dx.map(d => d.trim()).filter(Boolean), plan: n.plan.trim(), indicaciones: n.indicaciones.trim(), recipe: n.recipe.filter(r => r.med), tests: n.tests, urgent: n.urgent, to: (n.to || '').trim(), doc: n.doc || ME() };
   let rec = n.id && S.hc.find(x => x.id === n.id);
   if (!rec) { rec = { id: uid('hc'), date: dAt(0), time: now.slice(11), status: 'borrador', addenda: [], by: actor() }; S.hc.unshift(rec); }

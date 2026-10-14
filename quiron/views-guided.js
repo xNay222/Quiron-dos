@@ -1338,6 +1338,7 @@ function evolutionIssues(e) {
 }
 function evolutionSign(e) {
   if (!evolutionEditable(e)) return false;
+  if (typeof credsBlockSign === 'function' && credsBlockSign()) return false;
   const errors = evolutionIssues(e);
   if (errors.length) { toast(errors.length > 1 ? 'Antes de firmar falta: ' + errors.join(' ') : errors[0]); return false; }
   const hash = evolutionHash(e);

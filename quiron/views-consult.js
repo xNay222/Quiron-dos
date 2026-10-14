@@ -906,6 +906,7 @@ ACTIONS.ccApprove = () => {
 };
 function consultSign(c) {
   if (!consultCanSign(c)) return false;
+  if (typeof credsBlockSign === 'function' && credsBlockSign()) return false;
   const p = pat(c.pid),
     errors = CONSULT.signProblems(c, p);
   if (errors.length) {

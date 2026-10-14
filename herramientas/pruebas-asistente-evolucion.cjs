@@ -120,7 +120,9 @@ run('window.resetGuided=' + function () {
       name: d.name,
       role: 'medico',
       doc: d.id,
-      status: 'activo'
+      status: 'activo',
+      mpps: '54321',
+      cm: '12345 · CM Miranda'
     };
   S.users = [u];
   applyUser(u);
@@ -1770,6 +1772,21 @@ async function test(name, fn) {
     assert.equal(lastPatientRx(t).length, 0);
     assert.ok(doctorFavorites(c.doc).rx[normQ('Losartán 50 mg')] >= 1);
     param = saved;
+  });
+  await test('Un médico sin N.º MPPS ni Colegio no puede firmar; al registrarlos sí, y pasan a su ficha', () => {
+    const me = meUser();
+    const saved = { mpps: me.mpps, cm: me.cm };
+    me.mpps = ''; me.cm = '';
+    assert.equal(credsMissing(me), true);
+    assert.equal(credsBlockSign(), true);
+    Object.assign(me, saved);
+    syncCredsToDoctor(me);
+    assert.equal(credsMissing(me), false);
+    assert.equal(credsBlockSign(), false);
+    assert.equal(med(me.doc).mpps, '54321');
+    assert.ok(docCreds(med(me.doc)).includes('MPPS 54321'));
+    // Administración: los datos son opcionales y nunca bloquean
+    assert.equal(credsMissing({ role: 'admin' }), false);
   });
   await test('Preparar solicitud para probar fallo de almacenamiento sin duplicarla', () => {
     ACTIONS.guideStart({
