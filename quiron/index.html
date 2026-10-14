@@ -1249,6 +1249,9 @@ body{background:
   .app .side::-webkit-scrollbar{display:none}
   .app .side{-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 36px),transparent);mask-image:linear-gradient(to bottom,#000 calc(100% - 36px),transparent)}
   .app .side.at-end{-webkit-mask-image:none;mask-image:none}
+  /* El fondo de la barra superior pasa por detrás del menú: así no queda una raya vertical junto a la esquina redondeada */
+  .app .side{z-index:35}
+  .global-topbar::before{left:-256px}
 }
 </style>
 </head>
