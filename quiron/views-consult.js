@@ -1064,7 +1064,8 @@ function consultView(c) {
     recipe: 'Récipe PDF',
     orders: 'Orden PDF',
     referral: 'Referencia PDF'
-  }[k], 'data-kind="' + k + '"')).join('') + ccButton('ccAddendum', 'Agregar adenda') + '</div><div class="card"><h2>Adendas</h2>' + (S.hc.find(n => n.consultId === c.id)?.addenda || []).map(a => '<p>' + esc(a.at + ' · ' + a.by) + '<br>' + esc(a.text) + '</p>').join('') + '</div></div>';
+  }[k], 'data-kind="' + k + '"')).join('') + ccButton('ccPatientSheet', 'Indicaciones al paciente') +
+    ccButton('ccCertAttendance', 'Constancia de asistencia') + ccButton('ccCertRest', 'Reposo médico') + ccButton('ccAddendum', 'Agregar adenda') + '</div><div class="card"><h2>Adendas</h2>' + (S.hc.find(n => n.consultId === c.id)?.addenda || []).map(a => '<p>' + esc(a.at + ' · ' + a.by) + '<br>' + esc(a.text) + '</p>').join('') + '</div></div>';
   const step = Math.max(0, Math.min(11, UI.consultStep || 0));
   const quick = '<div class="stack cc-quick"><section class="card"><h2>1. Paciente y contexto</h2>' + consultSummary(c) + '<details><summary>Configurar consulta y confirmar antecedentes</summary>' + consultConfig(c) + consultHistory(c) + '</details></section><section class="card"><h2>2. Motivo y evolución</h2>' + consultReasons(c) + consultReasons(c, true) + '</section><section class="card"><h2>3. Signos vitales</h2>' + consultVitals(c) + '</section><section class="card"><h2>4. Examen dirigido</h2>' + consultExam(c) + '</section><section class="card"><h2>5. Diagnóstico y conducta</h2>' + consultDx(c) + '<details><summary>Exámenes solicitados</summary>' + consultOrders(c) + '</details><details><summary>Tratamiento prescrito</summary>' + consultRx(c) + '</details>' + consultPlan(c) + '</section><section class="card"><h2>6. Informe rápido</h2>' + consultReport(c) + '</section></div>';
   return top + (!editable ? '<div class="banner">Lectura de borrador. Solo el médico tratante o un usuario autorizado puede editar.</div>' : '') + '<fieldset class="cc-editor" ' + (editable ? '' : 'disabled') + '>' + '<div id="cc-alerts">' + alerts + '</div>' + (c.mode === 'quick' ? quick : '<div class="cc-layout"><aside class="cc-steps card" aria-label="Pasos de consulta">' + CONSULT.steps.map((label, i) => '<button class="row" data-act="ccStep" data-i="' + i + '" ' + (i === step ? 'aria-current="step"' : '') + '><div class="grow">' + esc(label) + '<div class="small muted">' + CONSULT.stepState(c, p, i) + '</div></div></button>').join('') + '</aside><div class="cc-section">' + consultSection(c, step) + '</div><details class="cc-summary card" ' + (matchMedia('(min-width:1024px)').matches ? 'open' : '') + '><summary>Resumen clínico</summary><div id="consult-summary">' + consultSummary(c) + '</div></details></div>') + '</fieldset>';
@@ -1078,19 +1079,25 @@ ACTIONS.ccAddendum = () => {
     }
   });
 };
-function consultPdf(c, kind = 'report') {
+function consultPdf(c, kind = 'report', opts = {}) {
   const p = c.patientSnapshot || pat(c.pid),
     d = c.report.signedDoctor || med(c.doc);
   const titles = {
     report: 'Informe de consulta médica',
     recipe: 'Récipe médico',
     orders: 'Orden de exámenes',
-    referral: 'Referencia médica'
+    referral: 'Referencia médica',
+    attendance: 'Constancia de asistencia',
+    rest: 'Constancia de reposo médico',
+    patient: 'Indicaciones para el paciente'
   };
+  // Constancias: documentos para terceros (empleo, estudios); no llevan alergias ni historia, solo lo necesario
+  const certificate = kind === 'attendance' || kind === 'rest';
   const doc = pdfNew(titles[kind], [fdate(c.date) + ' ' + c.time + ' · Caracas', d?.name || 'Médico no documentado', c.specialty]);
   let y = PG.top;
-  y = pdfInfoBox(doc, y, [['Paciente', p.name], ['Documento', p.ci || 'Sin documento'], ['Historia', p.code], ['Edad', CONSULT.age(p.birth, c.date) === null ? 'No documentada' : CONSULT.age(p.birth, c.date) + ' años']], 2);
-  y = pdfPara(doc, y, CONSULT.allergyText(c.historySnapshot || p.history), {
+  y = pdfInfoBox(doc, y, certificate ? [['Paciente', p.name], ['Cédula', p.ci || 'Sin documento']] :
+    [['Paciente', p.name], ['Documento', p.ci || 'Sin documento'], ['Historia', p.code], ['Edad', CONSULT.age(p.birth, c.date) === null ? 'No documentada' : CONSULT.age(p.birth, c.date) + ' años']], 2);
+  if (!certificate) y = pdfPara(doc, y, CONSULT.allergyText(c.historySnapshot || p.history), {
     size: 9,
     bold: true
   });
@@ -1119,16 +1126,53 @@ function consultPdf(c, kind = 'report') {
       y = pdfPara(doc, y, o.label + ' · ' + o.category + ' · ' + o.priority + ' · Solicitado' + (o.indication ? '\nIndicación: ' + o.indication : ''));
     });
   }
+  const longDate = iso => { const [Y, M, D] = String(iso).split('-').map(Number); return new Date(Date.UTC(Y, M - 1, D, 12)).toLocaleDateString('es-VE', { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' }); };
+  const addDays = (iso, n) => { const [Y, M, D] = String(iso).split('-').map(Number); const t = new Date(Date.UTC(Y, M - 1, D + n, 12)); return t.toISOString().slice(0, 10); };
+  if (kind === 'attendance') {
+    y = pdfSection(doc, y + 10, 'Constancia');
+    y = pdfPara(doc, y, 'Quien suscribe, ' + (d?.name || 'médico tratante') + ', hace constar que el(la) ciudadano(a) ' + p.name + ', titular de la cédula de identidad ' +
+      (p.ci || 'no documentada') + ', asistió a consulta de ' + (c.specialty || 'medicina') + ' en Quirón Especialidades Médicas el día ' + longDate(c.date) +
+      ', desde las ' + c.time + (opts.until ? ' hasta las ' + opts.until : '') + '.', { size: 11 });
+    y = pdfPara(doc, y + 6, 'Constancia que se expide a solicitud de la parte interesada, en Caracas, a los ' + longDate(c.date) + '.', { size: 11 });
+  }
+  if (kind === 'rest') {
+    const days = Math.max(1, +opts.days || 1), from = opts.from || c.date, to = addDays(from, days - 1), back = addDays(from, days);
+    y = pdfSection(doc, y + 10, 'Reposo médico');
+    y = pdfPara(doc, y, 'Quien suscribe, ' + (d?.name || 'médico tratante') + ', hace constar que el(la) ciudadano(a) ' + p.name + ', titular de la cédula de identidad ' +
+      (p.ci || 'no documentada') + ', fue evaluado(a) en consulta de ' + (c.specialty || 'medicina') + ' el día ' + longDate(c.date) + ' y amerita reposo médico por ' +
+      days + (days === 1 ? ' día' : ' días') + ', desde el ' + longDate(from) + ' hasta el ' + longDate(to) + ', ambos inclusive. Debe reincorporarse a sus actividades el ' + longDate(back) + '.', { size: 11 });
+    // El diagnóstico solo se imprime si el médico lo marca (dato privado del paciente)
+    if (opts.showDx && c.dx.length) y = pdfPara(doc, y + 4, 'Diagnóstico: ' + c.dx.map(x => x.label).join('; ') + '.', { size: 11 });
+    y = pdfPara(doc, y + 6, 'Constancia que se expide a solicitud de la parte interesada, en Caracas, a los ' + longDate(c.date) + '.', { size: 11 });
+  }
+  if (kind === 'patient') {
+    // Indicaciones en lenguaje sencillo para el paciente
+    const meds = c.rx.filter(r => r.drug);
+    if (meds.length) {
+      y = pdfSection(doc, y + 6, 'Sus medicamentos');
+      meds.forEach((r, i) => { y = pdfPara(doc, y, (i + 1) + '. ' + r.drug + (r.presentation ? ' (' + r.presentation + ')' : '') + ': ' +
+        ['tome ' + [r.dose, r.unit].filter(Boolean).join(' ') || '', r.route ? 'por vía ' + low0(r.route) : '', r.freq ? low0(r.freq) : '', r.duration ? 'durante ' + low0(r.duration) : ''].filter(x => x && x !== 'tome ').join(', ') +
+        (r.notes ? '. ' + r.notes : '') + '.', { size: 11 }); });
+    }
+    const general = (c.plan.instructions || []).concat(c.plan.instructionFree ? [c.plan.instructionFree] : [], c.plan.notes ? [c.plan.notes] : []).filter(Boolean);
+    if (general.length) { y = pdfSection(doc, y + 6, 'Recomendaciones'); general.forEach(t => { y = pdfPara(doc, y, '• ' + t, { size: 11 }); }); }
+    if (c.orders.length) { y = pdfSection(doc, y + 6, 'Exámenes que debe realizarse'); c.orders.forEach(o => { y = pdfPara(doc, y, '• ' + o.label, { size: 11 }); }); }
+    const alarms = (c.plan.alarmSigns || []).concat(c.plan.alarmFree ? [c.plan.alarmFree] : []).filter(Boolean);
+    if (alarms.length) { y = pdfSection(doc, y + 6, 'Acuda de inmediato a emergencia si presenta'); alarms.forEach(t => { y = pdfPara(doc, y, '• ' + t, { size: 11, bold: true }); }); }
+    if (c.plan.nextControl) { y = pdfSection(doc, y + 6, 'Su próximo control'); y = pdfPara(doc, y, longDate(c.plan.nextControl) + (c.plan.controlTime ? ' a las ' + c.plan.controlTime : '') + ', con ' + (d?.name || 'su médico') + '.', { size: 11, bold: true }); }
+    y = pdfPara(doc, y + 8, 'Si tiene dudas, comuníquese con la clínica: (+58-212) 9939173 - 9932747.', { size: 10 });
+  }
   if (kind === 'referral') {
     y = pdfSection(doc, y, 'Referencia a ' + c.plan.referral);
     y = pdfPara(doc, y, c.dx.map(d => d.label + ' · ' + d.certainty).join('\n') + '\n' + c.plan.notes);
   }
   if (c.status === 'firmada') {
-    y = pdfPara(doc, y, 'Firmado por ' + (d?.name || '') + ' · ' + new Date(c.report.signedAt).toLocaleString('es-VE', {
+    if (!certificate && kind !== 'patient') y = pdfPara(doc, y, 'Firmado por ' + (d?.name || '') + ' · ' + new Date(c.report.signedAt).toLocaleString('es-VE', {
       timeZone: 'America/Caracas'
     }) + ' (Caracas)', {
       size: 9
     });
+    if (certificate) y = Math.max(y, 520);
     if (kind === 'report') (S.hc.find(n => n.consultId === c.id)?.addenda || []).forEach(a => {
       y = pdfSection(doc, y, 'Adenda · ' + a.at + ' · ' + a.by);
       y = pdfPara(doc, y, a.text);
@@ -1148,4 +1192,45 @@ async function consultDownload(c, kind) {
 ACTIONS.ccPdf = el => {
   const c = consultOf(param);
   if (c && consultAccessible(c)) return consultDownload(c, el.dataset.kind);
+};
+
+// ---------- Constancias e indicaciones al paciente (solo de consultas firmadas) ----------
+const low0 = t => t ? String(t).charAt(0).toLowerCase() + String(t).slice(1) : t;
+const consultSigned = () => { const c = consultOf(param); return c && consultAccessible(c) && c.status === 'firmada' ? c : null; };
+ACTIONS.ccPatientSheet = async () => {
+  const c = consultSigned(); if (!c || !pdfReady()) return;
+  log('Indicaciones al paciente entregadas', pat(c.pid)?.code || '');
+  await pdfSave(consultPdf(c, 'patient'), 'Indicaciones ' + (pat(c.pid)?.name || '') + ' ' + c.date + '.pdf');
+};
+ACTIONS.ccCertAttendance = () => {
+  const c = consultSigned(); if (!c) return;
+  openSheet('Constancia de asistencia', patientBand(c.pid) +
+    '<div class="form"><div class="field"><label for="cert-from">Llegó a las</label><input class="input" id="cert-from" value="' + esc(c.time) + '" disabled></div>' +
+    '<div class="field"><label for="cert-until">Se retiró a las (opcional)</label><input class="input" type="time" id="cert-until"></div></div>',
+    '<button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="ccCertAttendanceDo">Descargar constancia</button>');
+};
+ACTIONS.ccCertAttendanceDo = async () => {
+  const c = consultSigned(); if (!c || !pdfReady()) return;
+  const until = val('cert-until');
+  if (until && until <= c.time) { toast('La hora de salida debe ser posterior a la llegada (' + c.time + ').'); return; }
+  closeSheet(); log('Constancia de asistencia emitida', pat(c.pid)?.code || '');
+  await pdfSave(consultPdf(c, 'attendance', { until }), 'Constancia de asistencia ' + (pat(c.pid)?.name || '') + ' ' + c.date + '.pdf');
+};
+ACTIONS.ccCertRest = () => {
+  const c = consultSigned(); if (!c) return;
+  openSheet('Reposo médico', patientBand(c.pid) +
+    '<div class="form"><div class="field"><label for="rest-days">Días de reposo</label><input class="input" type="number" min="1" max="90" id="rest-days" value="1"></div>' +
+    '<div class="field"><label for="rest-from">Desde</label><input class="input" type="date" id="rest-from" value="' + esc(c.date) + '"></div></div>' +
+    '<div class="guide-options">' + [1, 2, 3, 5, 7, 15].map(n => '<button class="btn" type="button" onclick="document.getElementById(\'rest-days\').value=' + n + '">' + n + (n === 1 ? ' día' : ' días') + '</button>').join('') + '</div>' +
+    '<label class="hstack small"><input type="checkbox" id="rest-dx"> Incluir el diagnóstico en la constancia (solo si el paciente lo autoriza)</label>',
+    '<button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="ccCertRestDo">Descargar constancia</button>');
+};
+ACTIONS.ccCertRestDo = async () => {
+  const c = consultSigned(); if (!c || !pdfReady()) return;
+  const days = Math.round(+val('rest-days')), from = val('rest-from');
+  if (!(days >= 1 && days <= 90)) { toast('Indique entre 1 y 90 días de reposo.'); return; }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from)) { toast('Indique la fecha de inicio del reposo.'); return; }
+  const showDx = document.getElementById('rest-dx')?.checked;
+  closeSheet(); log('Constancia de reposo emitida', (pat(c.pid)?.code || '') + ' · ' + days + ' día(s) desde ' + from);
+  await pdfSave(consultPdf(c, 'rest', { days, from, showDx }), 'Reposo ' + (pat(c.pid)?.name || '') + ' ' + from + '.pdf');
 };
