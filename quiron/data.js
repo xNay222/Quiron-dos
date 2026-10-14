@@ -460,6 +460,7 @@ function migrate() {
   fix(!S.facturaPrint, () => { S.facturaPrint = { x: 0, y: 0 }; });
   fix(!S.facturaVoids, () => { S.facturaVoids = []; });
   fix(!S.dues, () => { S.dues = []; });
+  fix(!S.referrals, () => { S.referrals = []; S.refSeq = 1; });   // derivaciones entre médicos (Agenda › Directorio)
   fix(!S.clinicLab2026, () => importClinicLab2026(S));
   fix(!S.labRefs2026 && typeof applyLabStandard === 'function', () => applyLabStandard(S));   // unidades y valores de referencia estándar
   fix(!S.labRefs2026b && typeof applyLabAgeBands === 'function', () => applyLabAgeBands(S));   // tablas por edad (testosterona, PSA, DHEA-S…)

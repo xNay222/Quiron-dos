@@ -134,13 +134,17 @@ ACTIONS.agAll = () => { UI.agAll = !UI.agAll; render(); };
 
 VIEWS.agenda = () => {
   const day = UI.agendaDay || dAt(0); const tab = UI.agTab || 'general';
+  const nRef = typeof refsToHandle === 'function' ? refsToHandle().length : 0;
+  const tabs = (nS, nC) => `<div class="seg" role="group" aria-label="Agenda"><button data-act="agTab" data-k="general" aria-pressed="${tab === 'general'}">Agenda general</button><button data-act="agTab" data-k="quirurgica" aria-pressed="${tab === 'quirurgica'}">Agenda quirúrgica${nS === null ? '' : ` (${nS})`}</button><button data-act="agTab" data-k="consultas" aria-pressed="${tab === 'consultas'}">Agenda de consultas${nC === null ? '' : ` (${nC})`}</button><button data-act="agTab" data-k="directorio" aria-pressed="${tab === 'directorio'}">Directorio de médicos${nRef ? ` (${nRef} por agendar)` : ''}</button></div>`;
+  // Directorio: no depende del día, así que no lleva la navegación por fechas
+  if (tab === 'directorio') return header('Agenda', 'Directorio de médicos: a quién derivar y cuándo atiende cada uno') + `<div style="margin-bottom:14px">${tabs(null, null)}</div>` + directoryView();
   const list = S.appts.filter(a => a.date === day && (!agendaOwn() || a.doc === myDoc() || a.anest === myDoc()));
   const nS = list.filter(a => a.kind === 'cirugia' && isActive(a)).length, nC = list.filter(a => a.kind !== 'cirugia' && isActive(a)).length;
   const body = tab === 'quirurgica' ? surgeryView(list, day) : tab === 'consultas' ? agendaConsultView(list, day) : generalView(list);
   return header('Agenda', fday(day).replace(/^./, c => c.toUpperCase()),
     `<button class="btn" data-act="agendaShift" data-n="-1" aria-label="Día anterior">‹</button><button class="btn" data-act="agendaShift" data-n="0">Hoy</button><button class="btn" data-act="agendaShift" data-n="1" aria-label="Día siguiente">›</button><input class="input" type="date" style="width:auto" value="${day}" data-ch="agendaDate" aria-label="Ir a fecha"><button class="btn primary" data-act="newAppt">${tab === 'quirurgica' ? 'Programar cirugía' : 'Nueva cita'}</button>`) +
   dutyStrip(day) +
-  `<div class="between" style="margin-bottom:14px"><div class="seg" role="group" aria-label="Agenda"><button data-act="agTab" data-k="general" aria-pressed="${tab === 'general'}">Agenda general</button><button data-act="agTab" data-k="quirurgica" aria-pressed="${tab === 'quirurgica'}">Agenda quirúrgica (${nS})</button><button data-act="agTab" data-k="consultas" aria-pressed="${tab === 'consultas'}">Agenda de consultas (${nC})</button></div>
+  `<div class="between" style="margin-bottom:14px">${tabs(nS, nC)}
     <div class="legend">${Object.entries(ESTADOS).map(([k, v]) => `<span class="pill ${v.k}">${v.t} ${list.filter(a => a.status === k).length}</span>`).join('')}</div></div>
   ${body}`;
 };
@@ -171,7 +175,7 @@ const apDocs = () => agendaOwn() ? consultDocs().filter(m => m.id === myDoc()) :
 ACTIONS.newAppt = el => {
   if (!can('agenda.programar')) { toast('Las citas las programa recepción'); return; }
   const ds = el?.dataset || {};
-  UI.ap = { kind: ds.kind || (UI.agTab === 'quirurgica' ? 'cirugia' : 'consulta'), pid: S.patients[0]?.id || '', date: UI.agendaDay || dAt(0), time: ds.time || (UI.agTab === 'quirurgica' ? '07:00' : '10:00'), doc: agendaOwn() ? myDoc() : ds.doc || consultDocs()[0].id, svc: 'v1', hours: 2, anest: anesthDocs()[0]?.id || '', proc: '' };
+  UI.ap = { ref: ds.ref || null, kind: ds.kind || (UI.agTab === 'quirurgica' ? 'cirugia' : 'consulta'), pid: ds.pid || S.patients[0]?.id || '', date: UI.agendaDay || dAt(0), time: ds.time || (UI.agTab === 'quirurgica' ? '07:00' : '10:00'), doc: agendaOwn() ? myDoc() : ds.doc || consultDocs()[0].id, svc: 'v1', hours: 2, anest: anesthDocs()[0]?.id || '', proc: '' };
   openSheet(UI.ap.kind === 'cirugia' ? 'Programar cirugía' : 'Nueva cita', apptForm(UI.ap), `<button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="saveAppt">Agendar</button>`);
 };
 const apKeep = () => { const f = UI.ap; f.pid = val('ap-p'); f.date = val('ap-date'); f.time = val('ap-time'); f.doc = val('ap-d'); if (f.kind === 'cirugia') { f.proc = val('ap-proc'); f.hours = +val('ap-h'); f.anest = val('ap-an'); f.kit = val('ap-kit'); } else f.svc = val('ap-s'); };
@@ -204,7 +208,10 @@ ACTIONS.saveAppt = () => {
     ? { id: uid('a'), kind: 'cirugia', pid: f.pid, doc: f.doc, svc: 'v5', proc: f.proc.trim(), hours: f.hours, anest: f.anest, kit: f.kit || null, date: f.date, time: f.time, status: 'reservada', inv: null }
     : { id: uid('a'), kind: 'consulta', pid: f.pid, doc: f.doc, svc: f.svc, date: f.date, time: f.time, status: 'reservada', inv: null };
   if (apptConflict(a, msg)) return;
-  S.appts.push(a); log(a.kind === 'cirugia' ? 'Cirugía programada' : 'Cita agendada', `${pat(a.pid).name} · ${a.date} ${a.time}${a.proc ? ' · ' + a.proc : ''}`); save();
+  // Cita que viene de una derivación: la derivación queda como agendada
+  const ref = f.ref && (S.referrals || []).find(r => r.id === f.ref);
+  if (ref) { a.ref = ref.id; Object.assign(ref, { status: 'agendada', apptId: a.id, closedAt: nowStamp(), closedBy: actor() }); }
+  S.appts.push(a); log(a.kind === 'cirugia' ? 'Cirugía programada' : 'Cita agendada', `${pat(a.pid).name} · ${a.date} ${a.time}${a.proc ? ' · ' + a.proc : ''}${ref ? ' · derivación ' + ref.num : ''}`); save();
   UI.agendaDay = a.date; UI.agTab = a.kind === 'cirugia' ? 'quirurgica' : 'consultas'; closeSheet(); go('agenda'); toast(a.kind === 'cirugia' ? 'Cirugía programada' : 'Cita agendada');
 };
 

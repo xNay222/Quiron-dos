@@ -48,7 +48,8 @@ const TOURS = {
   recepcion: [
     { id: 'rec-general', title: 'Primeros pasos', desc: 'Su menú y la agenda.', steps: [MENU,
       { go: 'agenda', el: '.main .head .actions', t: 'Moverse por los días', d: 'Use ‹ Hoy › o el calendario para ver otro día.' },
-      { go: 'agenda', setup: () => { UI.agTab = 'general'; }, el: '.main .seg', t: 'Tres agendas', d: 'General (todo el día), quirúrgica (quirófano) y de consultas (una columna por médico, con su horario).' },
+      { go: 'agenda', setup: () => { UI.agTab = 'general'; }, el: '.main .seg', t: 'Agendas y directorio', d: 'General (todo el día), quirúrgica (quirófano), de consultas (una columna por médico, con su horario) y el directorio de médicos.' },
+      { go: 'agenda', setup: () => { UI.agTab = 'directorio'; }, el: '.main .list', t: 'Derivaciones por agendar', d: 'Cuando un médico deriva un paciente a un colega, aparece arriba del directorio: toque "Agendar cita" y el formulario sale con el paciente y el médico ya elegidos.' },
       ACCOUNT, BACK_HERE()] },
     { id: 'rec-cita', title: 'Agendar una cita', desc: 'Consulta con un médico, dentro de su horario.', steps: [
       { go: 'agenda', setup: () => { UI.agTab = 'consultas'; }, el: '.main .head [data-act="newAppt"]', t: 'Nueva cita', d: 'Elija paciente, médico, servicio, fecha y hora. El sistema avisa si el médico no atiende a esa hora o si hay un choque.' },
@@ -66,6 +67,7 @@ const TOURS = {
     { id: 'med-general', title: 'Primeros pasos', desc: 'Su consulta y su menú.', steps: [MENU,
       { go: 'consultorio', el: '.main .grid.g4', t: 'Mi consulta', d: 'Sus pacientes de hoy, resultados nuevos de exámenes e historias sin firmar.' },
       { go: 'agenda', el: '.main .seg', t: 'Su agenda', d: 'Solo ve sus citas y cirugías, y puede programarlas a su nombre.' },
+      { go: 'agenda', setup: () => { UI.agTab = 'directorio'; }, el: '.main .list', t: 'Directorio de médicos', d: 'Todos los médicos de la clínica con su especialidad y horario. Con "Derivar paciente" le envía un paciente a un colega: sale la hoja de referencia con su firma y la derivación llega para agendarle la cita.' },
       ACCOUNT, BACK_HERE()] },
     { id: 'med-consulta', title: 'Hacer una consulta', desc: 'Del paciente a la consulta firmada, con sus documentos.', steps: [
       { go: 'consultas', el: '.main [data-act="ccNewMenu"]', t: 'Nueva consulta', d: 'Empiece aquí. Busque al paciente o regístrelo, y elija consulta rápida (control o seguimiento) o completa.' },

@@ -308,7 +308,7 @@ function credsCard(u) {
   return `<div class="card" style="display:grid;gap:10px"><b class="small">Datos profesionales ${req ? '<span class="pill warn">Obligatorios para firmar</span>' : '<span class="pill">Opcional</span>'}</b>
     ${req && credsMissing(u) ? '<div class="banner warn">Registre su N.º MPPS y su Colegio de Médicos: sin ellos no puede firmar consultas, evoluciones ni récipes.</div>' : ''}
     ${u.role === 'admin' ? `<div class="field"><label for="mc-doc">Su ficha de médico <span class="small muted">(si también atiende pacientes)</span></label><select class="input" id="mc-doc">
-      <option value="">No atiendo pacientes</option>${(S.doctors || []).filter(d => !d.resident && !(S.users || []).some(x => x.id !== u.id && x.doc === d.id)).map(d => `<option value="${d.id}" ${u.doc === d.id ? 'selected' : ''}>${esc(d.name)}${d.esp ? ' · ' + esc(d.esp) : ''}</option>`).join('')}</select>
+      <option value="">No atiendo pacientes</option>${(S.doctors || []).filter(d => !d.resident && (d.active !== false || d.id === u.doc) && !(S.users || []).some(x => x.id !== u.id && x.doc === d.id)).map(d => `<option value="${d.id}" ${u.doc === d.id ? 'selected' : ''}>${esc(d.name)}${d.esp ? ' · ' + esc(d.esp) : ''}</option>`).join('')}</select>
       <div class="small muted" style="margin-top:4px">Con su ficha vinculada puede escribir y firmar evoluciones y consultas con su nombre.</div></div>` : ''}
     <div class="form">
       <div class="field"><label for="mc-ci">Cédula</label><input class="input" id="mc-ci" value="${esc(c.ci)}" placeholder="Ej. V-12.345.678"></div>

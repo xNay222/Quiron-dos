@@ -81,7 +81,7 @@ function navCount(k) {
   if (k === 'quirofano') return S.appts.filter(a => a.kind === 'cirugia' && a.date === dAt(0) && isActive(a) && !a.done && (!mineOnly || a.doc === myDoc() || a.anest === myDoc())).length;
   if ((k === 'hospitalizacion' || k === 'emergencias') && role() === 'enfermeria') return nurseDue((S.admissions || []).filter(a => a.status === 'ingresado' && AREAS[admArea(a)].route === k).map(a => a.id)).length;
   if (k === 'hospitalizacion' || k === 'emergencias') return (S.admissions || []).filter(a => a.status === 'ingresado' && AREAS[admArea(a)].route === k && (!mineOnly || a.doc === myDoc())).length;
-  if (k === 'agenda') return S.appts.filter(a => a.date === dAt(0) && ['en_espera'].includes(a.status) && (!myDoc() || a.doc === myDoc())).length;
+  if (k === 'agenda') return S.appts.filter(a => a.date === dAt(0) && ['en_espera'].includes(a.status) && (!myDoc() || a.doc === myDoc())).length + (typeof refsToHandle === 'function' ? refsToHandle().length : 0);
   if (k === 'atencion') return S.budgets.filter(b => budStatus(b) === 'abierto').length;
   if (k === 'historias') return role() === 'admin' ? S.records.filter(r => r.status === 'pendiente').length : 0;
   if (k === 'examenes') return typeof examBadge === 'function' ? examBadge() : 0;
