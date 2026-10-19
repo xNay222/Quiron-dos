@@ -44,7 +44,7 @@ function acctResumen() {
       <div class="kpi"><div class="lab">Salidas</div><div class="val" style="font-size:22px;color:var(--bad)">${fmt(t[cur].out, cur)}</div></div>
       <div class="kpi"><div class="lab">Saldo</div><div class="val" style="font-size:22px">${net(t[cur].net, cur)}</div></div></div>
     ${cur === 'VES' ? `<div class="small muted" style="margin-top:8px">Equivale a ≈ ${fmt(all.filter(m => m.cur === 'VES').reduce((a, m) => a + (m.type === 'entrada' ? 1 : -1) * usdOf(m), 0))} a la tasa de cada día · hoy ${fmt(t.VES.net / S.rate)} a tasa BCV ${S.rate.toLocaleString('es-VE', { maximumFractionDigits: 4 })}</div>` : ''}</div>`;
-  return `<div class="small muted" style="margin:-6px 0 10px">Entradas y salidas del ${fdate(from)}${from !== to ? ' al ' + fdate(to) : ''}</div>
+  return `<div class="sec" style="margin:0 0 22px">${walletCards()}</div><div class="small muted" style="margin:-6px 0 10px">Entradas y salidas del ${fdate(from)}${from !== to ? ' al ' + fdate(to) : ''}</div>
   <div class="seg" role="group" aria-label="Período" style="margin-bottom:16px">${ACCT_PERIODS.map(([k, l]) => `<button data-act="acP" data-k="${k}" aria-pressed="${per === k}">${l}</button>`).join('')}</div>
   <div class="grid g2">${curCard('USD', 'Dólares')}${curCard('VES', 'Bolívares')}</div>
   <div class="grid g4 sec">${kpi('Entradas totales', fmt(t.usdIn), 'USD + Bs convertidos')}${kpi('Salidas totales', fmt(t.usdOut), 'USD + Bs convertidos')}${kpi('Resultado', fmt(t.usdNet), t.usdIn ? `margen ${Math.round(t.usdNet / t.usdIn * 100)}%` : '', t.usdNet < 0 ? 'alert' : '')}${kpi('Movimientos', all.length, `${all.filter(m => m.auto && m.auto !== '').length} automáticos`)}</div>
@@ -74,6 +74,7 @@ function acctForm() {
     <div class="field full"><label for="ac-con">Concepto</label><input class="input" id="ac-con" value="${esc(f.concept)}" placeholder="${f.type === 'entrada' ? 'Ej. Subarriendo del laboratorio, octubre' : 'Ej. Pago de Corpoelec'}"></div>
     <div class="field"><label>Moneda</label><div class="seg" role="group" aria-label="Moneda"><button data-act="acFCur" data-k="USD" aria-pressed="${f.cur === 'USD'}">Dólares</button><button data-act="acFCur" data-k="VES" aria-pressed="${f.cur === 'VES'}">Bolívares</button></div></div>
     <div class="field"><label for="ac-met">Método</label><select class="input" id="ac-met">${ACCT_METHODS[f.cur].map(m => `<option>${m}</option>`).join('')}</select></div>
+    <div class="field"><label for="ac-fund">Fondo</label><select class="input" id="ac-fund"><option value="">Según el método</option>${FUNDS.filter(x => x.cur === f.cur || (f.cur === 'USD' && x.cur === 'USDT')).map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select></div>
     <div class="field"><label for="ac-amt">Monto en ${f.cur === 'USD' ? 'dólares' : 'bolívares'}</label><input class="input" type="number" min="0" step="0.01" id="ac-amt" value="${f.amount || ''}" data-in="acAmt"></div>
     <div class="field"><label for="ac-ref">Referencia (opcional)</label><input class="input" id="ac-ref" placeholder="Nº de operación o factura"></div>
     <div class="field"><label for="ac-rate">Tasa BCV del día de la operación</label><input class="input" type="number" min="0" step="0.01" id="ac-rate" value="${f.rate || S.rate}" data-in="acAmt"></div>
@@ -94,7 +95,7 @@ ACTIONS.acctSave = () => {
   if (!f.concept.trim()) { msg.textContent = 'Escribe el concepto.'; return; }
   if (!(f.amount > 0)) { msg.textContent = 'El monto debe ser mayor que cero.'; return; }
   if (!(f.rate > 0)) { msg.textContent = 'Indique la tasa BCV del día de la operación.'; return; }
-  addLedger({ date: f.date || dAt(0), type: f.type, cat: f.cat, concept: f.concept.trim(), amount: f.amount, cur: f.cur, method: val('ac-met'), ref: val('ac-ref').trim(), rate: f.rate });
+  addLedger({ date: f.date || dAt(0), type: f.type, cat: f.cat, concept: f.concept.trim(), amount: f.amount, cur: f.cur, method: val('ac-met'), ref: val('ac-ref').trim(), rate: f.rate, fund: val('ac-fund') });
   closeSheet(); render(); toast(`${f.type === 'entrada' ? 'Entrada' : 'Salida'} registrada · ${fmt(f.amount, f.cur)}`);
 };
 ACTIONS.acctVoid = el => { const g = S.ledger.find(x => x.id === el.dataset.id); g.void = true; log('Movimiento anulado', `${g.concept} · ${fmt(g.amount, g.cur)}`); save(); closeSheet(); render(); toast('Movimiento anulado'); };
@@ -107,7 +108,7 @@ ACTIONS.acctDownload = async () => {
 
 // ---------- Contabilidad: Resumen · Por confirmar · Recurrentes ----------
 VIEWS.contabilidad = () => {
-  const pend = navCount('contabilidad'); const openInv = S.invoices.filter(i => i.status !== 'pagada').length;
+  const pend = navCount('contabilidad'); const openInv = S.invoices.filter(invOpen).length;
   const tabs = [['resumen', 'Resumen'], ['confirmar', `Por confirmar${pend ? ` (${pend})` : ''}`], ['facturas', `Cobros${openInv ? ` (${openInv} pendientes)` : ''}`], ['recurrentes', 'Recurrentes']];
   const tab = tabs.some(t => t[0] === UI.acTab) ? UI.acTab : (pend ? 'confirmar' : 'resumen');
   const actions = tab === 'recurrentes' ? `<button class="btn primary" data-act="recEdit">+ Nuevo recurrente</button>`
@@ -123,7 +124,7 @@ ACTIONS.acTab = el => { UI.acTab = el.dataset.k; render(); };
 function confirmView() {
   const pend = S.orders.filter(o => o.status === 'por_aprobar');
   const recent = S.orders.filter(o => o.payment || o.status === 'rechazada').slice(-6).reverse();
-  const card = o => `<div class="card"><div class="between"><div><b>${o.num} · ${esc(sup(o.sup).name)}</b><div class="small muted">Pedida por ${esc(o.by || 'Almacén')} el ${fdate(o.date)}${o.note ? ' · ' + esc(o.note) : ''}</div></div><div style="font-size:20px;font-weight:600">${fmt(ocTotal(o))}</div></div>
+  const card = o => `<div class="card"><div class="between"><div><b>${esc(o.num)} · ${esc(sup(o.sup).name)}</b><div class="small muted">Pedida por ${esc(o.by || 'Almacén')} el ${fdate(o.date)}${o.note ? ' · ' + esc(o.note) : ''}</div></div><div style="font-size:20px;font-weight:600">${fmt(ocTotal(o))}</div></div>
     <div class="small" style="margin:8px 0">${o.lines.map(l => `${esc(prod(l.pid).name)} ×${l.qty}`).join(' · ')}</div>
     <div class="hstack" style="justify-content:flex-end"><button class="btn sm" data-act="openOrder" data-id="${o.id}">Ver detalle</button><button class="btn sm danger" data-act="ocReject" data-id="${o.id}">Rechazar</button><button class="btn sm primary" data-act="ocApprove" data-id="${o.id}">Confirmar y registrar pago</button></div></div>`;
   const bSent = S.budgets.filter(b => ['enviado', 'aceptado'].includes(b.status));
@@ -131,7 +132,7 @@ function confirmView() {
   return `${duesSection()}<div class="sec"><h3>Presupuestos enviados a Contabilidad</h3><div class="small muted" style="margin-bottom:10px">Registre el monto recibido o indique que no se pagó / fue rechazado. La factura fiscal es opcional y puede emitirse desde la cuenta.</div><div class="stack">${bSent.map(bCard).join('') || '<div class="card empty">No hay presupuestos esperando.</div>'}</div></div>
     <div class="sec"><h3>Órdenes de compra</h3><div class="small muted" style="margin:-4px 0 10px">El almacén crea las órdenes de compra. Al confirmarlas se registra el pago como salida y el almacén ya puede recibir la mercancía.</div>
     <div class="stack">${pend.map(card).join('') || '<div class="card empty">No hay órdenes de compra esperando confirmación.</div>'}</div></div>
-    ${recent.length ? `<div class="sec"><h3>Últimas confirmadas o rechazadas</h3><div class="list">${recent.map(o => `<button class="row" data-act="openOrder" data-id="${o.id}"><div class="grow"><div class="t">${o.num} · ${esc(sup(o.sup).name)}</div><div class="s">${o.payment ? `Pagada ${o.payment.at} · ${esc(o.payment.method)} ${fmt(o.payment.amount, o.payment.cur)}` : esc(o.reason || '')}</div></div><span class="pill ${OC_ST[o.status][1]}">${OC_ST[o.status][0]}</span></button>`).join('')}</div></div>` : ''}`;
+    ${recent.length ? `<div class="sec"><h3>Últimas confirmadas o rechazadas</h3><div class="list">${recent.map(o => `<button class="row" data-act="openOrder" data-id="${o.id}"><div class="grow"><div class="t">${esc(o.num)} · ${esc(sup(o.sup).name)}</div><div class="s">${o.payment ? `Pagada ${o.payment.at} · ${esc(o.payment.method)} ${fmt(o.payment.amount, o.payment.cur)}` : esc(o.reason || '')}</div></div><span class="pill ${OC_ST[o.status][1]}">${OC_ST[o.status][0]}</span></button>`).join('')}</div></div>` : ''}`;
 }
 const allMethods = () => [...ACCT_METHODS.USD.map(m => [m, 'USD']), ...ACCT_METHODS.VES.map(m => [m, 'VES'])];
 ACTIONS.ocApprove = el => {

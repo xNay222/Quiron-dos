@@ -24,10 +24,10 @@ window.examFlagPill = e => {
 const examOrigin = e => e.external ? 'Externo · ' + e.external.lab : e.area === 'laboratorio' && e.tests.some(t => labMeta(t)?.source === 'clinica') ? 'Laboratorio de la clínica' : areaName(e.area);
 const areaName = a => a === 'laboratorio' ? 'Laboratorio' : a === 'otro' ? 'Otros exámenes' : 'Rayos X e imagen';
 const fileSrc = f => f.url || `/_blob/${f.id}`;
-const fileLinks = files => (files || []).length ? `<div class="hstack">${files.map(f => f.type?.startsWith('image/') ? `<a href="${fileSrc(f)}" target="_blank" rel="noopener"><img src="${fileSrc(f)}" alt="${esc(f.name)}" style="height:96px;border-radius:8px;border:1px solid var(--line)"></a>` : `<a class="btn sm" href="${fileSrc(f)}" target="_blank" rel="noopener">Abrir ${esc(f.name)}</a>`).join('')}</div>` : '';
+const fileLinks = files => (files || []).length ? `<div class="hstack">${files.map(f => f.type?.startsWith('image/') ? `<a href="${safeUrl(fileSrc(f))}" target="_blank" rel="noopener"><img src="${safeUrl(fileSrc(f))}" alt="${esc(f.name)}" style="height:96px;border-radius:8px;border:1px solid var(--line)"></a>` : `<a class="btn sm" href="${safeUrl(fileSrc(f))}" target="_blank" rel="noopener">Abrir ${esc(f.name)}</a>`).join('')}</div>` : '';
 const examRow = (e, mode = 'view') => { const p = pat(e.pid); const me = myDoc();
   return `<button class="row" data-act="openExam" data-id="${e.id}" data-mode="${mode}"><span class="avatar" style="${e.area === 'imagen' ? 'background:var(--warn-soft);color:var(--warn)' : ''}">${e.area === 'imagen' ? 'Rx' : e.area === 'otro' ? 'Ex' : 'Lab'}</span>
-    <div class="grow"><div class="t">${e.num} · ${esc(p.name)} ${e.priority === 'urgente' ? '<span class="pill bad">Urgente</span>' : ''} ${me && e.status === 'listo' && !e.seen ? '<span class="pill info">Nuevo</span>' : ''}</div><div class="s">${esc(e.tests.join(', '))} · ${esc(examOrigin(e))} · ${esc(docName(e.doc))} · ${fdate(e.date)}</div></div>
+    <div class="grow"><div class="t">${esc(e.num)} · ${esc(p.name)} ${e.priority === 'urgente' ? '<span class="pill bad">Urgente</span>' : ''} ${me && e.status === 'listo' && !e.seen ? '<span class="pill info">Nuevo</span>' : ''}</div><div class="s">${esc(e.tests.join(', '))} · ${esc(examOrigin(e))} · ${esc(docName(e.doc))} · ${fdate(e.date)}</div></div>
     <div class="end">${examFlagPill(e)}</div></button>`; };
 const byPriority = (a, b) => (a.priority === 'urgente' ? 0 : 1) - (b.priority === 'urgente' ? 0 : 1) || b.date.localeCompare(a.date);
 
@@ -277,7 +277,7 @@ ACTIONS.exSend = el => persistWork(el.dataset.id, true);
 // Leer con IA la foto del resultado impreso por el equipo del laboratorio
 ACTIONS.exrAI = async btn => {
   const e = S.exams.find(x => x.id === UI.exr.id); const rows = e.results.length ? e.results : blankResults(e.tests, pat(e.pid), e.date); const msg = document.getElementById('exr-msg');
-  const sample = await getCap('sample'); const lim = sample ? await sample.limits().catch(() => null) : null;
+  const sample = await getCap('sample-clin'); const lim = sample ? await sample.limits().catch(() => null) : null;
   if (!lim?.images) { msg.textContent = 'La lectura con IA no está disponible en esta vista.'; return; }
   const imgs = UI.exr.pending.filter(f => f.type.startsWith('image/')).slice(0, lim.images.maxCount);
   btn.disabled = true; msg.textContent = 'Leyendo el resultado…';

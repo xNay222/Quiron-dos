@@ -13,13 +13,13 @@ const fmtCi = d => d ? d.replace(/\B(?=(\d{3})+(?!\d))/g, '.') : 'Sin cédula';
 ACTIONS.syncScanned = async () => {
   let list; try { const r = await fetch('/__historias'); if (!r.ok) throw 0; list = await r.json(); }
   catch (e) { toast('No se encontró la carpeta de historias. Abra el software con serve.ps1 en esta computadora.'); return; }
-  const have = new Set(scannedRecords().map(r => r.file)); let n = 0;
+  const have = new Set(S.records.filter(r => r.file).map(r => r.file)); let n = 0;   // también las ya leídas
   list.forEach(h => { if (have.has(h.rel)) return; n++;
     const m = h.month ? String(h.month).padStart(2, '0') : null; const y = /^\d{4}$/.test(h.year) ? h.year : h.year.slice(0, 4);
     S.records.push({ id: 'hx-' + uid(''), origin: 'histórico', status: 'escaneada', type: 'Historia escaneada', date: `${y}-${m || '01'}-01`,
       year: h.year, period: m ? `${MES[h.month - 1].replace(/^./, c => c.toUpperCase())} ${h.year}` : h.year, procedure: 'Historia escaneada', patient: h.name || 'Sin nombre',
       ci: fmtCi(h.ci), surgeon: '', source: `Archivo ${h.year}${m ? ' · ' + MES[h.month - 1] : ''} · ${h.rel.split('/').pop()}`, file: h.rel, mb: h.mb, files: [] }); });
-  const gone = scannedRecords().filter(r => !list.some(h => h.rel === r.file)).length;
+  const gone = S.records.filter(r => r.file && !list.some(h => h.rel === r.file)).length;
   if (n) { log('Historias escaneadas registradas', `${n} nuevas · ${scannedRecords().length} en total`); save(); }
   render(); toast(n ? `${n} historias escaneadas registradas` : 'No hay historias nuevas en la carpeta');
   if (gone) toast(`${gone} historias registradas ya no están en la carpeta (¿se movieron o renombraron?)`);
@@ -142,7 +142,7 @@ ACTIONS.openRecord = el => {
       <div class="list"><div class="row"><div class="grow"><div class="s">Archivo</div><div class="t">${esc(r.file)}</div></div><span class="small muted">${r.mb} MB</span></div></div>
       ${same.length ? `<div><h3 class="small muted" style="margin:0 0 6px">Otras historias de esta cédula</h3><div class="list">${same.map(x => `<button class="row" data-act="openRecord" data-id="${x.id}"><div class="grow"><div class="t">${esc(x.patient)}</div><div class="s">${esc(x.period)} · ${esc(x.file.split('/').pop())}</div></div></button>`).join('')}</div></div>` : ''}
       <div class="banner">El contenido (diagnóstico, cirugía, cirujano, medicación) todavía no está leído: se cargará con la lectura por IA. Mientras tanto, abra el PDF original.</div>`,
-      `<button class="btn" data-act="close">Cerrar</button><a class="btn primary" href="${pdfUrl(r)}" target="_blank" rel="noopener">Abrir historia (PDF)</a>`, { wide: true });
+      `<button class="btn" data-act="close">Cerrar</button><a class="btn primary" href="${safeUrl(pdfUrl(r))}" target="_blank" rel="noopener">Abrir historia (PDF)</a>`, { wide: true });
     return;
   }
   const f = (k, v) => `<div class="row"><div class="grow"><div class="s">${k}</div><div class="t">${v ?? '<span class="muted">No consta</span>'}</div></div></div>`;
@@ -151,9 +151,9 @@ ACTIONS.openRecord = el => {
     <div class="grid g2"><div class="list">${f('Tipo', esc(r.type))}${f('Especialidad', r.specialty ? esc(r.specialty) : null)}${f(r.type === 'Cirugía' ? 'Cirujano' : 'Médico', r.surgeon ? esc(r.surgeon) : null)}${r.type === 'Cirugía' ? f('Anestesiólogo', r.anesth ? esc(r.anesth) : null) : ''}${(r.dx || []).length ? f('Diagnósticos', r.dx.map(esc).join('<br>')) : ''}</div>
     <div class="list">${f('Duración', r.durationMin != null ? r.durationMin + ' min' : null)}${f('Complicaciones', r.complications ? esc(r.complications) : 'Ninguna registrada')}${f('Origen', r.origin === 'nativo' ? 'Registrada en el sistema' : 'Historia en papel digitalizada')}</div></div>
     ${(r.prescribed || []).length ? `<div><h3 class="small muted" style="margin:0 0 6px">Medicación indicada (récipe)</h3><div class="small">${r.prescribed.map(m => esc(m.raw || m.name)).join(' · ')}</div></div>` : ''}
-    <div><h3 class="small muted" style="margin:0 0 6px">${r.origin === 'nativo' ? 'Medicación entregada por almacén (sin devoluciones)' : 'Medicamentos'}</h3>${Array.isArray(r.meds) ? `<div class="tablewrap"><table><thead><tr><th>Escrito en la historia</th><th>Normalizado</th><th>Vía</th></tr></thead><tbody>${r.meds.map(m => `<tr><td>${esc(m.raw)}</td><td>${esc(m.name)}</td><td>${esc(m.route || '—')}</td></tr>`).join('') || '<tr><td colspan="3" class="empty">Sin medicamentos.</td></tr>'}</tbody></table></div>` : '<div class="muted small">La historia no registra medicación (no cuenta en ese análisis).</div>'}</div>
+    <div><h3 class="small muted" style="margin:0 0 6px">${r.origin === 'nativo' ? 'Medicación entregada por almacén (sin devoluciones)' : 'Medicamentos'}</h3>${!Array.isArray(r.meds) && r.file ? '<div class="muted small">La medicación de esta historia todavía no se ha leído: consulte el PDF original.</div>' : Array.isArray(r.meds) ? `<div class="tablewrap"><table><thead><tr><th>Escrito en la historia</th><th>Normalizado</th><th>Vía</th></tr></thead><tbody>${r.meds.map(m => `<tr><td>${esc(m.raw)}</td><td>${esc(m.name)}</td><td>${esc(m.route || '—')}</td></tr>`).join('') || '<tr><td colspan="3" class="empty">Sin medicamentos.</td></tr>'}</tbody></table></div>` : '<div class="muted small">La historia no registra medicación (no cuenta en ese análisis).</div>'}</div>
     ${r.files?.length ? `<div class="hstack">${r.files.map(id => `<img src="/_blob/${id}" alt="Página escaneada" style="height:120px;border-radius:8px;border:1px solid var(--line)">`).join('')}</div>` : ''}`,
-    r.noteId ? `<button class="btn primary" data-act="openNote" data-id="${r.noteId}">Ver documento original</button>` : r.origin !== 'nativo' && can('*') ? `<button class="btn ${r.status === 'pendiente' ? 'primary' : ''}" data-act="editRecord" data-id="${r.id}">${r.status === 'pendiente' ? 'Revisar y validar' : 'Corregir'}</button>` : '', { wide: true });
+    (r.file ? `<a class="btn" href="${safeUrl(pdfUrl(r))}" target="_blank" rel="noopener">Abrir historia (PDF)</a>` : '') + (r.noteId ? `<button class="btn primary" data-act="openNote" data-id="${r.noteId}">Ver documento original</button>` : r.origin !== 'nativo' && can('*') ? `<button class="btn ${r.status === 'pendiente' ? 'primary' : ''}" data-act="editRecord" data-id="${r.id}">${r.status === 'pendiente' ? 'Revisar y validar' : 'Corregir'}</button>` : ''), { wide: true });
 };
 
 // ---------- Formulario de revisión (lo usa la carga con IA y la corrección) ----------
@@ -204,7 +204,7 @@ ACTIONS.saveRecord = async el => {
 
 // ---------- Subir historia en papel ----------
 ACTIONS.uploadHistory = async () => {
-  const sample = await getCap('sample'); const lim = sample ? await sample.limits().catch(() => null) : null; const max = lim?.images?.maxCount || 0;
+  const sample = await getCap('sample-clin'); const lim = sample ? await sample.limits().catch(() => null) : null; const max = lim?.images?.maxCount || 0;
   UI.recEdit = { id: null, files: [], pending: [] };
   openSheet('Subir historia en papel', `<p class="small muted" style="margin:0">Toma una foto por página de una misma historia${max ? ` (hasta ${max})` : ''}. La IA lee los datos y tú los revisas antes de guardarlos. Las fotos originales se conservan.</p>
     ${max ? `<label class="btn" style="justify-self:start" for="hist-files">Elegir fotos o tomar foto</label><input id="hist-files" type="file" accept="${lim.images.mediaTypes.join(',')}" multiple hidden data-ch="histFiles">` : '<div class="banner warn">La lectura con IA no está disponible en esta vista. Puedes cargar la historia a mano.</div>'}
@@ -228,7 +228,7 @@ Responde solo con un objeto JSON con esta forma:
  "confianza": {"paciente": 0-100, "cedula": 0-100, "fecha": 0-100, "procedimiento": 0-100, "cirujano": 0-100, "anestesiologo": 0-100, "duracion_min": 0-100}}
 "nombre_normalizado" = principio activo y concentración en español (por ejemplo "Novalgina 1 g" → "Metamizol 1 g"; "Zofran 4mg" → "Ondansetrón 4 mg"). Si la unidad no se lee, no la supongas.`;
 ACTIONS.readHistory = async el => {
-  const sample = await getCap('sample'); const msg = document.getElementById('hist-msg'); el.disabled = true; msg.textContent = 'Leyendo la historia… puede tardar hasta un minuto.';
+  const sample = await getCap('sample-clin'); const msg = document.getElementById('hist-msg'); el.disabled = true; msg.textContent = 'Leyendo la historia… puede tardar hasta un minuto.';
   try {
     const j = await sample.json(EXTRACT_PROMPT, { images: UI.recEdit.pending });
     const c = j.confianza || {}; const low = Object.entries({ patient: 'paciente', ci: 'cedula', date: 'fecha', procedure: 'procedimiento', surgeon: 'cirujano', anesth: 'anestesiologo', durationMin: 'duracion_min' }).filter(([, k]) => j[k] != null && (c[k] ?? 0) < 80 || j[k] == null).map(([f]) => f);
@@ -274,7 +274,7 @@ ACTIONS.iaAsk = async () => {
   const qEl = document.getElementById('ia-q'); const q = qEl.value.trim(); const out = document.getElementById('ia-out'); const btn = document.getElementById('ia-btn');
   if (iaCtl) { iaCtl.abort(); return; }
   if (!q) { qEl.focus(); return; }
-  const sample = await getCap('sample');
+  const sample = await getCap('sample-clin');
   if (!sample) { out.innerHTML = '<span class="muted">La IA no está disponible en esta vista. El gráfico de la derecha sí se calcula con todos los registros.</span>'; return; }
   const lim = await sample.limits().catch(() => null);
   const prompt = [{ role: 'user', content: IA_RULES + (lim?.tools ? '' : '\n\nResumen de datos (no hay herramienta disponible):\n' + iaDataPack()) + `\n\nHoy es ${dAt(0)}.\n\nPregunta: ${q}` }];

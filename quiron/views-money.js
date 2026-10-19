@@ -1,6 +1,6 @@
 // Cobros (con o sin factura fiscal), Presupuestos (lista) y ajustes. El editor de presupuestos está en views-budget.js.
 
-const INV_ST = { pendiente: ['Pendiente', 'warn'], parcial: ['Abono parcial', 'info'], pagada: ['Pagada', 'good'] };
+const INV_ST = { pendiente: ['Pendiente', 'warn'], parcial: ['Abono parcial', 'info'], pagada: ['Pagada', 'good'], exonerada: ['Exonerada', 'info'] };
 window.invStatusPill = i => `<span class="pill ${INV_ST[i.status][1]}">${INV_ST[i.status][0]}</span>`;
 
 // ---------- Nueva atención o presupuesto (una sola pantalla) ----------
@@ -89,7 +89,7 @@ ACTIONS.saveBudget = async el => {
 // ---------- Cobro ----------
 function openPay(invId) {
   const inv = byId(S.invoices, invId); UI.pay = { inv: invId, method: UI.pay?.method || 'usd', igtf: false };
-  openSheet(`Cobrar ${inv.num}`, payBody(), `<span class="note" id="pay-msg"></span><button class="btn" data-act="close">Más tarde</button><button class="btn primary" data-act="savePay">Registrar cobro</button>`);
+  openSheet(`Cobrar ${inv.num}`, payBody(), `<span class="note" id="pay-msg"></span><button class="btn" data-act="close">Más tarde</button>${can('*') && !isFiscal(inv) ? `<button class="btn" data-act="exonAsk" data-id="${inv.id}">Exonerar gastos</button>` : ''}<button class="btn primary" data-act="savePay">Registrar cobro</button>`);
   render();
 }
 window.openPay = openPay;
@@ -140,7 +140,7 @@ VIEWS.atencion = () => {
   const count = k => S.budgets.filter(b => { const st = budStatus(b); return st === k || (k === 'otros' && ['rechazado', 'vencido'].includes(st)); }).length;
   const sum = k => S.budgets.filter(b => budStatus(b) === k).reduce((a, b) => a + budgetTotals(b).total, 0);
   const list = S.budgets.filter(inTab).map(b => `<button class="row" data-act="openBudget" data-id="${b.id}"><span class="avatar">${initials(pat(b.pid).name)}</span>
-    <div class="grow"><div class="t">${b.num} · ${esc(pat(b.pid).name)}</div><div class="s">${fdate(b.date)}${b.proc ? ' · ' + esc(b.proc) : ''} · ${esc(med(b.doc)?.name || '')}</div></div>
+    <div class="grow"><div class="t">${esc(b.num)} · ${esc(pat(b.pid).name)}</div><div class="s">${fdate(b.date)}${b.proc ? ' · ' + esc(b.proc) : ''} · ${esc(med(b.doc)?.name || '')}</div></div>
     <div class="end"><div>${fmt(budgetTotals(b).total)}</div>${budPill(b)}</div></button>`).join('') || '<div class="empty">No hay presupuestos en esta sección.</div>';
   return header('Presupuestos', 'Quirúrgicos, de emergencia y de procedimientos. Se arman desde un paquete y se envían directamente a Contabilidad para registrar el pago o rechazo', `<button class="btn primary" data-act="newAttention" data-budget="1">+ Nuevo presupuesto</button>`) +
   `<div class="grid g4">${kpi('Por enviar', count('abierto'), fmt(sum('abierto')))}${kpi('En Contabilidad', count('enviado'), fmt(sum('enviado')))}${kpi('Pago parcial', count('parcial'), fmt(sum('parcial')))}${kpi('Pagos recibidos este mes', S.budgets.filter(b => budStatus(b) === 'pagado' && (byId(S.invoices, b.inv)?.date || '').slice(0, 7) === dAt(0).slice(0, 7)).length)}</div>
@@ -155,25 +155,35 @@ function invoicesView() {
   const f = UI.invF || 'abiertas';
   const month = dAt(0).slice(0, 7); const monthInv = S.invoices.filter(i => i.date.slice(0, 7) === month);
   const billed = monthInv.reduce((a, i) => a + invTotals(i).total, 0); const cost = monthInv.reduce((a, i) => a + i.cost, 0);
-  const billedBs = monthInv.reduce((a, i) => a + invTotals(i).total * invRate(i), 0); const open = S.invoices.filter(i => i.status !== 'pagada');
-  const list = S.invoices.filter(i => f === 'todas' || (f === 'abiertas' ? i.status !== 'pagada' : f === 'pagadas' ? i.status === 'pagada' : f === 'fiscal' ? isFiscal(i) : !isFiscal(i))).map(i => `<button class="row" data-act="openInvoice" data-id="${i.id}"><span class="avatar">${initials(pat(i.pid).name)}</span>
-    <div class="grow"><div class="t">${i.num} · ${esc(pat(i.pid).name)}</div><div class="s">${fdate(i.date)} · ${esc(i.items.map(x => x.name).join(', '))}</div></div>
+  const billedBs = monthInv.reduce((a, i) => a + invTotals(i).total * invRate(i), 0); const open = S.invoices.filter(invOpen);
+  const exonMonth = monthInv.filter(i => i.status === 'exonerada');
+  const list = S.invoices.filter(i => f === 'todas' || (f === 'abiertas' ? invOpen(i) : f === 'pagadas' ? i.status === 'pagada' : f === 'exoneradas' ? i.status === 'exonerada' : f === 'fiscal' ? isFiscal(i) : !isFiscal(i))).map(i => `<button class="row" data-act="openInvoice" data-id="${i.id}"><span class="avatar">${initials(pat(i.pid).name)}</span>
+    <div class="grow"><div class="t">${esc(i.num)} · ${esc(pat(i.pid).name)}</div><div class="s">${fdate(i.date)} · ${esc(i.items.map(x => x.name).join(', '))}</div></div>
     <div class="end"><div>${bsOf(invTotals(i).total, i)}</div><div class="hstack">${isFiscal(i) ? '<span class="pill info">Factura fiscal</span>' : '<span class="pill">Sin factura</span>'}${invStatusPill(i)}</div></div></button>`).join('') || '<div class="empty">No hay cobros en este filtro.</div>';
-  return `<div class="grid g3">${kpi('Registrado este mes', fmt(billedBs, 'VES'), `${monthInv.length} cuentas · ${monthInv.filter(isFiscal).length} con factura fiscal · ${fmt(billed)}`)}${kpi('Costo de insumos', fmt(cost), billed ? `margen ${Math.round((billed - cost) / billed * 100)}%` : '')}${kpi('Por cobrar', bsSum(open, invDue), `${open.length} abiertas · ${fmt(open.reduce((a, i) => a + invDue(i), 0))}`)}</div>
-  <div class="seg sec" role="group" aria-label="Filtro" style="margin-bottom:12px">${[['abiertas', 'Por cobrar'], ['pagadas', 'Pagadas'], ['fiscal', 'Con factura fiscal'], ['nofiscal', 'Sin factura'], ['todas', 'Todas']].map(([k, t]) => `<button data-act="invF" data-k="${k}" aria-pressed="${f === k}">${t}</button>`).join('')}</div>
+  return `<div class="grid g3">${kpi('Registrado este mes', fmt(billedBs, 'VES'), `${monthInv.length} cuentas · ${monthInv.filter(isFiscal).length} con factura fiscal · ${fmt(billed)}`)}${kpi('Costo de insumos', fmt(cost), billed ? `margen ${Math.round((billed - cost) / billed * 100)}%` : '')}${kpi('Por cobrar', bsSum(open, invDue), `${open.length} abiertas · ${fmt(open.reduce((a, i) => a + invDue(i), 0))}${exonMonth.length ? ` · exonerado este mes: ${fmt(exonMonth.reduce((a, i) => a + (i.exon?.usd || 0), 0))}` : ''}`)}</div>
+  <div class="seg sec" role="group" aria-label="Filtro" style="margin-bottom:12px">${[['abiertas', 'Por cobrar'], ['pagadas', 'Pagadas'], ...(S.invoices.some(i => i.status === 'exonerada') ? [['exoneradas', 'Exoneradas']] : []),['fiscal', 'Con factura fiscal'], ['nofiscal', 'Sin factura'], ['todas', 'Todas']].map(([k, t]) => `<button data-act="invF" data-k="${k}" aria-pressed="${f === k}">${t}</button>`).join('')}</div>
   <div class="list">${list}</div>`;
 }
 ACTIONS.invF = el => { UI.invF = el.dataset.k; render(); };
 ACTIONS.openInvoice = el => {
   const i = byId(S.invoices, el.dataset.id); const t = invTotals(i); const used = S.moves.filter(m => m.ref === i.num && m.pid);
-  openSheet(`${chargeLabel(i)} ${i.num}`, `${patientBand(i.pid)}${!isFiscal(i) && canSee('contabilidad') ? '<div class="banner"><span>Esta cuenta aún no tiene factura. Si la necesita, toque <b>Generar factura</b>: registra el Nº de control de la hoja, revisa y la imprime sobre la hoja.</span></div>' : ''}<div class="between"><div><b>${esc(pat(i.pid).name)}</b><div class="small muted">${esc(pat(i.pid).ci)} · ${fdate(i.date)}${isFiscal(i) ? ` · Nº control ${esc(i.sheets?.map(h => h.control).join(', ') || i.control || '')}` : ' · sin factura fiscal'}${i.prev ? ` · antes ${i.prev}` : ''}${i.doc ? ' · ' + esc(med(i.doc).name) : ''}</div></div>${invStatusPill(i)}</div>
+  const exo = i.status === 'exonerada' && i.exon;
+  openSheet(`${chargeLabel(i)} ${i.num}`, `${patientBand(i.pid)}${exo ? `<div class="banner"><span><b>Gastos exonerados</b> por ${esc(i.exon.by)} el ${esc(i.exon.at)}: ${bsOf(i.exon.usd, i)} (${fmt(i.exon.usd)})${i.exon.paid ? `; antes se habían cobrado ${fmt(i.exon.paid)}` : ''}. Motivo: ${esc(i.exon.reason)}. Los conceptos se conservan para saber cuánto representó la atención.</span></div>` : ''}${!exo && !isFiscal(i) && canSee('contabilidad') ? '<div class="banner"><span>Esta cuenta aún no tiene factura. Si la necesita, toque <b>Generar factura</b>: registra el Nº de control de la hoja, revisa y la imprime sobre la hoja.</span></div>' : ''}<div class="between"><div><b>${esc(pat(i.pid).name)}</b><div class="small muted">${esc(pat(i.pid).ci)} · ${fdate(i.date)}${isFiscal(i) ? ` · Nº control ${esc(i.sheets?.map(h => h.control).join(', ') || i.control || '')}` : ' · sin factura fiscal'}${i.prev ? ` · antes ${i.prev}` : ''}${i.doc ? ' · ' + esc(med(i.doc).name) : ''}</div></div>${invStatusPill(i)}</div>
     <div class="tablewrap"><table><thead><tr><th>Concepto</th><th class="num">Monto</th></tr></thead><tbody>${i.items.map(x => `<tr><td>${esc(x.name)}${x.adj ? ` <span class="pill warn" title="Solo visible para la clínica">+${x.adj}%</span>` : ''}</td><td class="num">${bsOf(x.price, i)}</td></tr>`).join('')}</tbody>
     <tfoot>${t.disc ? `<tr><td>Cortesía (descuento ${t.disc}%)</td><td class="num">-${bsOf(t.desc, i)}</td></tr>` : ''}${isFiscal(i) ? '<tr><td>IVA</td><td class="num">Exento · servicio médico</td></tr>' : ''}<tr><td>Total</td><td class="num">${bsOf(t.total, i)}</td></tr></tfoot></table></div>
     <div class="small muted">Equivale a ${fmt(t.total)} a tasa ${invRate(i).toLocaleString('es-VE', { maximumFractionDigits: 4 })} Bs/USD${i.rate ? (isFiscal(i) ? ' · tasa fija desde la emisión de la factura' : ' · tasa del cobro') : ' · tasa BCV de hoy (queda fija al saldarse)'}.</div>
     <div class="grid g2"><div><h3 class="small muted" style="margin:0 0 6px">Cobros</h3><div class="list">${i.payments.map(p => `<div class="row"><div class="grow"><div class="t">${metodo(p.method)?.name || p.method}</div><div class="s">${p.at}${p.rate ? ' · tasa ' + p.rate : ''}${p.igtf ? ' · IGTF ' + (p.cur === 'USD' ? fmt(p.igtf) : fmt(p.igtf * (p.rate || invRate(i)), 'VES')) : ''}</div></div><div class="end">${fmt(p.amount, p.cur)}</div></div>`).join('') || '<div class="empty">Sin cobros.</div>'}</div></div>
     <div><h3 class="small muted" style="margin:0 0 6px">Insumos descontados</h3><div class="list">${used.map(m => `<div class="row"><div class="grow"><div class="t">${esc(m.name)} ×${-m.qty}</div><div class="s">Lote ${esc(m.lots)}</div></div><div class="end">${fmt(m.cost)}</div></div>`).join('') || '<div class="empty">Sin insumos.</div>'}</div></div></div>`,
-    `${i.status !== 'pagada' ? `<span class="note">Pendiente ${bsOf(invDue(i), i)}</span>` : ''}<button class="btn" data-act="showDoc" data-kind="invoice" data-id="${i.id}">${isFiscal(i) ? 'Ver e imprimir factura' : i.status === 'pagada' ? 'Ver recibo' : 'Ver nota de cobro'}</button>${isFiscal(i) || !canSee('contabilidad') ? '' : `<button class="btn ${i.status === 'pagada' ? 'primary' : ''}" data-act="emitFiscal" data-id="${i.id}">Generar factura</button>`}${i.status !== 'pagada' ? `<button class="btn primary" data-act="payInvoice" data-id="${i.id}">Cobrar</button>` : ''}`, { wide: true });
+    `${invOpen(i) ? `<span class="note">Pendiente ${bsOf(invDue(i), i)}</span>` : ''}<button class="btn" data-act="showDoc" data-kind="invoice" data-id="${i.id}">${isFiscal(i) ? 'Ver e imprimir factura' : exo ? 'Ver constancia' : i.status === 'pagada' ? 'Ver recibo' : 'Ver nota de cobro'}</button>${isFiscal(i) || exo || !canSee('contabilidad') ? '' : `<button class="btn ${i.status === 'pagada' ? 'primary' : ''}" data-act="emitFiscal" data-id="${i.id}">Generar factura</button>`}${invOpen(i) && !isFiscal(i) && can('*') ? `<button class="btn" data-act="exonAsk" data-id="${i.id}">Exonerar gastos</button>` : ''}${invOpen(i) ? `<button class="btn primary" data-act="payInvoice" data-id="${i.id}">Cobrar</button>` : ''}`, { wide: true });
 };
+// Exonerar una cuenta (solo Administración): se pide el motivo y se confirma
+ACTIONS.exonAsk = el => { const i = byId(S.invoices, el.dataset.id); if (!can('*') || !i) return;
+  openSheet(`Exonerar gastos · ${i.num}`, `${patientBand(i.pid)}<div class="banner warn"><span>El paciente no pagará el saldo de esta cuenta: <b>${bsOf(invDue(i), i)} (${fmt(invDue(i))})</b>. La cuenta conserva todos sus conceptos y montos para saber cuánto representó; no entra dinero en caja ni se emite factura fiscal.</span></div>
+    ${exonReasonField('ex')}`,
+    `<span class="note" id="ex-msg"></span><button class="btn" data-act="openInvoice" data-id="${i.id}">Cancelar</button><button class="btn primary" data-act="exonSave" data-id="${i.id}">Exonerar</button>`); };
+window.exonReasonField = k => `<div class="field"><label for="${k}-r">Motivo de la exoneración <span style="color:var(--bad)">*</span></label><input class="input" id="${k}-r" list="${k}-rl" placeholder="Ej. personal de la clínica; cortesía de la dirección"><datalist id="${k}-rl"><option value="Personal de la clínica"><option value="Familiar de personal de la clínica"><option value="Médico de la clínica"><option value="Cortesía de la dirección"><option value="Caso social"></datalist></div>`;
+ACTIONS.exonSave = el => { const r = val('ex-r').trim(); if (!r) { document.getElementById('ex-msg').textContent = 'Escriba el motivo.'; return; }
+  const x = exonerate(el.dataset.id, r); if (!x.ok) { toast(x.msg); return; } render(); ACTIONS.openInvoice({ dataset: { id: el.dataset.id } }); toast(`${x.inv.num} exonerada`); };
 
 ACTIONS.emitFiscal = el => openFacturaIssue({ id: el.dataset.id });
 
@@ -186,6 +196,8 @@ VIEWS.ajustes = () => {
   return header('Ajustes', 'Apariencia, tasa, datos de la clínica, respaldos e historial') +
   `<div class="card" style="margin-bottom:16px"><div class="between"><div><h2 style="margin:0">Apariencia</h2><div class="small muted">Modo día (fondo blanco) o modo noche (fondo negro).</div></div>
     ${themeSeg('setTheme')}</div></div>
+  ${motionCard()}
+  ${iaCard()}
   <div class="grid g2">
     <div class="card"><h2>Tasa del dólar (BCV)</h2>
       <div class="kpi"><div class="val">${fmt(S.rate, 'VES')}</div><div class="sub">por USD · fecha valor ${fdate(S.rateDate)} · ${esc(S.rateSource)}</div></div>
@@ -207,6 +219,7 @@ VIEWS.ajustes = () => {
   </div>
   ${role() === 'admin' ? facturaSettingsCard() : ''}
   ${backupCard()}
+  ${can('*') ? deletedPatientsCard() : ''}
   <div class="sec"><h3>Historial de acciones</h3><div class="list">${S.audit.slice(0, 40).map(a => `<div class="row"><div class="grow"><div class="t">${esc(a.action)}</div><div class="s">${esc(a.ref)}</div></div><div class="end small muted">${a.at}<br>${esc(a.user)}</div></div>`).join('')}</div></div>
   <div class="sec card" style="display:grid;gap:12px"><div><b>Datos de trabajo</b><div class="small muted">${S.cleanStart ? `Empezó en limpio el ${fdate(S.cleanStart)}: los datos son los suyos.` : 'Ahora hay <b>datos de ejemplo</b> (pacientes, inventario, cobros, historias…) para practicar.'} Por ahora se guardan solo en este navegador.</div></div>
     <div class="hstack">${S.cleanStart ? '' : '<button class="btn primary" data-act="askClean">Empezar en limpio con mis datos</button>'}<button class="btn danger" data-act="askReset">Volver a los datos de ejemplo</button></div></div>`;
@@ -221,6 +234,7 @@ function applyRate(why) {
   const rates = S.rates || {};
   const day = Object.keys(rates).sort().pop();   // la última publicada por el BCV
   if (!day) return false;
+  const e = (S.ratesEUR || {})[day]; if (e > 0) S.rateEUR = e;   // euro del mismo día (para los fondos en euros)
   const r = rates[day]; if (r === S.rate && S.rateDate === day) return false;
   const old = S.rate; S.rate = r; S.rateDate = day; S.rateSource = 'BCV (automática, igual a bcv.org.ve)';
   log('Tasa BCV actualizada', `${old} → ${r} · fecha valor ${fdate(day)}${why ? ' · ' + why : ''}`); return true;
@@ -234,7 +248,9 @@ async function fetchBCV() {
     if (!r.ok || !(rate > 0) || !/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Error('sin tasa');
     j = { rate, fechaValor: day, fuente: 'DolarAPI' };
   }
-  S.rates = S.rates || {}; S.rates[j.fechaValor] = r2(j.rate * 10000) / 10000; return j;
+  S.rates = S.rates || {}; S.rates[j.fechaValor] = r2(j.rate * 10000) / 10000;
+  if (j.eur > 0) { S.ratesEUR = S.ratesEUR || {}; S.ratesEUR[j.fechaValor] = r2(j.eur * 10000) / 10000; }
+  return j;
 }
 async function autoRate(manual) {
   try { const j = await fetchBCV(); const changed = applyRate(); save();
@@ -257,7 +273,7 @@ ACTIONS.doReset = () => { resetDemo(); closeSheet(); UI.agendaDay = null; go('in
 // Emisión sobre hojas físicas y calibración administrativa.
 function facturaSettingsCard() {
   const c = facturaCalibration();
-  return '<div class="card sec"><h2>Impresión de facturas</h2><p>Use papel Carta y tamaño real (100%), sin ajustar a página. Los desplazamientos positivos mueven los datos a la derecha y hacia abajo.</p><div class="form"><div class="field"><label for="fp-x">Desplazamiento horizontal (mm)</label><input class="input" id="fp-x" type="number" step="0.1" min="-20" max="20" value="'+c.x+'"></div><div class="field"><label for="fp-y">Desplazamiento vertical (mm)</label><input class="input" id="fp-y" type="number" step="0.1" min="-20" max="20" value="'+c.y+'"></div></div><div class="hstack"><button class="btn" data-act="facturaConfigSave">Guardar calibración</button><button class="btn" data-act="facturaTest">Imprimir página de prueba</button><button class="btn" data-act="facturaVoid">Hoja dañada / anulada</button></div><p class="small muted">Las marcas de prueba se imprimen solo en la página de calibración.</p>'+facturaVoidHistory()+'</div>';
+  return '<div class="card sec"><h2>Impresión de facturas</h2><div style="display:grid;gap:14px"><p style="margin:0">Use papel Carta y tamaño real (100%), sin ajustar a página. Los desplazamientos positivos mueven los datos a la derecha y hacia abajo.</p><div class="form"><div class="field"><label for="fp-x">Desplazamiento horizontal (mm)</label><input class="input" id="fp-x" type="number" step="0.1" min="-20" max="20" value="'+c.x+'"></div><div class="field"><label for="fp-y">Desplazamiento vertical (mm)</label><input class="input" id="fp-y" type="number" step="0.1" min="-20" max="20" value="'+c.y+'"></div></div><div class="hstack" style="flex-wrap:wrap"><button class="btn" data-act="facturaConfigSave">Guardar calibración</button><button class="btn" data-act="facturaTest">Imprimir página de prueba</button><button class="btn" data-act="facturaVoid">Hoja dañada / anulada</button></div><p class="small muted" style="margin:0">Las marcas de prueba se imprimen solo en la página de calibración.</p>'+facturaVoidHistory()+'</div></div>';
 }
 function facturaVoidHistory(id) {
   const rows=(S.facturaVoids || []).filter(x => !id || x.invoice === id);

@@ -27,8 +27,8 @@ function bedsView(area) {
   const done = S.admissions.filter(a => a.status === 'alta' && admArea(a) === area).sort((a, b) => b.dischargedAt.localeCompare(a.dischargedAt)).slice(0, 5);
   const avg = act.length ? (act.reduce((s, a) => s + dayNumber(a), 0) / act.length).toFixed(1).replace('.', ',') : '0';
   const pendHere = pend.filter(o => act.some(a => a.id === o.admId)).length;
-  return header(AREAS[area].name, em ? 'Pacientes en emergencia, su evolución y su medicación' : 'Pacientes ingresados, su evolución y su medicación', canAdmit() ? `<button class="btn primary" data-act="admitNew" data-area="${area}">${em ? 'Recibir paciente' : 'Ingresar paciente'}</button>` : '') +
-  dutyStrip(dAt(0)) + `<div class="grid g4">${kpi(em ? 'Pacientes en emergencia' : 'Pacientes ingresados', act.length)}${kpi('Camas libres', beds.length - act.length, `de ${beds.length}`)}${kpi('Medicación por despachar', pendHere, 'solicitudes al almacén', pendHere ? 'alert' : '')}${kpi('Estancia promedio', avg + ' días')}</div>
+  return header(AREAS[area].name, em ? 'Pacientes en emergencia, su evolución y su medicación' : 'Pacientes ingresados, su evolución y su medicación', (canTplEdit() ? `<button class="btn" data-act="tplList">Plantillas de órdenes</button>` : '') + (canAdmit() ? `<button class="btn primary" data-act="admitNew" data-area="${area}">${em ? 'Recibir paciente' : 'Ingresar paciente'}</button>` : '')) +
+  (em ? triageBlock() : '') + dutyStrip(dAt(0)) + `<div class="grid g4">${kpi(em ? 'Pacientes en emergencia' : 'Pacientes ingresados', act.length)}${kpi('Camas libres', beds.length - act.length, `de ${beds.length}`)}${kpi('Medicación por despachar', pendHere, 'solicitudes al almacén', pendHere ? 'alert' : '')}${kpi('Estancia promedio', avg + ' días')}</div>
   <div class="bedgrid sec">${beds.map(b => { const a = act.find(x => x.bed === b.id);
     if (!a) return `<div class="bed free"><div class="between"><b>${b.id}</b><span class="pill">${b.type}</span></div><div class="muted small" style="margin:14px 0">Cama libre</div>${canAdmit() ? `<button class="btn sm" data-act="admitNew" data-area="${area}" data-bed="${b.id}">${em ? 'Recibir paciente' : 'Ingresar paciente'}</button>` : ''}</div>`;
     const p = pat(a.pid); const po = pend.filter(o => o.admId === a.id).length;
@@ -37,7 +37,7 @@ function bedsView(area) {
       <div class="bed-name">${esc(p.name)}</div><div class="small muted">Día ${dayNumber(a)} · ${esc(a.dx)}</div><div class="small muted">Tratante: ${esc(med(a.doc)?.name)}</div>
       <div class="hstack" style="margin-top:8px">${p.allergies.length ? `<span class="pill allergy">Alergias: ${esc(p.allergies.join(', '))}</span>` : ''}${po ? `<span class="pill warn">${po} medicación por despachar</span>` : ''}</div>${bedIndications(a)}</button>
       <div class="bed-acts"><button class="btn sm" data-go="${R}" data-param="${a.id}">Ver ingreso</button>${canHospWrite() ? `<button class="btn sm primary" data-act="newMedOrder" data-id="${a.id}">Solicitar medicación</button>` : ''}${evolutionBedButton(a)}</div></div>`; }).join('')}</div>
-  ${done.length ? `<div class="sec"><h3>Altas recientes</h3><div class="list">${done.map(a => `<button class="row" data-go="${R}" data-param="${a.id}"><div class="grow"><div class="t">${esc(pat(a.pid).name)} · ${a.bed}</div><div class="s">${a.num} · ${fdate(a.admittedAt.slice(0, 10))} a ${fdate(a.dischargedAt.slice(0, 10))} · ${stayDays(a)} días</div></div><span class="pill">Alta</span></button>`).join('')}</div></div>` : ''}`;
+  ${done.length ? `<div class="sec"><h3>Altas recientes</h3><div class="list">${done.map(a => `<button class="row" data-go="${R}" data-param="${a.id}"><div class="grow"><div class="t">${esc(pat(a.pid).name)} · ${a.bed}</div><div class="s">${esc(a.num)} · ${fdate(a.admittedAt.slice(0, 10))} a ${fdate(a.dischargedAt.slice(0, 10))} · ${stayDays(a)} días</div></div><span class="pill">Alta</span>${a.epicrisis ? '' : ' <span class="pill warn">Sin informe de egreso</span>'}</button>`).join('')}</div></div>` : ''}`;
 }
 
 function admissionView(a) {
@@ -55,7 +55,7 @@ function admissionView(a) {
   const guidedDrafts = evCanWrite() ? (S.evolutions || []).filter(e => e.admId === a.id && e.doc === evDoc() && e.status !== 'firmada') : [];
   const draftRows = guidedDrafts.map(e => '<button class="row" data-act="evResume" data-id="' + e.id + '"><div class="grow"><div class="t">Evolución guiada · borrador</div><div class="s">' + esc(med(e.doc)?.name) + ' · ' + esc(e.updatedAt || e.date + ' ' + e.time) + '</div></div><span class="pill warn">Retomar</span></button>').join('');
   if (tab === 'evoluciones') body = `<div class="list">${draftRows}${notes.map(n => `<button class="row" data-act="openNote" data-id="${n.id}"><div class="grow"><div class="t">${clinicalNoteTitle(n)} · ${fdate(n.date)} ${n.time}</div><div class="s">${esc(med(n.doc)?.name)}${med(n.doc)?.resident ? ' (residente)' : ''} · ${esc((n.actual || n.motivo || '').slice(0, 110))}</div></div><span class="pill ${n.status === 'firmada' ? 'good' : 'warn'}">${n.status === 'firmada' ? 'Firmada' : 'Borrador'}</span></button>`).join('') || '<div class="empty">Aún no hay evoluciones de este ingreso.</div>'}</div>`;
-  if (tab === 'medicacion') body = `<div class="stack">${orders.map(o => `<div class="card"><div class="between"><div><b>${o.num}</b> ${o.urgent ? '<span class="pill bad">Urgente</span>' : ''}<div class="small muted">${moWho(o)} · ${o.at}${o.dispatchedAt ? ` · despachada ${o.dispatchedAt} por ${esc(o.dispatchedBy)}` : ''}${o.reason ? ' · ' + esc(o.reason) : ''}</div></div>${moPill(o)}</div>
+  if (tab === 'medicacion') body = `<div class="stack">${orders.map(o => `<div class="card"><div class="between"><div><b>${esc(o.num)}</b> ${o.urgent ? '<span class="pill bad">Urgente</span>' : ''}<div class="small muted">${moWho(o)} · ${o.at}${o.dispatchedAt ? ` · despachada ${o.dispatchedAt} por ${esc(o.dispatchedBy)}` : ''}${o.reason ? ' · ' + esc(o.reason) : ''}</div></div>${moPill(o)}</div>
       <div class="tablewrap" style="margin-top:10px"><table><thead><tr><th>Medicamento</th><th>Indicación anterior</th><th class="num">Despachado</th><th class="num">Colocadas</th><th>Lote</th><th></th></tr></thead><tbody>
       ${o.items.map(it => { const g = givenCount(o, it); return `<tr><td>${esc(prod(it.pid).name)}</td><td class="muted">${esc([it.freq, it.ind].filter(Boolean).join(' · ') || '—')}</td><td class="num">${moServed(o) ? `${it.qty}${it.qty < (it.req ?? it.qty) ? ` <span class="small" style="color:var(--warn)">de ${it.req} · ${it.short ? 'faltante cerrado' : 'falta ' + moRemaining(o, it)}</span>` : ''}` : `${it.req ?? it.qty} solicitadas`}</td><td class="num">${moServed(o) ? `${g} de ${it.qty}` : '—'}</td><td class="mono muted">${esc(it.lots || '')}</td>
         <td>${moServed(o) && live && can('hosp.aplicar') && g < it.qty - (it.returned || 0) && !admIndications(a.id).some(i => i.status === 'activa' && i.pidProd === it.pid) ? `<button class="btn sm" data-act="giveDose" data-o="${o.id}" data-p="${it.pid}">Registrar aplicación</button>` : ''}</td></tr>`; }).join('')}</tbody></table></div>
@@ -63,12 +63,12 @@ function admissionView(a) {
     <div class="card"><h2>Registro de administración <small>cada aplicación</small></h2>${kardex.length ? `<div class="tablewrap"><table><thead><tr><th>Fecha y hora</th><th>Medicamento</th><th>Dosis</th><th>Resultado</th><th>Enfermera</th><th>Registrada por</th></tr></thead><tbody>
       ${kardex.map(k => `<tr><td>${k.at}</td><td>${esc(prod(k.pidProd)?.name || k.med || '')}</td><td>${esc(k.dose || '')}</td><td>${k.skipped ? `<span class="pill warn">No aplicada</span> <span class="small">${esc(k.reason || '')}</span>` : '<span class="pill good">Aplicada</span>'}</td><td>${esc(k.nurse || '—')}</td><td class="muted">${esc(k.by)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="small muted">Todavía no se ha registrado ninguna dosis.</div>'}</div></div>`;
   if (tab === 'indicaciones') body = indicationsTab(a);
-  if (tab === 'examenes') body = `<div class="list">${exams.map(e => `<button class="row" data-act="openExam" data-id="${e.id}"><div class="grow"><div class="t">${e.num} · ${esc(e.tests.join(', '))}</div><div class="s">${fdate(e.date)} · ${esc(med(e.doc)?.name || 'Particular')}</div></div>${examFlagPill(e)}</button>`).join('') || '<div class="empty">Sin exámenes durante este ingreso.</div>'}</div>${prevExams.length ? `<div class="sec"><h3>Resultados previos al ingreso <small>últimos 30 días, de otras atenciones</small></h3><div class="list">${prevExams.map(e => `<button class="row" data-act="openExam" data-id="${e.id}"><div class="grow"><div class="t">${e.num} · ${esc(e.tests.join(', '))}</div><div class="s">${fdate(e.date)} · ${e.external ? 'Externo · ' + esc(e.external.lab) : esc(med(e.doc)?.name || 'Particular')}</div></div>${examFlagPill(e)}</button>`).join('')}</div></div>` : ''}`;
+  if (tab === 'examenes') body = `<div class="list">${exams.map(e => `<button class="row" data-act="openExam" data-id="${e.id}"><div class="grow"><div class="t">${esc(e.num)} · ${esc(e.tests.join(', '))}</div><div class="s">${fdate(e.date)} · ${esc(med(e.doc)?.name || 'Particular')}</div></div>${examFlagPill(e)}</button>`).join('') || '<div class="empty">Sin exámenes durante este ingreso.</div>'}</div>${prevExams.length ? `<div class="sec"><h3>Resultados previos al ingreso <small>últimos 30 días, de otras atenciones</small></h3><div class="list">${prevExams.map(e => `<button class="row" data-act="openExam" data-id="${e.id}"><div class="grow"><div class="t">${esc(e.num)} · ${esc(e.tests.join(', '))}</div><div class="s">${fdate(e.date)} · ${e.external ? 'Externo · ' + esc(e.external.lab) : esc(med(e.doc)?.name || 'Particular')}</div></div>${examFlagPill(e)}</button>`).join('')}</div></div>` : ''}`;
   const em = admArea(a) === 'emerg';
   return `${backBtn(areaRoute(a))}
   <div class="card" style="margin-bottom:16px;display:grid;gap:10px"><div class="between"><div class="hstack" style="gap:14px;min-width:0"><span class="avatar" style="width:56px;height:56px;font-size:16px">${a.bed}</span>
-      <div style="min-width:0"><h1 style="font-size:24px;margin:0;letter-spacing:-.02em">${esc(p.name)}</h1><div class="muted small">${a.num} · ${live ? `Día ${dayNumber(a)} ${em ? 'en emergencia' : 'de hospitalización'}` : `Alta ${a.dischargedAt} · ${stayDays(a)} días`} · ingresó ${a.admittedAt} · ${esc(p.ci)} · ${ageTxt(p)}</div></div></div>
-      <div class="actions">${canSee('pacientes') ? `<button class="btn" data-go="pacientes" data-param="${p.id}">Ver perfil del paciente</button>` : ''}${live && clin && can('examen.pedir') ? `<button class="btn" data-act="newExam" data-pid="${p.id}" data-adm="${a.id}">Pedir exámenes</button>` : ''}${live && canHospWrite() ? `<button class="btn ${isClin() ? '' : 'primary'}" data-act="newMedOrder" data-id="${a.id}">Solicitar medicación</button>` : ''}${live && !evCanWrite() && role() === 'admin' ? `<button class="btn primary" data-act="evLinkHelp">Nueva evolución</button>` : ''}${live && evCanWrite() ? `<button class="btn primary" data-act="evNew" data-id="${a.id}">${(S.evolutions || []).some(x => x.admId === a.id && x.doc === evDoc() && x.status !== 'firmada') ? 'Continuar evolución (borrador)' : hasIngreso(a.id) ? 'Nueva evolución' : 'Valoración inicial'}</button><button class="btn" data-act="newNote" data-pid="${p.id}" data-adm="${a.id}" data-type="libre">Escribir nota libre</button>` : ''}${live && em && canAdmit() ? `<button class="btn" data-act="toHosp" data-id="${a.id}">Pasar a hospitalización</button>` : ''}${live && canDischarge(a) ? `<button class="btn danger" data-act="discharge" data-id="${a.id}">Dar de alta</button>` : ''}${!live && a.inv && canSee('atencion') ? `<button class="btn" data-act="openInvoice" data-id="${a.inv}">Ver cuenta</button>` : ''}</div></div>
+      <div style="min-width:0"><h1 style="font-size:24px;margin:0;letter-spacing:-.02em">${esc(p.name)}</h1><div class="muted small">${esc(a.num)} · ${live ? `Día ${dayNumber(a)} ${em ? 'en emergencia' : 'de hospitalización'}` : `Alta ${a.dischargedAt} · ${stayDays(a)} días`} · ingresó ${a.admittedAt} · ${esc(p.ci)} · ${ageTxt(p)}</div></div></div>
+      <div class="actions">${canSee('pacientes') ? `<button class="btn" data-go="pacientes" data-param="${p.id}">Ver perfil del paciente</button>` : ''}${live && isClin() ? `<button class="btn primary" data-act="tplApply" data-id="${a.id}">Aplicar plantilla de órdenes</button>` : ''}${clin || role() === 'admin' ? `<button class="btn${!live && !a.epicrisis ? ' primary' : ''}" data-act="egresoOpen" data-id="${a.id}">${a.epicrisis ? 'Informe de egreso' : 'Hacer informe de egreso'}</button>` : ''}${live && clin && can('examen.pedir') ? `<button class="btn" data-act="newExam" data-pid="${p.id}" data-adm="${a.id}">Pedir exámenes</button>` : ''}${live && canHospWrite() ? `<button class="btn ${isClin() ? '' : 'primary'}" data-act="newMedOrder" data-id="${a.id}">Solicitar medicación</button>` : ''}${live && !evCanWrite() && role() === 'admin' ? `<button class="btn primary" data-act="evLinkHelp">Nueva evolución</button>` : ''}${live && evCanWrite() ? `<button class="btn primary" data-act="evNew" data-id="${a.id}">${(S.evolutions || []).some(x => x.admId === a.id && x.doc === evDoc() && x.status !== 'firmada') ? 'Continuar evolución (borrador)' : hasIngreso(a.id) ? 'Nueva evolución' : 'Valoración inicial'}</button><button class="btn" data-act="newNote" data-pid="${p.id}" data-adm="${a.id}" data-type="libre">Escribir nota libre</button>` : ''}${live && em && canAdmit() ? `<button class="btn" data-act="toHosp" data-id="${a.id}">Pasar a hospitalización</button>` : ''}${live && canDischarge(a) ? `<button class="btn danger" data-act="discharge" data-id="${a.id}">Dar de alta</button>` : ''}${!live && a.inv && canSee('atencion') ? `<button class="btn" data-act="openInvoice" data-id="${a.inv}">Ver cuenta</button>` : ''}</div></div>
     ${canSee('contabilidad') ? (c => c.units ? `<div class="small muted">Costo de medicación e insumos de este ingreso: <b style="color:var(--fg)">${fmt(c.total)}</b> · ${c.units} unidad(es) · detalle en el perfil del paciente › Consumo</div>` : '')(patientConsumption(p.id).list.find(e => e.key === a.id) || { units: 0 }) : ''}
     ${clin ? `<div class="small"><b>Diagnóstico:</b> ${esc(a.dx)} · <b>Tratante:</b> ${esc(med(a.doc)?.name)}${a.reason ? ` · <b>Motivo de ingreso:</b> ${esc(a.reason)}` : ''}</div>` : `<div class="banner">Vista de consulta para almacén: aquí ve lo que se pidió para este paciente. Las solicitudes se despachan en Inventario › Órdenes pendientes.</div>`}
     ${p.allergies.length ? `<div class="banner allergy"><b>⚠ Alergias:</b>&nbsp;${esc(p.allergies.join(', '))}</div>` : ''}</div>
@@ -79,6 +79,7 @@ ACTIONS.hospTab = el => { UI.hospTab = el.dataset.k; render(); };
 
 // ---------- Ingreso ----------
 ACTIONS.admitNew = el => {
+  UI.triFor = null;   // si viene del triaje, ACTIONS.triAdmit lo vuelve a fijar
   const area = el?.dataset?.area || (route === 'emergencias' ? 'emerg' : 'hosp'); const em = area === 'emerg';
   const busy = S.admissions.filter(a => a.status === 'ingresado'); const free = BEDS.filter(b => b.area === area && !busy.some(a => a.bed === b.id));
   if (!free.length) { toast(em ? 'No hay camas de emergencia libres' : 'No hay camas libres'); return; }
@@ -107,6 +108,8 @@ ACTIONS.admitSave = () => {
   const bud = val('ad-bud') && budgetCandidates(who.pid).some(b => b.id === val('ad-bud')) ? val('ad-bud') : null;
   const a = { id: uid('ad'), num: 'HOS-' + String(S.hosSeq++).padStart(4, '0'), pid: who.pid, bed: val('ad-b'), doc: val('ad-d'), dx, reason: val('ad-r').trim(), admittedAt: nowStamp(), status: 'ingresado', budgetId: bud };
   if (admArea(a) === 'emerg') a.emerg = true;   // llegó por emergencia (se conserva aunque pase a hospitalización)
+  const tri = UI.triFor && (S.triage || []).find(t => t.id === UI.triFor && t.status === 'espera'); UI.triFor = null;
+  if (tri) { tri.status = 'ingresado'; tri.admId = a.id; tri.attendedAt = nowStamp(); if (!tri.pid) tri.pid = a.pid; a.triage = { num: tri.num, color: tri.color, waited: minsSince(tri.arrivedAt) }; }
   S.admissions.push(a); log(a.emerg ? 'Paciente recibido en emergencia' : 'Paciente ingresado', `${a.num} · ${pat(a.pid).name} · cama ${a.bed}`); save(); closeSheet(); UI.hospTab = 'evoluciones'; go(areaRoute(a), a.id); toast(`${pat(a.pid).name} en ${a.bed}`);
 };
 // Emergencia → hospitalización: el mismo ingreso cambia de cama (se conserva todo lo pedido y escrito)
@@ -225,7 +228,7 @@ ACTIONS.giveSave = el => {
 // Cuentas registradas del mismo paciente; se conserva también el presupuesto ya vinculado antes de migrar.
 const budgetCandidates = (pid, admId = null) => S.budgets.filter(b => b.pid === pid && b.v2 && (b.status === 'facturado' || (admId && admOf(admId)?.budgetId === b.id)) && !S.admissions.some(x => x.id !== admId && x.budgetId === b.id));
 const admBudgets = a => budgetCandidates(a.pid, a.id);
-const budOption = (b, sel) => `<option value="${b.id}" ${b.id === sel ? 'selected' : ''}>${b.num} · ${esc(b.proc)} · ${fdate(b.date)} · ${BUD_ST[budStatus(b)]?.[0] || b.status} · incluye ${b.days || 0} día(s)${b.uci ? ` y ${b.uci} de UCI` : ''}</option>`;
+const budOption = (b, sel) => `<option value="${b.id}" ${b.id === sel ? 'selected' : ''}>${esc(b.num)} · ${esc(b.proc)} · ${fdate(b.date)} · ${BUD_ST[budStatus(b)]?.[0] || b.status} · incluye ${b.days || 0} día(s)${b.uci ? ` y ${b.uci} de UCI` : ''}</option>`;
 function dischargeItems(a, budgetId, chargeMeds) {
   const days = stayDays(a); const uci = bedOf(a.bed).type === 'UCI'; const sid = uci ? 'v33' : 'v8';
   const b = budgetId ? byId(S.budgets, budgetId) : null; const em = admArea(a) === 'emerg';
@@ -245,7 +248,7 @@ ACTIONS.discharge = el => {
 function dischargeBody() {
   const a = admOf(UI.dc.id); const bs = admBudgets(a); const d = dischargeItems(a, UI.dc.budgetId, UI.dc.meds); const t = totalsOf(d.items, 0);
   const pend = S.medOrders.filter(o => o.admId === a.id && ['pendiente', 'parcial'].includes(o.status));
-  return `${patientBand(a.pid, a.bed)}<div class="small muted">${a.num} · ${d.days} día(s) en ${a.bed}${a.moves?.length ? ` (llegó por ${a.moves[0].from})` : ''}</div>
+  return `${patientBand(a.pid, a.bed)}${a.epicrisis ? `<div class="banner"><span>Informe de egreso listo (${esc(a.epicrisis.cond)}). <button class="btn sm" data-act="egresoOpen" data-id="${a.id}">Revisar</button></span></div>` : `<div class="banner warn"><span><b>Falta el informe de egreso (epicrisis).</b> Puede hacerlo ahora o después del alta. <button class="btn sm" data-act="egresoOpen" data-id="${a.id}">Hacer informe de egreso</button></span></div>`}<div class="small muted">${esc(a.num)} · ${d.days} día(s) en ${a.bed}${a.moves?.length ? ` (llegó por ${a.moves[0].from})` : ''}</div>
   <div class="field"><label for="dc-b">Presupuesto de esta hospitalización</label><select class="input" id="dc-b" data-ch="dcBudget"><option value="">Sin presupuesto: cobrar la estancia completa</option>${bs.map(b => budOption(b, UI.dc.budgetId)).join('')}</select>
     <div class="small muted">${a.budgetId ? 'Vinculado al ingresar al paciente.' : 'Este ingreso no se vinculó a ningún presupuesto al ingresar.'}</div></div>
   ${UI.dc.budgetId && UI.dc.budgetId !== a.budgetId ? `<label class="hstack small" style="color:var(--warn)"><input type="checkbox" id="dc-ok" data-ch="dcConfirm" ${UI.dc.confirm ? 'checked' : ''}> Confirmo que el presupuesto ${esc(byId(S.budgets, UI.dc.budgetId)?.num || '')} (${esc(byId(S.budgets, UI.dc.budgetId)?.proc || '')}) corresponde a esta hospitalización</label>` : ''}
@@ -254,15 +257,31 @@ function dischargeBody() {
   <div class="tablewrap"><table><thead><tr><th>Concepto</th><th class="num">Monto</th></tr></thead><tbody>${d.items.map(x => `<tr><td>${esc(x.name)}</td><td class="num">${fmt(x.price)}</td></tr>`).join('') || '<tr><td colspan="2" class="empty">Sin cargos adicionales: todo está incluido en el paquete.</td></tr>'}</tbody><tfoot><tr><td>${d.b ? 'Excedentes a cobrar' : 'Total de la estancia'}</td><td class="num">${fmt(t.total)}</td></tr></tfoot></table></div>
   ${pend.length ? `<div class="banner warn">${pend.length} solicitud(es) de medicación con entregas pendientes se cerrarán: lo no entregado se cancela.</div>` : ''}
   ${(u => u.length ? `<label class="hstack small"><input type="checkbox" id="dc-ret" data-ch="dcRet" ${UI.dc.ret ? 'checked' : ''}> Devolver al almacén lo despachado y no aplicado: ${u.map(x => `${esc(prod(x.it.pid)?.name || '?')} ×${x.n}`).join(', ')}</label>` : '')(unusedOfAdm(a.id))}
-  <div class="small muted">La medicación ya se descontó del inventario al despacharse. La factura fiscal es opcional y se emite desde Contabilidad › Cobros.</div>`;
+  <div class="small muted">La medicación ya se descontó del inventario al despacharse. La factura fiscal es opcional y se emite desde Contabilidad › Cobros.</div>
+  ${dcExonBlock(a, d, t)}`;
 }
-ACTIONS.dcBudget = el => { UI.dc.budgetId = el.value; UI.dc.confirm = false; refreshSheet(dischargeBody()); };
+// Exoneración al dar de alta (solo Administración): la cuenta se crea igual, con todo lo que costó la atención, y queda con saldo cero
+function dcExonBlock(a, d, t) {
+  if (!can('*')) return '';
+  const pk = d.b?.inv ? byId(S.invoices, d.b.inv) : null;
+  const total = r2((pk && invOpen(pk) ? invDue(pk) : 0) + (t.total || 0));
+  if (!total) return '';
+  return `<div class="card" style="display:grid;gap:8px;padding:12px 14px"><label class="hstack"><input type="checkbox" id="dc-ex" data-ch="dcExon" ${UI.dc.exon ? 'checked' : ''}> <b>Exonerar al paciente de los gastos</b></label>
+    <div class="small muted">La cuenta se registra igual, con todo lo que representó la atención (${fmt(total)}${pk ? `, incluido el paquete ${esc(d.b.num)}` : ''}), pero el paciente no paga: el saldo queda en cero y no entra dinero en caja.</div>
+    ${UI.dc.exon ? exonReasonField('dc') : ''}</div>`;
+}
+const dcKeep = () => { const r = document.getElementById('dc-r'); if (r) UI.dc.exonReason = r.value; };
+ACTIONS.dcExon = el => { dcKeep(); UI.dc.exon = el.checked; refreshSheet(dischargeBody()); const r = document.getElementById('dc-r'); if (r) { r.value = UI.dc.exonReason || ''; r.focus(); } };
+const dcRedraw = () => { dcKeep(); refreshSheet(dischargeBody()); const r = document.getElementById('dc-r'); if (r) r.value = UI.dc.exonReason || ''; };
+ACTIONS.dcBudget = el => { UI.dc.budgetId = el.value; UI.dc.confirm = false; dcRedraw(); };
 ACTIONS.dcConfirm = el => { UI.dc.confirm = el.checked; };
-ACTIONS.dcMeds = el => { UI.dc.meds = el.checked; refreshSheet(dischargeBody()); };
+ACTIONS.dcMeds = el => { UI.dc.meds = el.checked; dcRedraw(); };
 ACTIONS.dcRet = el => { UI.dc.ret = el.checked; };
 ACTIONS.dischargeSave = el => {
   const a = admOf(el.dataset.id); if (!a || a.status !== 'ingresado') { toast('Este paciente ya fue dado de alta'); closeSheet(); render(); return; } if (!canDischarge(a)) return;
   if (UI.dc.budgetId && UI.dc.budgetId !== a.budgetId && !UI.dc.confirm) { toast('Confirme que el presupuesto elegido corresponde a esta hospitalización'); return; }
+  dcKeep(); const exon = can('*') && UI.dc.exon && document.getElementById('dc-ex') ? (UI.dc.exonReason || '').trim() : null;
+  if (exon === '') { toast('Escriba el motivo de la exoneración'); document.getElementById('dc-r')?.focus(); return; }
   // Lo no aplicado vuelve al almacén antes de calcular la cuenta (así no se cobra ni cuenta como consumo)
   if (UI.dc.ret) unusedOfAdm(a.id).forEach(x => returnUnits(x.o, x.it, x.n, `Devolución al alta · ${pat(a.pid).name}`));
   const d = dischargeItems(a, UI.dc.budgetId, UI.dc.meds); let inv = null;
@@ -283,8 +302,12 @@ ACTIONS.dischargeSave = el => {
   S.medOrders.filter(o => o.admId === a.id && o.status === 'pendiente').forEach(o => { o.status = 'rechazada'; o.reason = 'Cancelada por alta del paciente'; });
   S.medOrders.filter(o => o.admId === a.id && o.status === 'parcial').forEach(o => closeShortfall(o.id, 'Cerrada por alta del paciente'));
   a.status = 'alta'; a.dischargedAt = nowStamp(); a.inv = inv?.id || d.b?.inv || null;
-  log('Alta de hospitalización', `${a.num} · ${pat(a.pid).name}${inv ? ' · cuenta ' + inv.num : ' · sin cargos adicionales'}`); save(); closeSheet(); render();
-  toast(inv ? `Alta registrada · ${d.b ? 'excedentes agregados a' : 'cuenta'} ${inv.num}` : 'Alta registrada · sin cargos adicionales');
+  log('Alta de hospitalización', `${a.num} · ${pat(a.pid).name}${inv ? ' · cuenta ' + inv.num : ' · sin cargos adicionales'}`); save();
+  // Exoneración: la cuenta (la del alta o la del paquete) queda registrada con todo su monto y saldo cero
+  const target = a.inv ? byId(S.invoices, a.inv) : null; let exonMsg = '';
+  if (exon && target && invOpen(target)) { const x = exonerate(target.id, exon); exonMsg = x.ok ? ` · gastos exonerados (${fmt(x.inv.exon.usd)})` : ` · no se pudo exonerar: ${x.msg}`; }
+  closeSheet(); render();
+  toast((inv ? `Alta registrada · ${d.b ? 'excedentes agregados a' : 'cuenta'} ${inv.num}` : 'Alta registrada · sin cargos adicionales') + exonMsg);
 };
 
 // ---------- Inventario → pestaña "Órdenes pendientes" (almacén y administrador) ----------
@@ -297,7 +320,7 @@ function medOrdersTab() {
   const today = S.medOrders.filter(o => o.status === 'despachada' && (o.dispatchedAt || '').startsWith(dAt(0)));
   const card = o => { const a = admOf(o.admId); const open = ['pendiente', 'parcial'].includes(o.status); const again = o.status === 'parcial';
     const short = open && o.items.some(it => dispQty(o, it) < moRemaining(o, it)); const none = open && o.items.every(it => dispQty(o, it) === 0);
-    return `<div class="card"><div class="between"><div><b>${o.num} · ${esc(pat(o.pid).name)}</b> ${o.urgent ? '<span class="pill bad">Urgente</span>' : ''}<div class="small muted">${o.kind === 'qx' ? `<span class="pill bad">Quirófano</span> ${esc(S.appts.find(x => x.id === o.apptId)?.proc || '')} · ${S.appts.find(x => x.id === o.apptId)?.time || ''}` : `Cama ${a?.bed || '—'}`} · ${moWho(o)} · ${o.at}</div></div>${moPill(o)}</div>
+    return `<div class="card"><div class="between"><div><b>${esc(o.num)} · ${esc(pat(o.pid).name)}</b> ${o.urgent ? '<span class="pill bad">Urgente</span>' : ''}<div class="small muted">${o.kind === 'extra' ? `<span class="pill warn">Extraordinaria · ${esc(o.motive)}</span>${a ? ` Cama ${a.bed}` : ''}` : o.kind === 'qx' ? `<span class="pill bad">Quirófano</span> ${esc(S.appts.find(x => x.id === o.apptId)?.proc || '')} · ${S.appts.find(x => x.id === o.apptId)?.time || ''}` : `Cama ${a?.bed || '—'}`} · ${moWho(o)} · ${o.at}</div></div>${moPill(o)}</div>
       <div class="tablewrap" style="margin-top:10px"><table><thead><tr><th>Medicamento</th><th>Frecuencia</th><th class="num">Solicitado</th>${again ? '<th class="num">Ya entregado</th>' : ''}<th class="num">En almacén</th><th class="num">${open ? 'Sale ahora' : 'Despachado'}</th><th>Lote</th></tr></thead><tbody>
       ${o.items.map(it => { const p = prod(it.pid); const req = it.req ?? it.qty; const max = Math.min(moRemaining(o, it), usable(p)); const q = open ? dispQty(o, it) : it.qty;
         return `<tr><td>${esc(p.name)}</td><td class="muted">${esc([it.freq || (o.kind === 'qx' ? 'Uso en cirugía' : ''), it.ind].filter(Boolean).join(' · '))}</td><td class="num">${req}</td>${again ? `<td class="num">${it.qty}</td>` : ''}<td class="num"><span class="pill ${usable(p) >= moRemaining(o, it) ? 'good' : 'bad'}">${usable(p)}</span></td>
@@ -308,7 +331,8 @@ function medOrdersTab() {
         <div class="hstack">${again ? `<button class="btn sm" data-act="moCloseShort" data-id="${o.id}">Cerrar faltante</button>` : `<button class="btn sm danger" data-act="moReject" data-id="${o.id}">Rechazar</button>`}<button class="btn sm primary" data-act="moDispatch" data-id="${o.id}" ${none ? 'disabled' : ''}>${short ? 'Confirmar despacho parcial' : 'Confirmar despacho'}</button></div></div>`
       : `<div class="small muted" style="margin-top:6px">Despachada ${o.dispatchedAt} por ${esc(o.dispatchedBy)}</div>`}</div>`; };
   return `<div class="stack">${pend.map(card).join('') || '<div class="card empty">No hay solicitudes de medicación pendientes.</div>'}</div>
-    ${today.length ? `<div class="sec"><h3>Despachadas hoy</h3><div class="stack">${today.map(card).join('')}</div></div>` : ''}`;
+    ${today.length ? `<div class="sec"><h3>Despachadas hoy</h3><div class="stack">${today.map(card).join('')}</div></div>` : ''}
+    ${typeof extraHistory === 'function' ? extraHistory() : ''}`;
 }
 window.moPill = o => o.status === 'parcial' ? `<span class="pill warn">Parcial · faltan ${o.items.reduce((s, it) => s + moRemaining(o, it), 0)}</span>` : o.status === 'despachada' && o.partial ? '<span class="pill">Entregada con faltante cerrado</span>' : `<span class="pill ${MO_ST[o.status][1]}">${MO_ST[o.status][0]}</span>`;
 ACTIONS.moDq = el => { const o = S.medOrders.find(x => x.id === el.dataset.o); const it = o.items.find(i => i.pid === el.dataset.p);

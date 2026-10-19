@@ -66,7 +66,7 @@ function dispatchMedOrder(oid, qtyMap = null) {
   if (missing.length) return { ok: false, missing };
   // Primer despacho: la cantidad solicitada pasa a "req" y "qty" cuenta lo entregado
   if (o.status === 'pendiente') o.items.forEach(it => { it.req = it.req ?? it.qty; it.qty = 0; it.cost = 0; it.used = []; it.lots = ''; });
-  const ref = `${o.num} · ${o.kind === 'qx' ? 'Quirófano' : AREAS[admArea(admOf(o.admId))].name} · ${pat(o.pid).name}`;
+  const ref = `${o.num} · ${o.kind === 'qx' ? 'Quirófano' : o.kind === 'extra' ? `Solicitud extraordinaria (${o.motive})` : AREAS[admArea(admOf(o.admId))].name} · ${pat(o.pid).name}`;
   lines.forEach(({ it, q }) => { if (!q) return; const r = takeStock(it.pid, q, 'consumo', ref);
     it.qty += q; it.cost = r2((it.cost || 0) + r.cost); it.used.push(...r.used.map(u => ({ ...u, ret: 0 }))); it.lots = [...new Set(it.used.map(u => u.lot))].join(', '); });
   (o.dispatches = o.dispatches || []).push({ at: nowStamp(), by: actor(), lines: lines.filter(l => l.q).map(l => ({ pid: l.it.pid, qty: l.q })) });

@@ -132,7 +132,7 @@ const pdfTable = (doc, y, head, body, opts = {}) => {
 };
 // Bloque de firma
 // Credenciales del médico bajo la firma: C.I. · Colegio de Médicos (el MPPS no se usa)
-const docCreds = d => [d?.ci && 'C.I. ' + d.ci, d?.cm && 'C.M. ' + d.cm].filter(Boolean).join(' · ');
+const docCreds = d => [d?.ci && 'C.I. ' + d.ci, d?.cm && 'C.M. ' + d.cm + (d?.colegio && typeof colegioShort === 'function' ? ' (' + colegioShort(d.colegio) + ')' : ''), d?.mpps && 'MPPS ' + d.mpps].filter(Boolean).join(' · ');
 function pdfSignature(doc, y, name, sub, img, creds = '') {
   y = pdfEnsure(doc, y + 30, 90); const x = PG.R - 200;
   if (img) doc.addImage(img, 'PNG', x + 20, y - 4, 160, 40);
@@ -189,6 +189,10 @@ function pdfBilling(m) {
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...GREY);
   doc.text(m.kind === 'budget' ? `Equivalente: ${fmt(m.t.total * S.rate, 'VES')} a tasa BCV ${S.rate.toLocaleString('es-VE', { maximumFractionDigits: 4 })} Bs/USD` : `Tasa BCV ${m.rate.toLocaleString('es-VE', { maximumFractionDigits: 4 })} Bs/USD · referencia ${usd(m.t.total)}`, PG.R, y, { align: 'right' }); y += 13;
   if (igtf) { doc.text(`IGTF ${S.igtfRate}% pagado: ${money(igtf)}`, PG.R, y, { align: 'right' }); y += 13; }
+  // Cuenta exonerada: el monto que representó la atención, lo exonerado y que no queda saldo por pagar
+  if (m.invoice?.status === 'exonerada' && m.invoice.exon) { const e = m.invoice.exon; y += 4;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...INK); doc.text(`Exonerado: -${money(e.usd)}  ·  A pagar: ${money(0)}`, PG.R, y, { align: 'right' }); y += 13;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...GREY); doc.text(`Motivo: ${e.reason} · autorizado por ${e.by} el ${e.at}`, PG.R, y, { align: 'right' }); y += 13; }
   y += 10;
   if (m.payments.length) { y = pdfSection(doc, y, 'Forma de pago'); y = pdfPara(doc, y, m.payments.map(p => `${metodo(p.method)?.name || p.method}: ${fmt(p.amount, p.cur)}${p.ref ? ' (ref. ' + p.ref + ')' : ''}`).join('   ·   '), { size: 9 }); }
   if (m.kind !== 'budget' && m.fiscal === false) { y = pdfPara(doc, y, 'Este documento no constituye factura fiscal.', { size: 8.5, color: GREY, bold: true }); }

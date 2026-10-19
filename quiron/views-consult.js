@@ -639,18 +639,10 @@ ACTIONS.ccConfirmHistory = () => {
   render();
 };
 function consultDx(c) {
-  return '<div class="stack"><label for="cc-dx-search" class="small muted">Buscar diagnóstico, sinónimo o CIE-10; texto libre disponible</label><input class="input" id="cc-dx-search" data-in="ccDxSearch" value="' + esc(UI.ccDxQuery || '') + '"><div id="cc-dx-results" class="hstack">' + consultDxOptions(UI.ccDxQuery || '') + '</div>' + c.dx.map((d, i) => '<section class="card"><h2>' + esc(d.label) + (d.code ? ' <small>' + esc(d.code) + '</small>' : '') + '</h2><div class="form">' + ccSelect('Prioridad', 'dx.' + i + '.priority', d.priority, ['principal', 'secundario']) + ccSelect('Certeza', 'dx.' + i + '.certainty', d.certainty, ['presuntivo', 'confirmado', 'diferencial', 'pendiente de estudio']) + '</div>' + ccButton('ccRemove', 'Quitar', 'data-list="dx" data-i="' + i + '"') + '</section>').join('') + '</div>';
+  return '<div class="stack"><label for="cc-dx-search" class="small muted">Escriba el diagnóstico</label><input class="input" id="cc-dx-search" data-in="ccDxSearch" value="' + esc(UI.ccDxQuery || '') + '"><div id="cc-dx-results" class="hstack">' + consultDxOptions(UI.ccDxQuery || '') + '</div>' + c.dx.map((d, i) => '<section class="card"><h2>' + esc(d.label) + (d.code ? ' <small>' + esc(d.code) + '</small>' : '') + '</h2><div class="form">' + ccSelect('Prioridad', 'dx.' + i + '.priority', d.priority, ['principal', 'secundario']) + ccSelect('Certeza', 'dx.' + i + '.certainty', d.certainty, ['presuntivo', 'confirmado', 'diferencial', 'pendiente de estudio']) + '</div>' + ccButton('ccRemove', 'Quitar', 'data-list="dx" data-i="' + i + '"') + '</section>').join('') + '</div>';
 }
-function consultDxOptions(q) {
-  return CONSULT.diagnoses.map((d, i) => ({
-    d,
-    i
-  })).filter(({
-    d
-  }) => normQ([d.label, d.code, ...d.synonyms].join(' ')).includes(normQ(q))).slice(0, 15).map(({
-    d,
-    i
-  }) => ccButton('ccDxAdd', esc(d.label) + (d.code ? ' · ' + d.code : ''), 'data-i="' + i + '"')).join('') + (q ? ccButton('ccDxFree', 'Agregar texto libre: ' + esc(q)) : '');
+function consultDxOptions(q) {   // el médico escribe su propio diagnóstico
+  return q && q.trim() ? ccButton('ccDxFree', 'Agregar diagnóstico: ' + esc(q.trim()), '', 'primary') : '<span class="small muted">Escriba el diagnóstico y pulse Agregar.</span>';
 }
 ACTIONS.ccDxSearch = el => {
   if (!ccCurrent()) return;
@@ -681,7 +673,7 @@ ACTIONS.ccDxFree = () => {
     priority: c.dx.some(x => x.priority === 'principal') ? 'secundario' : 'principal',
     certainty: 'pendiente de estudio'
   });
-  consultDirty(c);
+  UI.ccDxQuery = ''; consultDirty(c);
   render();
 };
 function consultOrderOptions(q) {
@@ -1225,7 +1217,7 @@ ACTIONS.ccCertRest = () => {
   openSheet('Reposo médico', patientBand(c.pid) +
     '<div class="form"><div class="field"><label for="rest-days">Días de reposo</label><input class="input" type="number" min="1" max="90" id="rest-days" value="1"></div>' +
     '<div class="field"><label for="rest-from">Desde</label><input class="input" type="date" id="rest-from" value="' + esc(c.date) + '"></div></div>' +
-    '<div class="guide-options">' + [1, 2, 3, 5, 7, 15].map(n => '<button class="btn" type="button" onclick="document.getElementById(\'rest-days\').value=' + n + '">' + n + (n === 1 ? ' día' : ' días') + '</button>').join('') + '</div>' +
+    '<div class="guide-options">' + [1, 2, 3, 5, 7, 15].map(n => '<button class="btn" type="button" data-act="restDaysPick" data-n="' + n + '">' + n + (n === 1 ? ' día' : ' días') + '</button>').join('') + '</div>' +
     '<label class="hstack small"><input type="checkbox" id="rest-dx"> Incluir el diagnóstico en la constancia (solo si el paciente lo autoriza)</label>',
     '<button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="ccCertRestDo">Descargar constancia</button>');
 };
@@ -1238,3 +1230,6 @@ ACTIONS.ccCertRestDo = async () => {
   closeSheet(); log('Constancia de reposo emitida', (pat(c.pid)?.code || '') + ' · ' + days + ' día(s) desde ' + from);
   await pdfSave(() => consultPdf(c, 'rest', { days, from, showDx }), 'Reposo ' + (pat(c.pid)?.name || '') + ' ' + from + '.pdf');
 };
+
+// Atajos de días de reposo (sin código dentro del HTML, por la política de seguridad)
+ACTIONS.restDaysPick = el => { const i = document.getElementById('rest-days'); if (i) { i.value = el.dataset.n; i.dispatchEvent(new Event('input', { bubbles: true })); } };

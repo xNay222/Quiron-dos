@@ -15,6 +15,59 @@ function consumptionChart() {
   </svg></div>`;
 }
 
+// Orden de las tablas de inventario: clic en un encabezado ordena de menor a mayor (A-Z), otro clic al revés, un tercero vuelve al orden normal
+const locKey = p => { const l = p.loc || {}; return l.shelf || l.sector ? [l.sector || 9, l.shelf || '', String(l.level || '').padStart(2, '0'), String(l.bin || '').padStart(4, '0'), l.spot || ''].join('|') : '~'; };
+const nextExpDays = p => { const nx = fefo(p)[0]; return nx && nx.exp ? daysTo(nx.exp) : stock(p) > usable(p) ? -1 : Infinity; };
+const ST_RANK = { 'Agotado': 0, 'Solo vencidos': 1, 'Bajo mínimo': 2, 'Disponible': 3 };
+const SORT_KEYS = {
+  prod: { name: p => p.name, loc: locKey, cat: p => p.cat, stock: usable, lots: p => p.lots.filter(l => l.qty > 0).length, min: p => p.min,
+    exp: nextExpDays, value: p => lotsValue(p), state: p => ST_RANK[stockState(p).t] ?? 9 },
+  lote: { exp: r => r.l.exp ? daysTo(r.l.exp) : Infinity, loc: r => locKeyOf(lotLoc(r.p, r.l)), name: r => r.p.name, brand: r => r.l.brand || '~', num: r => r.l.num || '',
+    qty: r => r.l.qty, cost: r => r.l.cost, state: r => r.l.exp ? daysTo(r.l.exp) : Infinity }
+};
+function sortRows(t, rows) {
+  const o = (UI.invSort || {})[t]; if (!o) return rows; const f = SORT_KEYS[t][o.k]; const dir = o.dir === 'desc' ? -1 : 1;
+  return [...rows].sort((a, b) => { const x = f(a), y = f(b);
+    return dir * (typeof x === 'string' || typeof y === 'string' ? String(x).localeCompare(String(y), 'es', { numeric: true, sensitivity: 'base' }) : x === y ? 0 : x > y ? 1 : -1); });
+}
+const sortTh = (t, k, label, num) => { const o = (UI.invSort || {})[t]; const on = o && o.k === k ? o.dir : '';
+  return `<th class="${num ? 'num ' : ''}sort-th${on ? ' ' + on : ''}" data-act="invSort" data-t="${t}" data-k="${k}" aria-sort="${on === 'asc' ? 'ascending' : on === 'desc' ? 'descending' : 'none'}" title="Ordenar por ${label.toLowerCase()}">${label}</th>`; };
+// En el teléfono la tabla se ve como tarjetas sin encabezados: el orden se elige en una lista
+const SORT_LABELS = { prod: [['name', 'Nombre'], ['stock', 'Existencia'], ['exp', 'Próximo vencimiento'], ['loc', 'Ubicación'], ['cat', 'Categoría'], ['value', 'Valor'], ['state', 'Estado']],
+  lote: [['exp', 'Vencimiento'], ['name', 'Producto'], ['qty', 'Cantidad'], ['loc', 'Ubicación'], ['cost', 'Costo unitario']] };
+const sortSelect = t => { const o = (UI.invSort || {})[t]; const cur = o ? o.k + ':' + o.dir : '';
+  return `<label class="sort-mobile small muted">Ordenar por <select class="input" data-ch="invSortSel" data-t="${t}"><option value="">Orden normal</option>${SORT_LABELS[t].map(([k, l]) => ['asc', 'desc'].map(d => `<option value="${k}:${d}" ${cur === k + ':' + d ? 'selected' : ''}>${l} ${d === 'asc' ? (k === 'stock' || k === 'qty' || k === 'value' || k === 'cost' ? '(de menos a más)' : k === 'exp' ? '(lo que vence antes)' : '(A-Z)') : (k === 'stock' || k === 'qty' || k === 'value' || k === 'cost' ? '(de más a menos)' : k === 'exp' ? '(lo que vence después)' : '(Z-A)')}</option>`).join('')).join('')}</select></label>`; };
+ACTIONS.invSortSel = el => { const [k, dir] = el.value.split(':'); UI.invSort = UI.invSort || {}; UI.invSort[el.dataset.t] = k ? { k, dir } : null; render(); };
+ACTIONS.invSort = el => { const { t, k } = el.dataset; UI.invSort = UI.invSort || {}; const o = UI.invSort[t];
+  UI.invSort[t] = !o || o.k !== k ? { k, dir: 'asc' } : o.dir === 'asc' ? { k, dir: 'desc' } : null; render(); };
+
+// Gráfico del inventario: por defecto los medicamentos más usados del mes; también el gasto por mes y por medicamento
+const unitN = (u, n) => { u = (u || 'unidad').toLowerCase(); return n === 1 ? u : /[aeiou]$/.test(u) ? u + 's' : u + 'es'; };
+const USAGE_VIEWS = [['top', 'Más usados este mes'], ['mes', 'Consumo en USD por mes'], ['usdmed', 'USD del mes por medicamento']];
+function usageCard() {
+  const k = USAGE_VIEWS.some(x => x[0] === UI.invChart) ? UI.invChart : 'top'; const mes = TODAY.toLocaleDateString('es-VE', { month: 'long' });
+  const seg = `<div class="seg" role="group" aria-label="Gráfico">${USAGE_VIEWS.map(([id, l]) => `<button data-act="invChart" data-k="${id}" aria-pressed="${k === id}">${l}</button>`).join('')}</div>`;
+  let title, body;
+  if (k === 'mes') { title = 'Consumo por mes <small>costo en USD, últimos 6 meses</small>'; body = consumptionChart(); }
+  else {
+    const usd = k === 'usdmed'; const rows = monthUsage().sort((a, b) => usd ? b.usd - a.usd : b.qty - a.qty).filter(r => usd ? r.usd > 0 : r.qty > 0).slice(0, 12);
+    const max = rows[0] ? (usd ? rows[0].usd : rows[0].qty) : 1; const tot = monthUsage().reduce((a, r) => a + r.usd, 0);
+    title = usd ? `Gasto en medicamentos de ${mes} <small>USD por medicamento · total ${fmt(tot)}</small>` : `Medicamentos más usados en ${mes} <small>unidades que salieron del almacén</small>`;
+    body = rows.length ? `<ol class="rank">${rows.map(r => `<li style="cursor:pointer" data-act="openProduct" data-id="${r.pid}"><div style="min-width:0;flex:1;display:grid;gap:3px"><div class="between small"><span class="t">${esc(r.name)}</span><b style="font-weight:600">${usd ? fmt(r.usd) : r.qty + ' ' + esc(unitN(r.unit, r.qty))}</b></div>
+      <div class="muted" style="font-size:12px">${usd ? r.qty + ' ' + esc(unitN(r.unit, r.qty)) : fmt(r.usd)}</div><div class="bar"><span style="width:${(usd ? r.usd : r.qty) / max * 100}%;background:var(--accent)"></span></div></div></li>`).join('')}</ol>`
+      : `<div class="empty">Todavía no ha salido ningún medicamento en ${mes}.</div>`;
+  }
+  return `<div class="card sec"><div class="between" style="gap:10px;flex-wrap:wrap;margin-bottom:10px"><h2 style="margin:0">${title}</h2>${seg}</div>${body}</div>`;
+}
+ACTIONS.invChart = el => { UI.invChart = el.dataset.k; render(); };
+// Alertas que llaman la atención: aviso arriba y pestaña en rojo cuando hay vencidos o agotados
+const stockCritical = a => ({ expired: a.expired.length, out: S.products.filter(p => usable(p) === 0 && p.min > 0).length, soon: a.soon.length, low: a.low.filter(p => usable(p) > 0).length });
+const alertTabLabel = a => { const c = stockCritical(a); const n = alertRows().length; return (c.expired || c.out ? '⚠ ' : '') + `Alertas (${n})`; };
+function stockAlertBanner(a) {
+  const c = stockCritical(a); if (!c.expired && !c.out && !c.soon && !c.low) return '';
+  const parts = [c.expired && `<b>${c.expired}</b> lote(s) vencido(s)`, c.out && `<b>${c.out}</b> producto(s) agotado(s)`, c.soon && `<b>${c.soon}</b> lote(s) vencen en 30 días`, c.low && `<b>${c.low}</b> bajo el mínimo`].filter(Boolean);
+  return `<button class="stock-alert sec ${c.expired || c.out ? 'crit' : ''}" data-act="invTab" data-k="alertas"><span class="sa-ico">⚠</span><span class="grow">${parts.join(' · ')}</span><span class="sa-go">Ver alertas ›</span></button>`;
+}
 VIEWS.inventario = () => {
   const tab = UI.invTab || (role() === 'almacen' || pendingMedOrders().length ? 'ordenes' : 'productos'); const a = alerts();
   const thisMonth = monthlyConsumption(1)[0].usd;
@@ -25,23 +78,23 @@ VIEWS.inventario = () => {
     const list = S.products.filter(p => (cat === 'Todos' || p.cat === cat) && (!q || p.name.toLowerCase().includes(q)));
     const mode = UI.invMode || 'producto';
     body = `<div class="between" style="margin-bottom:12px"><div class="seg" role="group" aria-label="Agrupar"><button data-act="invMode" data-k="producto" aria-pressed="${mode === 'producto'}">Por producto</button><button data-act="invMode" data-k="lote" aria-pressed="${mode === 'lote'}">Por lote y vencimiento</button></div><div class="search" style="flex:1;min-width:220px">${icon('buscar')}<input class="input" id="invQ" placeholder="Buscar producto" value="${esc(UI.invQ || '')}" data-in="invSearch" aria-label="Buscar producto"></div>
-      <div class="seg" role="group" aria-label="Categoría">${cats.map(c => `<button data-act="invCat" data-c="${c}" aria-pressed="${cat === c}">${c}</button>`).join('')}</div></div>
-    ${mode === 'lote' ? lotTable(list) : `<div class="tablewrap"><table><thead><tr><th>Producto</th><th>Estantería · caja</th><th>Categoría</th><th class="num">Existencia</th><th class="num">Lotes</th><th class="num">Mínimo</th><th>Próximo vencimiento</th><th class="num">Valor</th><th>Estado</th></tr></thead><tbody>
-    ${list.map(p => { const st = stockState(p); const nx = fefo(p)[0]; const dn = nx ? daysTo(nx.exp) : Infinity;
-      return `<tr style="cursor:pointer" data-act="openProduct" data-id="${p.id}"><td><b style="font-weight:500">${esc(p.name)}</b></td>${locCells(p)}<td class="muted">${p.cat}</td>
+      <div class="seg" role="group" aria-label="Categoría">${cats.map(c => `<button data-act="invCat" data-c="${esc(c)}" aria-pressed="${cat === c}">${esc(c)}</button>`).join('')}</div></div>
+    ${sortSelect(mode === 'lote' ? 'lote' : 'prod')}${mode === 'lote' ? lotTable(list) : `<div class="tablewrap"><table><thead><tr>${sortTh('prod', 'name', 'Producto')}${sortTh('prod', 'loc', 'Estantería · caja')}${sortTh('prod', 'cat', 'Categoría')}${sortTh('prod', 'stock', 'Existencia', 1)}${sortTh('prod', 'lots', 'Lotes', 1)}${sortTh('prod', 'min', 'Mínimo', 1)}${sortTh('prod', 'exp', 'Próximo vencimiento')}${sortTh('prod', 'value', 'Valor', 1)}${sortTh('prod', 'state', 'Estado')}</tr></thead><tbody>
+    ${sortRows('prod', list).map(p => { const st = stockState(p); const nx = fefo(p)[0]; const dn = nx ? daysTo(nx.exp) : Infinity;
+      return `<tr style="cursor:pointer" data-act="openProduct" data-id="${p.id}"><td style="min-width:220px"><b style="font-weight:500">${esc(p.name)}</b></td>${locCells(p)}<td class="muted">${esc(p.cat)}</td>
       <td class="num"><b>${usable(p)}</b> <span class="muted small">${p.unit.toLowerCase()}</span>${expiredNote(p)}</td><td class="num muted">${p.lots.filter(l => l.qty > 0).length}</td><td class="num muted">${p.min}</td>
       <td>${nx && nx.exp ? `<span class="${dn <= 30 ? 'pill warn' : 'muted'}">${fdate(nx.exp)}</span>` : stock(p) > usable(p) && !nx ? '<span class="pill bad">Vencido</span>' : nx ? '<span class="muted">No vence</span>' : '<span class="muted">—</span>'}</td>
-      <td class="num">${fmt(p.lots.reduce((s, l) => s + l.qty * l.cost, 0))}</td><td><span class="pill ${st.k}"><span class="dot"></span>${st.t}</span></td></tr>`; }).join('')}
+      <td class="num">${fmt(lotsValue(p))}${lotsValue(p, true) ? `<div class="small" style="color:var(--bad)">+ ${fmt(lotsValue(p, true))} vencido</div>` : ''}</td><td><span class="pill ${st.k}"><span class="dot"></span>${st.t}</span></td></tr>`; }).join('')}
     </tbody></table></div>`}`;
   }
   if (tab === 'alertas') {
-    const rows = alertRows();
+    const rows = alertRows(); const groups = [['bad', 'Urgente: vencidos y agotados'], ['warn', 'Atención: vencen pronto o bajo el mínimo'], ['info', 'Para planificar: vencen en 60–90 días']];
     body = `<div class="legend" style="margin-bottom:10px"><span>Avisos de vencimiento a 90, 60, 30 y 15 días. Se descuenta siempre primero el lote que vence antes (FEFO).</span></div>
-    <div class="list">${rows.map(r => `<div class="row"><div class="grow"><div class="t">${esc(r.t)}</div><div class="s">${r.s}</div></div><span class="pill ${r.k}">${r.pill}</span></div>`).join('') || '<div class="empty">Sin alertas.</div>'}</div>
+    ${groups.map(([k, t]) => { const g = rows.filter(r => r.k === k); return g.length ? `<div class="alert-group ${k}"><h3>${t} <span class="pill ${k}">${g.length}</span></h3><div class="list">${g.map(r => `<div class="row"><div class="grow"><div class="t">${esc(r.t)}</div><div class="s">${esc(r.s)}</div></div><span class="pill ${r.k}">${r.pill}</span></div>`).join('')}</div></div>` : ''; }).join('') || '<div class="empty">Sin alertas.</div>'}
     ${a.low.length ? `<div class="sec between card"><div><b>${a.low.length} productos bajo mínimo</b><div class="small muted">Crea una orden de compra con las cantidades sugeridas.</div></div><button class="btn primary" data-act="newOrder" data-suggest="1">Pedir lo que falta</button></div>` : ''}`;
   }
   if (tab === 'mapa') body = mapTab();
-  if (tab === 'facturas') body = invPendingTab();
+  if (tab === 'facturas' && can('*')) body = invPendingTab();
   if (tab === 'ordenes') body = medOrdersTab();
   if (tab === 'compras') body = comprasBody();
   if (tab === 'movimientos') {
@@ -50,15 +103,16 @@ VIEWS.inventario = () => {
       <td>${esc(m.name)}</td><td class="num">${m.qty > 0 ? '+' : ''}${m.qty}</td><td class="num">${fmt(m.cost)}</td><td>${esc(m.ref)}</td><td class="mono muted">${esc(m.lots || '')}</td><td class="muted">${esc(m.user)}</td></tr>`).join('') || '<tr><td colspan="8" class="empty">Aún no hay movimientos.</td></tr>'}
     </tbody></table></div>`;
   }
-  return header('Inventario', 'Existencias por lote, vencimientos y consumo', `<button class="btn" data-act="invoiceLoad">Cargar factura</button><button class="btn" data-act="newProduct">Producto o lote nuevo (con foto)</button><button class="btn primary" data-act="moveStock">Entrada / salida</button>`) +
+  return header('Inventario', 'Existencias por lote, vencimientos y consumo', `<button class="btn primary" data-act="scanOpen">Escanear código</button>${canBarcode() ? '<button class="btn" data-act="labelsOpen">Etiquetas</button>' : ''}${can('*') ? '<button class="btn" data-act="invoiceLoad">Cargar factura</button>' : ''}<button class="btn" data-act="newProduct">Producto o lote nuevo (con foto)</button>${can('*') ? '<button class="btn primary" data-act="moveStock">Entrada / salida</button>' : ''}${can('inv.extra') ? '<button class="btn primary" data-act="extraReq">Hacer una solicitud extraordinaria</button>' : ''}`) +
   `<div class="grid g4">
-    ${can('*') ? kpi('Valor del inventario', fmt(invValue()), fmt(invValue() * S.rate, 'VES')) : ''}
+    ${can('*') ? kpi('Valor del inventario', fmt(invValue()), fmt(invValue() * S.rate, 'VES') + (expiredValue() ? ' · vencido aparte: ' + fmt(expiredValue()) : '')) : ''}
     ${kpi('Bajo mínimo', a.low.length, 'productos por reponer', a.low.length ? 'alert' : '')}
     ${kpi('Vencen en 30 días', a.soon.length, a.expired.length ? `${a.expired.length} lote(s) ya vencido(s)` : 'lotes por usar primero', a.expired.length ? 'alert' : '')}
     ${kpi('Consumo este mes', fmt(thisMonth), 'costo de insumos usados')}
   </div>
-  <div class="card sec"><h2>Consumo por mes <small>costo en USD, últimos 6 meses</small></h2>${consumptionChart()}</div>
-  <div class="seg sec" role="group" aria-label="Vista" style="margin-bottom:14px">${[['ordenes', `Órdenes pendientes (${pendingMedOrders().length})`], ['productos', 'Productos'], ...((S.invPending || []).length ? [['facturas', `Facturas por completar (${S.invPending.length})`]] : []), ['alertas', `Alertas (${alertRows().length})`], ['compras', `Compras${S.orders.filter(ocCanReceive).length ? ` (${S.orders.filter(ocCanReceive).length} por recibir)` : ''}`], ['mapa', 'Mapa del almacén'], ['movimientos', 'Movimientos']].map(([k, t]) => `<button data-act="invTab" data-k="${k}" aria-pressed="${tab === k}">${t}</button>`).join('')}</div>
+  ${stockAlertBanner(a)}
+  ${usageCard()}
+  <div class="seg sec" role="group" aria-label="Vista" style="margin-bottom:14px">${[['ordenes', `Órdenes pendientes (${pendingMedOrders().length})`], ['productos', 'Productos'], ...((S.invPending || []).length && can('*') ? [['facturas', `Facturas por completar (${S.invPending.length})`]] : []), ['alertas', `${alertTabLabel(a)}`], ['compras', `Compras${S.orders.filter(ocCanReceive).length ? ` (${S.orders.filter(ocCanReceive).length} por recibir)` : ''}`], ['mapa', 'Mapa del almacén'], ['movimientos', 'Movimientos']].map(([k, t]) => `<button data-act="invTab" data-k="${k}" aria-pressed="${tab === k}">${t}</button>`).join('')}</div>
   ${body}`;
 };
 ACTIONS.invTab = el => { UI.invTab = el.dataset.k; render(); };
@@ -71,17 +125,18 @@ ACTIONS.openProduct = el => {
   openSheet(p.name, `${locationBlock(p)}<div class="grid g3">${kpi('Existencia utilizable', `${usable(p)} <span class="small muted">${p.unit.toLowerCase()}</span>`)}${kpi('Costo promedio', fmt(avgCost(p)))}${kpi('Mínimo', p.min)}</div>
     <div><h3 class="small muted" style="margin:0 0 6px">Lotes · el primero de la lista sale primero</h3>
     <div class="list">${p.lots.filter(l => l.qty > 0).sort((a, b) => daysTo(a.exp) - daysTo(b.exp)).map(l => { const d = daysTo(l.exp); const n = order.indexOf(l.id);
-      return `<div class="row"><div class="grow"><div class="t">Lote ${esc(l.num)}${l.brand ? ' · ' + esc(l.brand) : ''} ${n === 0 ? '<span class="pill info">Sale primero</span>' : ''}</div><div class="s">${l.exp ? 'Vence ' + fdate(l.exp) : 'Sin vencimiento'} · ${sup(l.sup)?.name || 'Proveedor no indicado'} · costo ${fmt(l.cost)}</div></div>
+      return `<div class="row"><div class="grow"><div class="t">Lote ${esc(l.num)}${l.brand ? ' · ' + esc(l.brand) : ''} ${n === 0 ? '<span class="pill info">Sale primero</span>' : ''}</div><div class="s">${l.exp ? 'Vence ' + fdate(l.exp) : 'Sin vencimiento'} · ${esc(sup(l.sup)?.name || 'Proveedor no indicado')} · costo ${fmt(l.cost)}</div><div class="s">Ubicación: <b>${esc(locTextOf(lotLoc(p, l)) || 'sin asignar')}</b>${l.loc?.sector ? '' : ' <span class="muted">(la del producto)</span>'}${can('inv.gestionar') ? ` <button class="btn sm" data-act="locEdit" data-id="${p.id}" data-l="${l.id}">Mover</button>` : ''}</div>${l.photos?.length ? `<div class="hstack" style="margin-top:6px">${l.photos.map(f => `<a href="${safeUrl(f.url)}" target="_blank" rel="noopener"><img src="${safeUrl(f.url)}" alt="Foto del lote ${esc(l.num)}" style="height:56px;border-radius:6px;border:1px solid var(--line)"></a>`).join('')}<span class="small muted">subidas por ${esc(l.by || '')} el ${fdate(l.recv)}</span></div>` : ''}</div>
       <div class="end"><b>${l.qty}</b> ${d < 0 ? `<span class="pill bad">Vencido</span>${can('inv.gestionar') ? ` <button class="btn danger sm" data-act="retireLot" data-id="${p.id}" data-l="${l.id}">Retirar</button>` : ''}` : d <= 30 ? `<span class="pill warn">${d} días</span>` : ''}</div></div>`; }).join('') || '<div class="empty">Sin existencia.</div>'}</div></div>
     <div class="small muted">${usedIn.length ? 'Incluido en: ' + usedIn.map(s => esc(s.name)).join(', ') + '. Se descuenta solo al facturar esos servicios.' : 'No está incluido en ningún servicio.'}</div>
+    ${barcodeLine(p)}
     <div class="field" style="max-width:220px"><label for="pr-min">Stock mínimo</label><input class="input" type="number" min="0" id="pr-min" value="${p.min}"></div>`,
-    `<button class="btn" data-act="saveMin" data-id="${p.id}">Guardar mínimo</button><button class="btn primary" data-act="moveStock" data-id="${p.id}">Entrada / salida</button>`, { wide: true });
+    `${can('inv.gestionar') ? `<button class="btn" data-act="locEdit" data-id="${p.id}">Cambiar ubicación</button>` : ''}<button class="btn" data-act="saveMin" data-id="${p.id}">Guardar mínimo</button>${can('*') ? `<button class="btn primary" data-act="moveStock" data-id="${p.id}">Entrada / salida</button>` : can('inv.extra') ? `<button class="btn primary" data-act="extraReq" data-id="${p.id}">Solicitud extraordinaria</button>` : ''}`, { wide: true });
 };
 // Retirar un lote vencido: sale del inventario y queda en Movimientos como "Vencido, retirado"
 ACTIONS.retireLot = el => {
   const p = prod(el.dataset.id), l = p.lots.find(x => x.id === el.dataset.l); if (!l) return;
   openSheet('Retirar lote vencido', `<p style="margin:0"><b>${esc(p.name)}</b></p>
-    <div class="small muted">Lote ${esc(l.num)}${l.brand ? ' · ' + esc(l.brand) : ''} · venció el ${fdate(l.exp)} · ${l.qty} ${p.unit.toLowerCase()}(s) · ${esc(locText(p) || 'sin ubicación')}</div>
+    <div class="small muted">Lote ${esc(l.num)}${l.brand ? ' · ' + esc(l.brand) : ''} · venció el ${fdate(l.exp)} · ${l.qty} ${p.unit.toLowerCase()}(s) · ${esc(locTextOf(lotLoc(p, l)) || 'sin ubicación')}</div>
     <div class="field" style="max-width:220px"><label for="rt-q">Cantidad que retira</label><input class="input" type="number" min="1" max="${l.qty}" id="rt-q" value="${l.qty}"></div>
     <div class="banner">Sáquelas del recipiente y apártelas según el procedimiento de la clínica. Quedará registrado quién las retiró y cuándo.</div>`,
     `<span class="note" id="rt-msg"></span><button class="btn" data-act="openProduct" data-id="${p.id}">Cancelar</button><button class="btn danger" data-act="doRetire" data-id="${p.id}" data-l="${l.id}">Retirar</button>`);
@@ -103,14 +158,17 @@ ACTIONS.invMode = el => { UI.invMode = el.dataset.k; render(); };
 
 // Cada lote es una fila: así se distinguen las mismas medicinas por su vencimiento
 // Estantería y nivel (EST-A-02) y número de caja en una sola etiqueta compacta, para encontrar el producto de un vistazo
-const locCells = p => { const l = p.loc || {};
-  const where = l.shelf ? (l.level ? levelCode(l.shelf, l.level) : shelfOf(l.shelf).name) : l.sector ? sectorOf(l.sector).name : '';
-  return `<td style="white-space:nowrap">${where ? `<span class="pill info"><span style="font-family:var(--mono)">${esc(where)}</span>${l.bin ? ` · Caja <b>${esc(l.bin)}</b>` : ''}</span>` : '<span class="muted small">Sin asignar</span>'}</td>`; };
+const locCell = l => { const where = l.shelf ? (l.level ? levelCode(l.shelf, l.level) : shelfOf(l.shelf).name) : l.sector ? sectorOf(l.sector).name : '';
+  // Dos renglones: la estantería y nivel en la etiqueta, y debajo la caja (o el detalle) en texto
+  return where ? `<div class="loc-cell"><span class="pill info" style="font-family:var(--mono)">${esc(where)}</span>${l.bin ? `<span class="bin">Caja <b>${esc(l.bin)}</b></span>` : l.spot ? `<span class="bin">${esc(l.spot)}</span>` : ''}</div>` : ''; };
+// Todas las ubicaciones del producto (la principal primero); en la vista por lote, solo la del lote
+const locCells = (p, l = null) => { const cells = (l ? [lotLoc(p, l)] : placements(p).map(e => e.loc)).map(locCell).filter(Boolean);
+  return `<td style="white-space:nowrap">${cells.length ? cells.join('<div style="height:6px"></div>') : '<span class="muted small">Sin asignar</span>'}</td>`; };
 function lotTable(products) {
   const rows = products.flatMap(p => { const first = fefo(p)[0]?.id; return p.lots.filter(l => l.qty > 0).map(l => ({ p, l, first: l.id === first })); })
     .sort((a, b) => daysTo(a.l.exp) - daysTo(b.l.exp));
-  return `<div class="tablewrap"><table><thead><tr><th>Vence</th><th>Estantería · caja</th><th>Producto</th><th>Marca</th><th>Lote</th><th class="num">Cantidad</th><th class="num">Costo unit.</th><th>Estado</th></tr></thead><tbody>
-  ${rows.map(({ p, l, first }) => { const st = lotState(l); return `<tr style="cursor:pointer" data-act="openProduct" data-id="${p.id}"><td><b style="font-weight:500">${l.exp ? fdate(l.exp) : 'No vence'}</b></td>${locCells(p)}<td>${esc(p.name)}</td><td class="muted">${esc(l.brand || '—')}</td><td class="mono">${esc(l.num)}</td><td class="num">${l.qty}</td><td class="num">${fmt(l.cost)}</td>
+  return `<div class="tablewrap"><table><thead><tr>${sortTh('lote', 'exp', 'Vence')}${sortTh('lote', 'loc', 'Estantería · caja')}${sortTh('lote', 'name', 'Producto')}${sortTh('lote', 'brand', 'Marca')}${sortTh('lote', 'num', 'Lote')}${sortTh('lote', 'qty', 'Cantidad', 1)}${sortTh('lote', 'cost', 'Costo unit.', 1)}${sortTh('lote', 'state', 'Estado')}</tr></thead><tbody>
+  ${sortRows('lote', rows).map(({ p, l, first }) => { const st = lotState(l); return `<tr style="cursor:pointer" data-act="openProduct" data-id="${p.id}"><td><b style="font-weight:500">${l.exp ? fdate(l.exp) : 'No vence'}</b></td>${locCells(p, l)}<td>${esc(p.name)}</td><td class="muted">${esc(l.brand || '—')}</td><td class="mono">${esc(l.num)}</td><td class="num">${l.qty}</td><td class="num">${fmt(l.cost)}</td>
     <td><span class="pill ${st.k}"><span class="dot"></span>${st.t}</span>${first ? ' <span class="pill info">Sale primero</span>' : ''}</td></tr>`; }).join('') || '<tr><td colspan="8" class="empty">Sin lotes.</td></tr>'}
   </tbody></table></div>`;
 }
@@ -137,17 +195,19 @@ function productForm(d = {}) {
 ACTIONS.newProduct = async () => {
   const sample = await getCap('sample'); const lim = sample ? await sample.limits().catch(() => null) : null; const max = Math.min(2, lim?.images?.maxCount || 0);
   UI.np = { files: [] };
-  openSheet('Nuevo producto o lote', `${max ? `<div class="card" style="display:grid;gap:10px"><div><b>Leer la caja con IA</b><div class="small muted">Toma 1 o 2 fotos: el frente y la cara donde vienen lote y vencimiento. La IA llena el formulario y tú lo revisas.</div></div>
-      <div class="hstack"><label class="btn" for="np-files">Tomar o elegir fotos</label><input id="np-files" type="file" accept="${lim.images.mediaTypes.join(',')}" multiple hidden data-ch="npFiles"><button class="btn primary" data-act="readProduct" id="np-read" disabled>Leer con IA</button><span class="small muted" id="np-msg"></span></div>
-      <div class="hstack" id="np-thumbs"></div></div>` : '<div class="banner warn">La lectura por foto no está disponible en esta vista; llena los datos a mano.</div>'}
+  // Las fotos siempre se pueden subir: quedan guardadas con el lote como respaldo (el almacén debe subir al menos una).
+  // La lectura automática con IA solo aparece donde está disponible.
+  openSheet('Nuevo producto o lote', `<div class="card" style="display:grid;gap:10px"><div><b>Fotos de la mercancía${can('*') ? '' : ' <span style="color:var(--bad)">*</span>'}</b><div class="small muted">Tome 1 a 3 fotos: el frente de la caja y la cara donde vienen el lote y el vencimiento (y la nota de entrega, si la hay). Quedan guardadas con el lote.${max ? ' Con "Leer con IA" se llena el formulario solo; usted lo revisa.' : ''}</div></div>
+      <div class="hstack"><label class="btn" for="np-files">Tomar o elegir fotos</label><input id="np-files" type="file" accept="image/*" capture="environment" multiple hidden data-ch="npFiles">${max ? '<button class="btn primary" data-act="readProduct" id="np-read" disabled>Leer con IA</button>' : ''}<span class="small muted" id="np-msg"></span></div>
+      <div class="hstack" id="np-thumbs"></div></div>
     <div id="np-form">${productForm()}</div>`,
     `<button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="saveProduct">Guardar</button>`, { wide: true });
   UI.npMax = max;
 };
 ACTIONS.npFiles = el => {
-  UI.np.files = [...el.files].slice(0, UI.npMax);
-  document.getElementById('np-thumbs').innerHTML = UI.np.files.map(f => `<img src="${URL.createObjectURL(f)}" alt="${esc(f.name)}" style="height:88px;border-radius:8px;border:1px solid var(--line)">`).join('');
-  document.getElementById('np-read').disabled = !UI.np.files.length;
+  UI.np.files = [...UI.np.files, ...[...el.files].filter(f => f.type.startsWith('image/'))].slice(0, 3); el.value = '';
+  document.getElementById('np-thumbs').innerHTML = UI.np.files.map((f, i) => `<span style="position:relative;display:inline-block"><img src="${URL.createObjectURL(f)}" alt="${esc(f.name)}" style="height:88px;border-radius:8px;border:1px solid var(--line)"><button class="btn ghost sm" data-act="npDelFile" data-i="${i}" aria-label="Quitar foto" style="position:absolute;top:2px;right:2px">✕</button></span>`).join('');
+  const r = document.getElementById('np-read'); if (r) r.disabled = !UI.np.files.length;
 };
 const findProduct = (name, str) => { const k = `${name} ${str}`.toLowerCase().replace(/\s+/g, ' ').trim(); return S.products.find(p => p.name.toLowerCase().replace(/\s+/g, ' ') === k) || (!str && S.products.find(p => p.name.toLowerCase() === name.toLowerCase().trim())); };
 ACTIONS.npMatch = () => {
@@ -157,7 +217,7 @@ ACTIONS.npMatch = () => {
 ACTIONS.readProduct = async el => {
   const sample = await getCap('sample'); const msg = document.getElementById('np-msg'); el.disabled = true; msg.textContent = 'Leyendo la caja…';
   try {
-    const j = await sample.json(PRODUCT_PROMPT, { images: UI.np.files });
+    const j = await sample.json(PRODUCT_PROMPT, { images: UI.np.files.slice(0, Math.max(1, UI.npMax)) });
     const c = j.confianza || {}; const low = ['nombre', 'concentracion', 'marca', 'lote', 'vencimiento'].filter(k => j[k] == null || (c[k] ?? 0) < 80);
     document.getElementById('np-form').innerHTML = productForm({ name: j.nombre, str: j.concentracion, unit: j.presentacion, brand: j.marca, lot: j.lote, exp: j.vencimiento, qty: j.unidades_por_caja, cat: j.categoria || 'Medicamento', low });
     ACTIONS.npMatch(); msg.textContent = low.length ? 'Revisa los campos en amarillo.' : 'Listo. Revisa y guarda.';
@@ -165,14 +225,26 @@ ACTIONS.readProduct = async el => {
     msg.textContent = { not_granted: 'No se dio permiso para usar la IA.', rate_limited: 'Demasiadas consultas; espera un momento.', image_rejected: 'No se pudo leer la foto; prueba con otra más nítida.' }[e?.code] || 'No se pudo leer la caja. Inténtalo de nuevo o llénalo a mano.';
   } finally { el.disabled = false; }
 };
-ACTIONS.saveProduct = () => {
+ACTIONS.npDelFile = el => { UI.np.files.splice(+el.dataset.i, 1); ACTIONS.npFiles({ files: [], set value(v) {} }); };
+ACTIONS.saveProduct = async el => {
   const name = val('np-name').trim(), str = val('np-str').trim(); if (!name) { toast('Escribe el nombre del producto'); return; }
   const qty = Math.round(num('np-qty'));
   if (qty > 0 && !val('np-lot').trim()) { toast('Indica el número de lote'); return; }
   if (qty > 0 && val('np-cat') === 'Medicamento' && !val('np-exp')) { toast('Indica el vencimiento del lote'); return; }
+  if (qty > 0 && !can('*') && !UI.np.files.length) { toast('Agregue al menos una foto de la mercancía'); return; }
+  // Fotos: se reducen y se guardan (carpeta "archivos" con el servidor local, o en la nube); si una falla, se avisa y no se guarda nada
+  const photos = [];
+  if (qty > 0 && UI.np.files.length) {
+    if (el) el.disabled = true; toast('Guardando las fotos…');
+    for (const f of UI.np.files) { const url = await storeFile(await shrinkImage(f), false).catch(() => null);
+      if (!url) { if (el) el.disabled = false; toast('No se pudo guardar una foto. Intente de nuevo con el servidor local encendido.'); return; }
+      photos.push({ url, name: f.name, type: 'image/jpeg' }); }
+  }
   let p = findProduct(name, str); const isNew = !p;
   if (isNew) { p = { id: uid('p'), name: str ? `${name} ${str}` : name, cat: val('np-cat'), unit: val('np-unit') || 'Unidad', min: Math.round(num('np-min')), lots: [] }; S.products.push(p); log('Producto creado', p.name); }
-  if (qty > 0) { addLot(p.id, { num: val('np-lot').trim(), qty, cost: num('np-cost'), exp: val('np-exp') || null, sup: val('np-sup'), brand: val('np-brand').trim() }, isNew ? 'Alta de producto' : 'Lote nuevo'); log('Entrada de inventario', `${p.name} +${qty} · lote ${val('np-lot').trim()}`); }
+  if (qty > 0) { addLot(p.id, { num: val('np-lot').trim(), qty, cost: num('np-cost'), exp: val('np-exp') || null, sup: val('np-sup'), brand: val('np-brand').trim() }, isNew ? 'Alta de producto' : 'Lote nuevo');
+    if (photos.length) { p.lots.at(-1).photos = photos; p.lots.at(-1).by = actor(); }
+    log('Entrada de inventario', `${p.name} +${qty} · lote ${val('np-lot').trim()}${photos.length ? ` · ${photos.length} foto(s)` : ''}`); }
   save(); closeSheet(); render(); toast(isNew ? `${p.name} creado${qty ? ` con ${qty} en el lote ${val('np-lot').trim()}` : ''}` : `Lote nuevo de ${p.name}: +${qty}`);
 };
 
@@ -196,6 +268,8 @@ function moveForm(pid, kind) {
     <div class="full banner">Lo que se usa con un paciente no se saca aquí: se agrega en <b>Nueva atención</b>, así se descuenta, se cobra y queda en su expediente a la vez.</div></div>`;
 }
 ACTIONS.moveStock = el => {
+  // Entradas y salidas manuales: solo Administración. El almacén saca con orden del médico o con una solicitud extraordinaria.
+  if (!can('*')) { toast('Las entradas y salidas manuales solo las hace Administración. Para sacar algo sin orden del médico use "Hacer una solicitud extraordinaria".'); return; }
   if (!S.products.length) { toast('Primero registre un producto con "Producto o lote nuevo"'); return; }
   UI.mv = { pid: el?.dataset?.id || S.products[0].id, kind: 'entrada' };
   openSheet('Entrada / salida de inventario', moveForm(UI.mv.pid, UI.mv.kind), `<span class="note" id="mv-msg"></span><button class="btn" data-act="saveMove" data-again="1">Guardar y otro</button><button class="btn primary" data-act="saveMove">Guardar</button>`);
@@ -203,6 +277,7 @@ ACTIONS.moveStock = el => {
 ACTIONS.moveKind = el => { UI.mv.kind = el.dataset.k; UI.mv.pid = val('mv-p'); refreshSheet(moveForm(UI.mv.pid, UI.mv.kind)); };
 ACTIONS.moveProduct = () => { UI.mv.pid = val('mv-p'); refreshSheet(moveForm(UI.mv.pid, UI.mv.kind)); };
 ACTIONS.saveMove = el => {
+  if (!can('*')) { closeSheet(); return; }
   const pid = val('mv-p'), q = Math.round(num('mv-q')); const p = prod(pid); const msg = document.getElementById('mv-msg');
   if (q <= 0) { msg.textContent = 'La cantidad debe ser mayor que cero.'; return; }
   if (UI.mv.kind === 'entrada') {
@@ -240,7 +315,7 @@ function comprasBody() {
       <div class="hstack"><button class="btn" data-act="newSupplier">Nuevo proveedor</button><button class="btn primary" data-act="newOrder">+ Nueva orden de compra</button></div></div>
     <div class="grid g4">${kpi('Esperando a contabilidad', wait.length, fmt(wait.reduce((a, o) => a + ocTotal(o), 0)))}${kpi('Listas para recibir', ready.length, fmt(ready.reduce((a, o) => a + ocTotal(o), 0)))}${kpi('Recibido este mes', fmt(S.orders.filter(o => o.status === 'recibida' && (o.recv || '').slice(0, 7) === dAt(0).slice(0, 7)).reduce((a, o) => a + ocTotal(o), 0)))}${kpi('Proveedores', S.suppliers.length)}</div>
     <div class="sec"><h3>Órdenes de compra</h3><div class="list">${S.orders.slice().reverse().map(o => `<button class="row" data-act="openOrder" data-id="${o.id}">
-      <div class="grow"><div class="t">${o.num} · ${esc(sup(o.sup).name)}</div><div class="s">${fdate(o.date)} · ${o.lines.length} productos${o.reason ? ' · ' + esc(o.reason) : ''}</div></div>
+      <div class="grow"><div class="t">${esc(o.num)} · ${esc(sup(o.sup).name)}</div><div class="s">${fdate(o.date)} · ${o.lines.length} productos${o.reason ? ' · ' + esc(o.reason) : ''}</div></div>
       <div class="end"><div>${fmt(ocTotal(o))}</div><span class="pill ${OC_ST[o.status][1]}">${OC_ST[o.status][0]}</span></div></button>`).join('') || '<div class="empty">Aún no hay órdenes.</div>'}</div></div>
     <div class="sec"><h3>Proveedores</h3><div class="list">${S.suppliers.map(s => `<div class="row"><span class="avatar">${initials(s.name)}</span><div class="grow"><div class="t">${esc(s.name)}</div><div class="s">${esc(s.rif)} · ${esc(s.contact)} · ${esc(s.phone)}</div></div><div class="end small muted">Entrega ~${s.days} días</div></div>`).join('')}</div></div>`;
 }

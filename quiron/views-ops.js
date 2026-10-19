@@ -87,6 +87,7 @@ VIEWS.inicio = () => {
     ${tile('emergencias', 'Emergencias', `${occ('emerg')}<span class="of">/${zoneBeds('emerg')}</span>`, occ('emerg') ? 'camas ocupadas' : 'sin pacientes', occ('emerg') ? 'alert' : '')}
   </div>
   <div class="small muted" style="margin:12px 2px 0">Guardia: <b style="color:var(--fg)">${esc(med(g.doc)?.name || 'sin médico asignado')}</b> · Enfermera: <b style="color:var(--fg)">${esc(g.nurse || 'sin asignar')}</b></div>
+  ${dailySummaryCard()}
   <section class="today-feed card sec" aria-label="Hoy en la clínica"><div class="between feed-heading"><h2>Hoy en la clínica</h2><span class="small muted" title="Se actualiza sola cada minuto">Actualizado ${new Date().toTimeString().slice(0, 5)}</span></div>
   <div class="timeline">
   ${todo.length ? `<section class="sec"><h3>Requiere atención</h3><div class="list">${todo.map(([k, t, s, go]) => `<button class="row" data-go="${go}"><span class="dot" style="color:var(--${k === 'bad' ? 'bad' : 'warn'});width:9px;height:9px"></span><div class="grow"><div class="t">${t}</div><div class="s">${s}</div></div><span class="muted">›</span></button>`).join('')}</div></section>` : `<p class="small muted">No hay nada que requiera atención.</p>`}
@@ -192,10 +193,10 @@ const patLinks = pid => { const adm = (S.admissions || []).filter(a => a.pid ===
   // Lo que se puede devolver: despachado, menos lo ya devuelto y las dosis que enfermería registró como aplicadas
   const served = orders.filter(moServed).flatMap(o => o.items.map(it => ({ o, it, n: it.qty - (it.returned || 0) - givenCount(o, it) }))).filter(x => x.n > 0);
   return { appts: S.appts.filter(a => a.pid === pid), adm, orders, served, hc: S.hc.filter(n => n.pid === pid), exams: S.exams.filter(e => e.pid === pid),
-    invoices: S.invoices.filter(i => i.pid === pid), budgets: S.budgets.filter(b => b.pid === pid), records: (S.records || []).filter(r => r.pid === pid) }; };
+    invoices: S.invoices.filter(i => i.pid === pid), budgets: S.budgets.filter(b => b.pid === pid), records: (S.records || []).filter(r => r.pid === pid), consults: (S.consults || []).filter(c => c.pid === pid) }; };
 ACTIONS.delPatient = el => { if (!can('*')) return; const p = pat(el.dataset.id); const L = patLinks(p.id);
   const paid = L.invoices.reduce((a, i) => a + invPaid(i), 0);
-  const rows = [['Citas y cirugías', L.appts.length], ['Hospitalizaciones o emergencias', L.adm.length], ['Historias clínicas', L.hc.length], ['Exámenes', L.exams.length],
+  const rows = [['Citas y cirugías', L.appts.length], ['Hospitalizaciones o emergencias', L.adm.length], ['Historias clínicas', L.hc.length], ['Consultas', L.consults.length], ['Exámenes', L.exams.length],
     ['Presupuestos', L.budgets.length], ['Cobros', L.invoices.length], ['Solicitudes de medicación', L.orders.length], ['Consentimientos', (p.consents || []).length]].filter(r => r[1]);
   openSheet(`Eliminar a ${p.name}`, `${patientBand(p.id)}<div class="banner warn">Esto borra al paciente y todo lo registrado a su nombre. Úselo para pacientes de prueba o duplicados, no para pacientes reales.</div>
     <div class="small muted">${esc(p.code)} · ${esc(p.ci)}</div>
@@ -204,9 +205,15 @@ ACTIONS.delPatient = el => { if (!can('*')) return; const p = pat(el.dataset.id)
     ${L.records.length ? `<div class="small">Tiene ${L.records.length} historia(s) escaneada(s) vinculada(s): <b>no se borran</b>, quedan en Historias sin paciente asignado.</div>` : ''}
     ${L.served.length ? `<label class="hstack small"><input type="checkbox" id="dp-ret" checked> Devolver al inventario lo despachado y no usado (${L.served.map(x => `${esc(prod(x.it.pid)?.name || '?')} ×${x.n}`).join(', ')})</label>` : ''}
     <div class="small muted">Antes de borrar se guarda una copia completa de los datos, por si necesita recuperarlo.</div>
+    <div class="form"><div class="field"><label for="dp-why">Motivo</label><select class="input" id="dp-why"><option value="">Elija el motivo…</option>${['Paciente de prueba', 'Paciente duplicado', 'Creado por error', 'Otro'].map(x => `<option>${x}</option>`).join('')}</select></div>
+      <div class="field"><label for="dp-det">Detalle (opcional)</label><input class="input" id="dp-det" placeholder="Ej. duplicado de QRN-000245"></div></div>
+    <div class="banner" style="background:var(--bad-soft)"><span>¿Seguro que va a eliminar a <b>${esc(p.name)}</b> (${esc(p.code)} · ${esc(p.ci || 'sin cédula')})? Esta acción no se puede deshacer desde el programa.</span></div>
     <div class="field"><label for="dp-ok">Para confirmar, escriba ELIMINAR</label><input class="input" id="dp-ok" autocomplete="off"></div><span class="note" id="dp-msg"></span>`,
     `<button class="btn" data-act="close">Cancelar</button><button class="btn danger" data-act="delPatientDo" data-id="${p.id}">Eliminar definitivamente</button>`); };
 ACTIONS.delPatientDo = async el => { if (!can('*')) return; const p = pat(el.dataset.id); if (!p) return; const msg = document.getElementById('dp-msg');
+  const why = val('dp-why'), det = val('dp-det').trim();
+  if (!why) { msg.textContent = 'Elija el motivo.'; return; }
+  if (why === 'Otro' && !det) { msg.textContent = 'Explique el motivo en el detalle.'; return; }
   if (val('dp-ok').trim().toUpperCase() !== 'ELIMINAR') { msg.textContent = 'Escriba ELIMINAR para confirmar.'; return; }
   const ret = document.getElementById('dp-ret')?.checked; const L = patLinks(p.id);
   // Copia de seguridad previa: en la carpeta del servidor local; si no hay servidor, se descarga
@@ -218,9 +225,10 @@ ACTIONS.delPatientDo = async el => { if (!can('*')) return; const p = pat(el.dat
   const ids = k => new Set(L[k].map(x => x.id)); const inv = ids('invoices'), ord = new Set(L.orders.map(o => o.id)), adm = new Set(L.adm);
   S.appts = S.appts.filter(a => a.pid !== p.id); S.admissions = (S.admissions || []).filter(a => a.pid !== p.id); S.medOrders = (S.medOrders || []).filter(o => !ord.has(o.id));
   S.mar = (S.mar || []).filter(k => !adm.has(k.admId) && !ord.has(k.orderId)); S.hc = S.hc.filter(n => n.pid !== p.id); S.exams = S.exams.filter(e => e.pid !== p.id);
-  S.invoices = S.invoices.filter(i => !inv.has(i.id)); S.budgets = S.budgets.filter(b => b.pid !== p.id);
+  S.invoices = S.invoices.filter(i => !inv.has(i.id)); S.budgets = S.budgets.filter(b => b.pid !== p.id); S.consults = (S.consults || []).filter(c => c.pid !== p.id);
   L.records.forEach(r => { r.pid = null; }); S.patients = S.patients.filter(x => x.id !== p.id);
-  log('Paciente eliminado', `${p.code} · ${p.name} · ${L.appts.length} cita(s), ${L.hc.length} historia(s), ${L.invoices.length} cobro(s)${ret && L.served.length ? ' · medicación devuelta al inventario' : ''} · copia previa: ${name}`);
+  (S.deletedPatients = S.deletedPatients || []).unshift({ at: nowStamp(), by: actor(), code: p.code, name: p.name, ci: p.ci || '', why, det, backup: name, counts: { citas: L.appts.length, consultas: L.consults.length, historias: L.hc.length, cobros: L.invoices.length } });
+  log('Paciente eliminado', `${p.code} · ${p.name} · motivo: ${why}${det ? ' (' + det + ')' : ''} · ${L.appts.length} cita(s), ${L.consults.length} consulta(s), ${L.hc.length} historia(s), ${L.invoices.length} cobro(s)${ret && L.served.length ? ' · medicación devuelta al inventario' : ''} · copia previa: ${name}`);
   save(); closeSheet(); go('pacientes', null, { root: true }); toast(`${p.name} eliminado · copia previa guardada`);
 };
 ACTIONS.savePatient = () => {
@@ -270,11 +278,11 @@ function patientRecord(p) {
   if (tab === 'presupuestos') body = '<div class="list">' + S.budgets.filter(b => b.pid === p.id).map(b => `<button class="row" data-act="openBudget" data-id="${b.id}"><div class="grow">${esc(b.num)} · ${esc(b.proc || '')}</div>${budPill(b)}</button>`).join('') + '</div>';
   if (tab === 'examenes') { const exs = S.exams.filter(e => e.pid === p.id).sort((a, b) => b.date.localeCompare(a.date));
     body = `<div class="between" style="margin-bottom:10px"><span class="muted small">Laboratorio, rayos X y ecografías, de la clínica o de otros centros</span><div class="hstack">${canUploadExt() ? `<button class="btn sm" data-act="extExam" data-pid="${p.id}">Subir examen externo</button>` : ''}${canCreateExam() ? `<button class="btn sm" data-act="newExam" data-pid="${p.id}">${createLabel()}</button>` : ''}</div></div>
-    <div class="list">${exs.map(e => `<button class="row" data-act="openExam" data-id="${e.id}"><div class="grow"><div class="t">${e.num} · ${esc(e.tests.join(', '))}</div><div class="s">${fdate(e.date)} · ${e.external ? 'Externo · ' + esc(e.external.lab) : esc(med(e.doc)?.name || 'Sin médico solicitante')} · ${e.area === 'laboratorio' ? 'Laboratorio' : 'Imagen'}</div></div>${examFlagPill(e)}</button>`).join('') || '<div class="empty">Sin exámenes.</div>'}</div>`; }
+    <div class="list">${exs.map(e => `<button class="row" data-act="openExam" data-id="${e.id}"><div class="grow"><div class="t">${esc(e.num)} · ${esc(e.tests.join(', '))}</div><div class="s">${fdate(e.date)} · ${e.external ? 'Externo · ' + esc(e.external.lab) : esc(med(e.doc)?.name || 'Sin médico solicitante')} · ${e.area === 'laboratorio' ? 'Laboratorio' : 'Imagen'}</div></div>${examFlagPill(e)}</button>`).join('') || '<div class="empty">Sin exámenes.</div>'}</div>`; }
   if (tab === 'consentimientos') body = `<div class="between" style="margin-bottom:10px"><span class="muted small">Se imprimen, el paciente los firma en papel y se sube la foto o el escaneo firmado</span>${can('pac.papeles') || can('pac.escribir') ? `<button class="btn primary sm" data-act="newConsent" data-id="${p.id}">Nuevo consentimiento</button>` : ''}</div>
     <div class="list">${p.consents.map((c, i) => { const pend = c.status === 'pendiente'; return `<div class="row"><button style="all:unset;flex:1;cursor:pointer;min-width:0" data-act="viewConsent" data-id="${p.id}" data-i="${i}"><div class="t">${esc(c.type)}</div><div class="s">${c.proc ? esc(c.proc) + ' · ' : ''}${pend ? `creado el ${fdate(c.d)}` : c.signedAt ? `firmado subido el ${fdate(c.signedAt.slice(0, 10))}` : `firmado por ${esc(c.signer || '')} · ${fdate(c.d)}`}</div></button>
       <div class="hstack">${pend ? `<span class="pill warn">Pendiente de firma</span><button class="btn sm" data-act="consentPrint" data-id="${p.id}" data-i="${i}">Imprimir</button><button class="btn sm primary" data-act="consentUpload" data-id="${p.id}" data-i="${i}">Subir firmado</button>` : '<span class="pill good">Firmado</span>'}</div></div>`; }).join('') || '<div class="empty">Sin consentimientos.</div>'}</div>`;
-  if (tab === 'facturas') body = `<div class="list">${invs.map(i => `<button class="row" data-act="openInvoice" data-id="${i.id}"><div class="grow"><div class="t">${i.num} · ${esc(i.items.map(x => x.name).join(', '))}</div><div class="s">${fdate(i.date)}</div></div><div class="end"><div>${bsOf(invTotals(i).total, i)}</div>${invStatusPill(i)}</div></button>`).join('') || '<div class="empty">Sin cobros.</div>'}</div>`;
+  if (tab === 'facturas') body = `<div class="list">${invs.map(i => `<button class="row" data-act="openInvoice" data-id="${i.id}"><div class="grow"><div class="t">${esc(i.num)} · ${esc(i.items.map(x => x.name).join(', '))}</div><div class="s">${fdate(i.date)}</div></div><div class="end"><div>${bsOf(invTotals(i).total, i)}</div>${invStatusPill(i)}</div></button>`).join('') || '<div class="empty">Sin cobros.</div>'}</div>`;
   if (tab === 'consumo') { const c = patientConsumption(p.id);
     body = `<div class="small muted" style="margin-bottom:10px">Medicación e insumos que el almacén despachó para este paciente (hospitalización, emergencia y quirófano), menos lo devuelto, valorados al costo de compra de cada lote. Uso interno: no es lo que se cobra.</div>
     <div class="grid g4" style="margin-bottom:14px">${kpi('Costo total', fmt(c.total))}${kpi('Unidades consumidas', c.units)}${kpi('Episodios', c.list.length)}</div>
@@ -291,7 +299,7 @@ function patientRecord(p) {
     <div class="hstack" style="gap:14px;min-width:0"><span class="avatar" style="width:56px;height:56px;font-size:20px">${initials(p.name)}</span>
       <div style="min-width:0"><h1 style="font-size:24px;margin:0;letter-spacing:-.02em">${esc(p.name)}</h1>
       <div class="muted small">${esc(p.code)} · ${esc(p.ci)} · ${ageTxt(p)} · ${p.sex === 'F' ? 'Femenino' : p.sex === 'M' ? 'Masculino' : 'sexo no registrado'} · ${esc(p.phone)}</div></div></div>
-    <div class="actions">${imageUploadButton(p.id)}${can('pac.registrar') ? `<button class="btn" data-act="editPatient" data-id="${p.id}">Editar ficha</button>` : ''}${can('agenda.programar') ? `<button class="btn" data-act="newApptFor" data-id="${p.id}">Agendar</button>` : ''}${canCreateExam() ? `<button class="btn" data-act="newExam" data-pid="${p.id}">${createLabel()}</button>` : ''}${can('pac.escribir') ? `<button class="btn" data-act="newNote" data-pid="${p.id}" data-type="informe">Informe médico</button>` : ''}${can('pac.escribir') && isClin() ? `<button class="btn primary" data-act="newNote" data-pid="${p.id}">Nueva historia</button>` : ''}${canSee('atencion') ? `<button class="btn primary" data-act="newAttentionFor" data-id="${p.id}">Nueva atención</button>` : ''}</div>
+    <div class="actions">${imageUploadButton(p.id)}${can('pac.registrar') ? `<button class="btn" data-act="editPatient" data-id="${p.id}">Editar ficha</button>` : ''}${can('*') ? `<button class="btn danger" data-act="delPatient" data-id="${p.id}">Eliminar</button>` : ''}${can('agenda.programar') ? `<button class="btn" data-act="newApptFor" data-id="${p.id}">Agendar</button>` : ''}${canCreateExam() ? `<button class="btn" data-act="newExam" data-pid="${p.id}">${createLabel()}</button>` : ''}${can('pac.escribir') ? `<button class="btn" data-act="newNote" data-pid="${p.id}" data-type="informe">Informe médico</button>` : ''}${can('pac.escribir') && isClin() ? `<button class="btn primary" data-act="newNote" data-pid="${p.id}">Nueva historia</button>` : ''}${canSee('atencion') ? `<button class="btn primary" data-act="newAttentionFor" data-id="${p.id}">Nueva atención</button>` : ''}</div>
   </div>
   ${(() => { const ad = activeAdmission(p.id); return ad && canSee('hospitalizacion') ? `<div class="banner" style="margin-bottom:14px;align-items:center"><div style="flex:1"><b>Ingresado</b> en ${ad.bed} desde ${ad.admittedAt} · día ${dayNumber(ad)} · ${esc(ad.dx)}</div><button class="btn sm" data-go="${areaRoute(ad)}" data-param="${ad.id}">Ver ${admArea(ad) === 'emerg' ? 'emergencia' : 'hospitalización'}</button></div>` : ''; })()}
   ${canRecordAllergy() && !can('pac.clinico') ? patientBand(p.id) : ''}
@@ -392,10 +400,18 @@ ACTIONS.consentFile = async el => {
 
 ACTIONS.viewConsent = el => {
   const p = pat(el.dataset.id); const i = +el.dataset.i; const c = p.consents[i];
-  const doc = c.file ? (c.file.kind === 'image' ? `<img src="${c.file.url}" alt="Consentimiento firmado" style="width:100%;border-radius:10px;border:1px solid var(--line);background:#fff">`
-      : `<iframe src="${c.file.url}" title="Consentimiento firmado" style="width:100%;height:520px;border:1px solid var(--line);border-radius:10px;background:#fff"></iframe>`)
-    : c.img ? `<div class="card small" style="line-height:1.55">${esc(c.text || '')}</div><img src="${c.img}" alt="Firma de ${esc(c.signer)}" style="background:#fff;border-radius:10px;border:1px solid var(--line)">`
+  const doc = c.file ? (c.file.kind === 'image' ? `<img src="${safeUrl(c.file.url)}" alt="Consentimiento firmado" style="width:100%;border-radius:10px;border:1px solid var(--line);background:#fff">`
+      : `<iframe src="${safeUrl(c.file.url)}" title="Consentimiento firmado" style="width:100%;height:520px;border:1px solid var(--line);border-radius:10px;background:#fff"></iframe>`)
+    : c.img ? `<div class="card small" style="line-height:1.55">${esc(c.text || '')}</div><img src="${safeUrl(c.img)}" alt="Firma de ${esc(c.signer)}" style="background:#fff;border-radius:10px;border:1px solid var(--line)">`
     : '<div class="banner warn">Pendiente de firma: imprima el documento, hágalo firmar y súbalo.</div>';
   openSheet(c.type, `${patientBand(p.id)}<div class="small muted">${c.proc ? esc(c.proc) + ' · ' : ''}${c.docName || c.doc ? 'Médico tratante: ' + esc(c.docName || med(c.doc)?.name || '') + ' · ' : ''}creado el ${fdate(c.d)}${c.signedAt ? ` · firmado subido el ${c.signedAt} por ${esc(c.uploadedBy)}` : c.signer ? ` · firmado por ${esc(c.signer)}` : ''}</div>${doc}`,
     `${c.clauses ? `<button class="btn" data-act="consentPrint" data-id="${p.id}" data-i="${i}">Imprimir en blanco (PDF)</button>` : `<button class="btn" data-act="pdfConsent" data-id="${p.id}" data-i="${i}">Descargar PDF</button>`}${c.status === 'pendiente' ? `<button class="btn primary" data-act="consentUpload" data-id="${p.id}" data-i="${i}">Subir documento firmado</button>` : ''}`, { wide: true });
 };
+
+// Registro de pacientes eliminados (Ajustes · solo Administración)
+function deletedPatientsCard() {
+  const list = S.deletedPatients || [];
+  return `<div class="sec"><h3>Pacientes eliminados</h3><div class="list">${list.map(x => `<div class="row"><div class="grow"><div class="t">${esc(x.name)} <span class="muted small">${esc(x.code)} · ${esc(x.ci || 'sin cédula')}</span></div>
+    <div class="s">${esc(x.why)}${x.det ? ' · ' + esc(x.det) : ''} · ${Object.entries(x.counts || {}).filter(([, n]) => n).map(([k, n]) => n + ' ' + k).join(', ') || 'sin registros'} · copia previa: ${esc(x.backup)}</div></div>
+    <div class="end small muted">${esc(x.at)}<br>${esc(x.by)}</div></div>`).join('') || '<div class="empty">No se ha eliminado ningún paciente.</div>'}</div></div>`;
+}

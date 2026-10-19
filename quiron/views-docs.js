@@ -7,7 +7,7 @@ function docModel(kind, id) {
     return { kind, title: 'PRESUPUESTO', num: b.num, date: b.date, until, p: pat(b.pid), doc: med(b.doc), proc: b.proc, items: budgetItems(b), t: budgetTotals(b), payments: [], money: n => fmt(n) };
   }
   const i = byId(S.invoices, id);
-  return { kind, title: isFiscal(i) ? 'FACTURA' : i.status === 'pagada' ? 'RECIBO DE PAGO' : 'NOTA DE COBRO', invoice: i, fiscal: isFiscal(i), num: i.num, control: i.sheets?.map(h => h.control).join(', ') || i.control, date: i.issueDate || i.date, p: i.buyer ? { ...pat(i.pid), ...i.buyer } : pat(i.pid), doc: med(i.doc), proc: i.proc, items: i.items, t: invTotals(i), payments: i.payments,
+  return { kind, title: isFiscal(i) ? 'FACTURA' : i.status === 'exonerada' ? 'CONSTANCIA DE EXONERACIÓN' : i.status === 'pagada' ? 'RECIBO DE PAGO' : 'NOTA DE COBRO', invoice: i, fiscal: isFiscal(i), num: i.num, control: i.sheets?.map(h => h.control).join(', ') || i.control, date: i.issueDate || i.date, p: i.buyer ? { ...pat(i.pid), ...i.buyer } : pat(i.pid), doc: med(i.doc), proc: i.proc, items: i.items, t: invTotals(i), payments: i.payments,
     rate: invRate(i), fixed: !!i.rate, money: n => fmt(n * invRate(i), 'VES') };   // cuentas y facturas en Bs
 }
 const pdfMoney = n => fmt(n).replace('$', 'USD ');
@@ -18,7 +18,7 @@ function docHTML(m) {
   return `<div class="paper">
     <div style="display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap">
       <div>${window.LOGO ? `<img src="${window.LOGO.url}" alt="${esc(c.name)}" style="width:150px;display:block">` : `<div style="font-size:19px;font-weight:700">${esc(c.name)}</div>`}<div class="prif">RIF ${esc(c.rif)}</div></div>
-      <div style="text-align:right"><div style="font-size:17px;font-weight:700;letter-spacing:.04em">${m.title}</div><div class="pm">Nº ${m.num}${m.control ? `<br>Nº de control ${m.control}` : ''}<br>Fecha ${fdate(m.date)}${m.until ? `<br>Válido hasta ${fdate(m.until)}` : ''}</div></div>
+      <div style="text-align:right"><div style="font-size:17px;font-weight:700;letter-spacing:.04em">${m.title}</div><div class="pm">Nº ${esc(m.num)}${m.control ? `<br>Nº de control ${m.control}` : ''}<br>Fecha ${fdate(m.date)}${m.until ? `<br>Válido hasta ${fdate(m.until)}` : ''}</div></div>
     </div>
     <div class="pbox"><div><b>Paciente:</b> ${esc(m.p.name)} · C.I. ${esc(m.p.ci)}</div><div><b>Teléfono:</b> ${esc(m.p.phone)}${m.p.address ? ` · <b>Dirección:</b> ${esc(m.p.address)}` : ''}</div>
       ${m.doc ? `<div><b>Médico tratante:</b> ${esc(m.doc.name)}</div>` : ''}${m.proc ? `<div><b>Procedimiento:</b> ${esc(m.proc)}</div>` : ''}</div>
@@ -31,6 +31,7 @@ function docHTML(m) {
       ${row('TOTAL', m.money(m.t.total), true)}
       ${m.kind === 'budget' ? row(`Equivalente en Bs (tasa BCV ${S.rate.toLocaleString('es-VE', { maximumFractionDigits: 4 })})`, fmt(m.t.total * S.rate, 'VES')) : row(`Referencia: tasa BCV ${m.rate.toLocaleString('es-VE', { maximumFractionDigits: 4 })} Bs/USD`, fmt(m.t.total))}
       ${igtf ? row(`IGTF ${S.igtfRate}% pagado`, m.money(igtf)) : ''}
+      ${m.invoice?.status === 'exonerada' && m.invoice.exon ? row(`Exonerado · ${esc(m.invoice.exon.reason)}`, '-' + m.money(m.invoice.exon.usd)) + row('A PAGAR', m.money(0), true) : ''}
     </div>
     ${m.payments.length ? `<div class="pm" style="margin-top:12px"><b>Forma de pago:</b> ${m.payments.map(p => `${metodo(p.method).name} ${fmt(p.amount, p.cur)}`).join(' · ')}</div>` : ''}
     <div class="pm" style="margin-top:18px;border-top:1px solid #ddd;padding-top:8px">${m.kind === 'budget' ? `Presupuesto válido por ${Math.round((new Date(m.until) - new Date(m.date)) / DAY)} días. Montos expresados en dólares; el equivalente en bolívares se calcula a la tasa oficial BCV del día del pago. ` : ''}${esc(c.note)}</div>
@@ -50,12 +51,12 @@ function facturaOpen(inv) {
     after: facturaVoidHistory(inv.id),
     extra: canSee('contabilidad') ? '<button class="btn" data-act="facturaReplace" data-id="' + inv.id + '">Hoja dañada · reemplazar</button>' : '' });
 }
-const docFileName = m => `${m.kind === 'budget' ? 'Presupuesto' : m.status === 'pagada' ? 'Recibo' : 'Nota de cobro'} ${m.num} - ${m.p.name}.pdf`;
+const docFileName = m => `${m.kind === 'budget' ? 'Presupuesto' : m.invoice?.status === 'exonerada' ? 'Constancia de exoneración' : m.status === 'pagada' ? 'Recibo' : 'Nota de cobro'} ${m.num} - ${m.p.name}.pdf`;
 ACTIONS.showDoc = el => {
   if (!pdfReady()) return;
   const m = docModel(el.dataset.kind, el.dataset.id); UI.docShown = { kind: el.dataset.kind, id: el.dataset.id };
   if (m.fiscal) return facturaOpen(m.invoice);
-  return pdfSave(() => pdfBilling(m), docFileName({ ...m, status: m.invoice?.status }), { title: `${m.kind === 'budget' ? 'Presupuesto' : 'Recibo'} ${m.num}`,
+  return pdfSave(() => pdfBilling(m), docFileName({ ...m, status: m.invoice?.status }), { title: `${m.kind === 'budget' ? 'Presupuesto' : m.invoice?.status === 'exonerada' ? 'Constancia de exoneración' : m.invoice?.status === 'pagada' ? 'Recibo' : 'Nota de cobro'} ${m.num}`,
     note: m.kind === 'budget' ? 'Los aumentos por servicio no se muestran; la cortesía sí.' : '' });
 };
 ACTIONS.downloadDoc = () => ACTIONS.showDoc({ dataset: UI.docShown || {} });

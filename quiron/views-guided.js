@@ -965,7 +965,7 @@ function guidedQuestionBody(c, s) {
       '<div class="guide-selected">' + c.reasons.map((r, i) => '<div class="row"><span>' + esc(r.label) + (r.main ? ' · Principal' : '') +
         '</span>' + (r.main ? '' : ccButton('ccReasonMain', 'Principal', 'data-i="' + i + '"')) +
         ccButton('ccRemove', 'Quitar', 'data-list="reasons" data-i="' + i + '"') + '</div>').join('') + '</div>';
-  } else if (s.type === 'dxSearch') body += (c.kind === 'evolution' ? guidedDiagnosisUpdates(c) : '') + guidedSearch('cc-dx-search', 'guideDxSearch', UI.ccDxQuery, 'Diagnóstico, sinónimo o CIE-10',
+  } else if (s.type === 'dxSearch') body += (c.kind === 'evolution' ? guidedDiagnosisUpdates(c) : '') + guidedSearch('cc-dx-search', 'guideDxSearch', UI.ccDxQuery, 'Escriba el diagnóstico',
     guidedDxOptions(UI.ccDxQuery || ''), 'cc-dx-results') + guidedSelected(c, 'dx', 'label');
   else if (s.type === 'rxSearch') body += guidedSearch('guide-rx-search', 'guideRxSearch', UI.guideRxQuery, 'Busque o escriba el medicamento',
     guidedRxOptions(UI.guideRxQuery || ''), 'guide-rx-results', 'guide-rx-options') + '<p class="allergy">' + esc(CONSULT.allergyText(pat(c.pid).history)) +
@@ -1661,24 +1661,12 @@ function guidedDxIndex(c, dx) {
   return c.dx.findIndex(d => dx.code && d.code === dx.code || normQ(d.label).trim() === normQ(dx.label).trim());
 }
 
+// El médico escribe el diagnóstico con sus propias palabras (sin lista de sugerencias)
 function guidedDxOptions(query) {
-  const c = guidedCurrent(), q = normQ(query || '').trim();
-  // Sin búsqueda: arriba lo que coincide con el motivo de consulta y lo que el paciente ya tenía diagnosticado
-  const reasonWords = c ? c.reasons.map(r => normQ(r.label)) : [];
-  const previous = c ? (S.consults || []).filter(x => x.pid === c.pid && x.id !== c.id && x.status === 'firmada').flatMap(x => x.dx || []).map(d => normQ(d.label)) : [];
-  const fav = doctorFavorites(c?.doc).dx;
-  const rank = d => { const t = normQ([d.label, ...(d.synonyms || [])].join(' '));
-    return reasonWords.some(w => w && (t.includes(w) || w.includes(normQ(d.label)))) ? 0 : previous.includes(normQ(d.label)) ? 1 : fav[normQ(d.label)] ? 2 : 3; };
-  return CONSULT.diagnoses.map((d, i) => ({ d, i }))
-    .filter(({ d }) => normQ([d.label, d.code, ...(d.synonyms || [])].join(' ')).includes(q))
-    .sort((a, b) => q ? 0 : rank(a.d) - rank(b.d))
-    .slice(0, q ? 25 : 15).map(({ d, i }) => {
-      const on = !!c && guidedDxIndex(c, d) >= 0;
-      return ccButton('guideDxPick', (on ? '✓ ' : '') + esc(d.label) + (d.code ? ' · ' + esc(d.code) : ''),
-        'data-i="' + i + '" aria-pressed="' + on + '"', on ? 'on' : '');
-    }).join('') + (q ? ccButton('guideDxFree', 'Agregar texto libre: ' + esc(query.trim()),
-      'aria-pressed="' + (!!c && guidedDxIndex(c, { label: query.trim() }) >= 0) + '"',
-      c && guidedDxIndex(c, { label: query.trim() }) >= 0 ? 'on' : '') : '');
+  const q = (query || '').trim(), c = guidedCurrent();
+  if (!q) return '<p class="small muted">Escriba el diagnóstico y pulse Agregar (o Enter). Puede agregar varios.</p>';
+  const dup = !!c && guidedDxIndex(c, { label: q }) >= 0;
+  return dup ? '<p class="small muted">Ese diagnóstico ya está agregado.</p>' : ccButton('guideDxFree', 'Agregar diagnóstico: ' + esc(q), '', 'primary');
 }
 
 ACTIONS.guideDxSearch = el => {
@@ -1707,8 +1695,14 @@ ACTIONS.guideDxPick = el => {
   if (d) guidedAddDx(d);
 };
 ACTIONS.guideDxFree = () => {
-  if (UI.ccDxQuery?.trim()) guidedAddDx({ label: UI.ccDxQuery.trim() });
+  const c = guidedCurrent(), label = UI.ccDxQuery?.trim();
+  if (!c || !label || guidedDxIndex(c, { label }) >= 0) return;
+  guidedAddDx({ label }); UI.ccDxQuery = ''; render();
+  document.getElementById('cc-dx-search')?.focus();
 };
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.id === 'cc-dx-search' && document.getElementById('guide-body')) { e.preventDefault(); ACTIONS.guideDxFree(); }
+});
 
 function guidedRxIndex(c, drug, productId) {
   return c.rx.findIndex(r => productId && r.productId === productId || normQ(r.drug).trim() === normQ(drug).trim());
@@ -1729,7 +1723,7 @@ function guidedRxAllergies(c, drug) {
 function guidedRxButton(c, drug, attrs, label = drug, productId) {
   const on = !!c && guidedRxIndex(c, drug, productId) >= 0;
   const allergy = !!c && guidedRxAllergies(c, drug).length > 0;
-  return ccButton('guideRxPick', (on ? '✓ ' : '') + esc(label) +
+  return ccButton('guideRxPick', esc(label) +
     (allergy ? '<span class="guide-rx-allergy-label">⚠ Alergia registrada</span>' : ''),
     attrs + ' aria-pressed="' + on + '"', [on ? 'on' : '', allergy ? 'guide-rx-allergy' : ''].filter(Boolean).join(' '));
 }
@@ -1772,7 +1766,7 @@ function guidedOrderOptions(query) {
   const q = normQ(query || ''), fav = doctorFavorites(c?.doc).orders;
   return opts.filter(o => normQ(o.label).includes(q)).sort((a, b) => (fav[normQ(b.label)] || 0) - (fav[normQ(a.label)] || 0)).slice(0, q ? 40 : 24).map(o => {
     const on = chosen.has(o.label);
-    return ccButton('guideOrderPick', (on ? '✓ ' : fav[normQ(o.label)] ? '★ ' : '') + esc(o.label),
+    return ccButton('guideOrderPick', (on ? '' : fav[normQ(o.label)] ? '★ ' : '') + esc(o.label),
       'data-label="' + esc(o.label) + '" data-category="' + o.category + '" aria-pressed="' + on + '"', on ? 'on' : '');
   }).join('') +
     (query?.trim() && !chosen.has(query.trim()) ? ccButton('guideOrderPick', 'Solicitar: ' + esc(query), 'data-label="' + esc(query.trim()) + '" data-category="otro"') : '');

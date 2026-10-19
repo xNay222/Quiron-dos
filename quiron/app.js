@@ -68,7 +68,7 @@ const PERMS = {
   enfermeria: ['hosp.clinico', 'hosp.solicitar', 'hosp.aplicar'],
   // Enfermeras+: todo lo de enfermería y además programan cirugías (no agendan consultas)
   enfermeria_plus: ['hosp.clinico', 'hosp.solicitar', 'hosp.aplicar', 'qx.solicitar', 'qx.devolver', 'qx.programar'],
-  almacen: ['inv.gestionar', 'guardia.editar', 'agenda.programar'],   // Inicio completo y Agenda (crea y edita citas y cirugías); el valor total del inventario solo lo ve el administrador
+  almacen: ['inv.gestionar', 'inv.extra', 'guardia.editar', 'agenda.programar'],   // inv.extra: solicitud extraordinaria (sacar sin orden del médico, con motivo, médico y paciente); sin entradas ni salidas manuales ·   // Inicio completo y Agenda (crea y edita citas y cirugías); el valor total del inventario solo lo ve el administrador
   laboratorio: ['pac.clinico', 'pac.registrar', 'examen.pedir'],
   imagen: ['examen.pedir', 'imagen.subir'],
   recepcion: ['consulta.estado', 'agenda.programar', 'pac.registrar', 'pac.papeles'],
@@ -230,9 +230,9 @@ ACTIONS.setUser = el => {
 // Contadores: al abrir una pantalla, cada cifra grande sube desde 0 hasta su valor (~0,8 s, frenando al final).
 // Respeta el formato ($1.250,00 · Bs 866,56 · 12) y al terminar deja el texto original exacto.
 function countUp(root) {
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.classList.contains('motion-off')) return;
   const re = /\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:,\d+)?/;
-  root.querySelectorAll('.kpi .val').forEach(el => {
+  root.querySelectorAll('.kpi .val, .wcard .wbal, .bh-val').forEach(el => {
     const tn = [...el.childNodes].find(n => n.nodeType === 3 && /\d/.test(n.nodeValue)); if (!tn) return;
     const orig = tn.nodeValue; if (/\d\s*[–-]\s*\d/.test(orig)) return; // rangos como 2019–2026 no se animan
     const m = orig.match(re); if (!m) return;
@@ -566,9 +566,34 @@ const exampleTag = '<span class="example"><span class="dot"></span>Datos de ejem
 
 // Capacidades de la página (IA, descargas, archivos): null si esta vista no las tiene
 const capCache = {};
+// "sample" lee imágenes con IA. Dentro de Claude usa su IA; fuera (servidor local) usa el proveedor configurado en el
+// servidor (/__ia: Google Gemini con la clave guardada en Windows). "sample-clin" es lo mismo pero para fotos con datos
+// de pacientes (historias, resultados): fuera de Claude solo funciona si Administración lo activó en Ajustes.
+const IA_CLIN_KEY = 'quiron-ia-clinica';
+const iaClinOn = () => { try { return localStorage.getItem(IA_CLIN_KEY) === '1'; } catch (e) { return false; } };
 function getCap(name) {
-  if (!capCache[name]) capCache[name] = (window.claude?.use ? window.claude.use(name) : Promise.resolve(null)).catch(() => null);
+  if (capCache[name]) return capCache[name];
+  const real = name === 'sample-clin' ? 'sample' : name;
+  const local = real === 'sample' && (name !== 'sample-clin' || iaClinOn()) ? localAI() : Promise.resolve(null);
+  capCache[name] = (window.claude?.use ? window.claude.use(real) : local).catch(() => null);
   return capCache[name];
+}
+async function localAI() {
+  if (typeof fetch !== 'function') return null;
+  const r = await fetch('/__ia', { cache: 'no-store' }).catch(() => null); if (!r || r.status !== 204) return null;
+  const toPart = async f => {
+    const b = String(f.type || '').startsWith('image/') ? await shrinkImage(f) : f; const url = await blobToDataURL(b);
+    return { mime: url.slice(5, url.indexOf(';')), data: url.slice(url.indexOf(',') + 1) };
+  };
+  return {
+    limits: async () => ({ images: { maxCount: 6, mediaTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/heic'] } }),
+    json: async (prompt, { images = [] } = {}) => {
+      const body = JSON.stringify({ prompt: prompt + '\n\nResponde solo con JSON válido.', images: await Promise.all(images.map(toPart)) });
+      const res = await fetch('/__ia', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }); const t = await res.text();
+      if (!res.ok) throw new Error(t || 'La IA no respondió');
+      const fence = String.fromCharCode(96).repeat(3);
+      return JSON.parse(t.trim().replace(new RegExp('^' + fence + '(json)?'), '').replace(new RegExp(fence + '$'), ''));
+    } };
 }
 
 // Modo día / noche, recordado en este navegador
@@ -583,10 +608,28 @@ function setTheme(t) { try { localStorage.setItem(THEME_KEY, t); } catch (e) {}
 const themeSeg = (act = 'setTheme') => `<div class="seg" role="group" aria-label="Apariencia">${THEMES.map(([k, t]) => `<button data-act="${act}" data-k="${k}" aria-pressed="${getTheme() === k}">${t}</button>`).join('')}</div>`;
 applyTheme(getTheme());
 
+// Abrir con una copia de la carpeta "copias de seguridad" (servidor local): http://localhost:8082/?cargar=<archivo>.json
+// Sirve para empezar en otro navegador o computadora con los datos reales. Si este navegador ya tiene pacientes, pide confirmación.
+async function loadFromServerCopy(name) {
+  const clean = () => history.replaceState(null, '', location.pathname + location.hash);
+  try {
+    const r = await fetch('/__copia?nombre=' + encodeURIComponent(name)); if (!r.ok) throw new Error('No se encontró la copia ' + name);
+    const obj = await r.json(); const st = obj?.app === 'quiron' ? obj.state : obj;
+    if (!st || !['patients', 'invoices', 'products', 'services', 'appts'].every(k => Array.isArray(st[k]))) throw new Error('El archivo no es una copia válida de Quirón');
+    if (S?.patients?.length && !confirm(`Este navegador ya tiene datos (${S.patients.length} pacientes). ¿Reemplazarlos por la copia "${name}" (${st.patients.length} pacientes, ${st.products.length} productos)?`)) { clean(); return false; }
+    S = st; STORE.blocked = false; STORE.stale = false; STORE.error = null; try { STORE.rev = +(localStorage.getItem(REV_KEY) || 0); } catch (e) {}
+    migrate(); if (!save()) throw new Error('No se pudo guardar en este navegador');
+    log('Datos cargados desde la copia del servidor', name); save(); clean(); location.reload(); return true;
+  } catch (e) { clean(); alert('No se pudieron cargar los datos: ' + e.message); return false; }
+}
 (function start() {
+  const cargar = typeof URLSearchParams === 'function' && location?.search ? new URLSearchParams(location.search).get('cargar') : null;
+  if (cargar) { loadFromServerCopy(cargar); return; }
   const h = (location.hash || '').slice(1);
   if (h && VIEWS[h]) route = h;
-  if (authBoot()) render();   // sin sesión válida: pantalla de acceso
+  const boot = () => { if (authBoot()) render(); };   // sin sesión válida: pantalla de acceso
+  // Con el servidor local, primero toma los datos más recientes de cualquier equipo; sin él (o en pruebas) arranca de inmediato
+  if (!STORE.blocked && typeof fetch === 'function' && /^https?:$/.test(location?.protocol || '')) serverPull().then(boot, boot); else boot();
 })();
 
 // Menú lateral: el desvanecido de abajo desaparece cuando ya se ve la última opción
@@ -598,3 +641,67 @@ applyTheme(getTheme());
   addEventListener('resize', check);
   if (typeof MutationObserver === 'function') new MutationObserver(check).observe(side, { childList: true });
 })();
+
+// Pastilla que se desliza en los grupos de botones (.seg): un solo fondo que viaja hasta la opción elegida.
+// Como cada render vuelve a crear el grupo, se recuerda dónde estaba la pastilla (por nombre del grupo) y desde ahí se desliza.
+(function segPills() { try {
+  const last = new Map();
+  const keyOf = seg => { const label = seg.getAttribute('aria-label') || ''; const scope = seg.closest('.sheet') ? 's' : 'm';
+    const same = [...document.querySelectorAll('.seg')].filter(s => (s.getAttribute('aria-label') || '') === label && (s.closest('.sheet') ? 's' : 'm') === scope);
+    return scope + '|' + label + '|' + same.indexOf(seg); };
+  const place = (pill, r) => { pill.style.width = r.w + 'px'; pill.style.height = r.h + 'px'; pill.style.transform = `translate(${r.x}px,${r.y}px)`; };
+  function sync(seg) {
+    const on = seg.querySelector(':scope>button[aria-pressed="true"]'); let pill = seg.querySelector(':scope>.seg-pill');
+    if (!on || !on.offsetWidth) { if (pill) pill.style.opacity = '0'; return; }
+    const r = { x: on.offsetLeft, y: on.offsetTop, w: on.offsetWidth, h: on.offsetHeight }; const k = keyOf(seg);
+    if (!pill) {
+      pill = document.createElement('span'); pill.className = 'seg-pill'; pill.setAttribute('aria-hidden', 'true'); seg.prepend(pill); seg.classList.add('has-pill');
+      const prev = last.get(k);
+      // Arranca donde estaba antes (o directamente en su sitio, sin animación, la primera vez)
+      pill.style.transition = 'none'; place(pill, prev || r); void pill.offsetWidth; pill.style.transition = '';
+    }
+    pill.style.opacity = '1';
+    place(pill, r); last.set(k, r);
+  }
+  let queued = false;
+  const all = () => { queued = false; document.querySelectorAll('.seg').forEach(sync); };
+  const queue = () => { if (!queued) { queued = true; (typeof queueMicrotask === 'function' ? queueMicrotask : f => setTimeout(f, 0))(all); } };
+  if (typeof MutationObserver === 'function') new MutationObserver(queue).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['aria-pressed'] });
+  addEventListener('resize', queue); if (document.fonts?.ready) document.fonts.ready.then(queue);
+  queue();
+} catch (e) {} })();
+
+// ---------- Animaciones según el equipo: Completas · Ligeras · Sin animaciones ----------
+// "Automático" (por defecto) mira el equipo: con 4 núcleos o menos, 4 GB de memoria o menos, o si la pantalla no llega
+// a ~45 cuadros por segundo, usa el modo ligero (sin desenfoques ni efectos que latan sin parar). La elección es por equipo.
+const MOTION_KEY = 'quiron-motion';
+const motionPref = () => { try { return localStorage.getItem(MOTION_KEY) || 'auto'; } catch (e) { return 'auto'; } };
+const NAV = globalThis.navigator || {};
+let motionAuto = (NAV.hardwareConcurrency && NAV.hardwareConcurrency <= 4) || (NAV.deviceMemory && NAV.deviceMemory <= 4) ? 'lite' : 'full';
+const motionMode = () => { const p = motionPref(); return p === 'auto' ? motionAuto : p; };
+function applyMotion() { const m = motionMode(); const h = document.documentElement; if (typeof h?.classList?.toggle !== 'function') return; h.classList.toggle('motion-lite', m === 'lite'); h.classList.toggle('motion-off', m === 'off'); }
+applyMotion();
+// Medición real de fluidez: dos mediciones de 1,5 s, a los 6 y 12 s de abrir (ya pasada la carga) y con la pantalla visible.
+// Solo pasa a ligero si ambas dan menos de 24 cuadros/s (el ahorro de energía del navegador limita a 30 y eso no cuenta).
+const MOTION_INFO = { cores: globalThis.navigator?.hardwareConcurrency || null, mem: globalThis.navigator?.deviceMemory || null, fps: [] };
+(function probeMotion() { try {
+  if (motionAuto === 'lite' || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const measure = () => new Promise(res => { let n = 0, t0 = 0; const step = t => { if (document.visibilityState !== 'visible') return res(null); if (!t0) t0 = t; n++; if (t - t0 < 1500) requestAnimationFrame(step); else res(Math.round(n / ((t - t0) / 1000))); }; requestAnimationFrame(step); });
+  const run = async () => { const a = await measure(); await new Promise(r => setTimeout(r, 6000)); const b = await measure();
+    MOTION_INFO.fps = [a, b].filter(Boolean); if (MOTION_INFO.fps.length === 2 && MOTION_INFO.fps.every(f => f < 24)) { motionAuto = 'lite'; applyMotion(); } };
+  const go = () => setTimeout(run, 6000);
+  if (document.visibilityState === 'visible') go(); else document.addEventListener('visibilitychange', function v() { if (document.visibilityState === 'visible') { document.removeEventListener('visibilitychange', v); go(); } });
+} catch (e) {} })();
+const motionWhy = () => { const i = MOTION_INFO; return [i.cores ? i.cores + ' núcleos' : 'núcleos: no informa', i.mem ? (i.mem >= 8 ? '8 GB o más' : i.mem + ' GB') + ' de memoria' : 'memoria: no informa', i.fps.length ? 'pantalla a ' + i.fps.join(' y ') + ' cuadros/s' : 'pantalla: midiendo…'].join(' · '); };
+const motionCard = () => { const p = motionPref(); const opts = [['auto', `Automático (${motionAuto === 'lite' ? 'ligeras' : 'completas'} en este equipo)`], ['full', 'Completas'], ['lite', 'Ligeras'], ['off', 'Sin animaciones']];
+  return `<div class="card" style="margin-bottom:16px"><div class="between" style="gap:12px;flex-wrap:wrap"><div><h2 style="margin:0">Animaciones</h2><div class="small muted">Solo para este equipo. "Ligeras" quita los desenfoques y efectos continuos para que las computadoras viejas vayan fluidas.</div><div class="small muted" style="margin-top:4px">Detectado: ${motionWhy()}</div></div>
+    <div class="seg" role="group" aria-label="Animaciones">${opts.map(([k, l]) => `<button data-act="setMotion" data-k="${k}" aria-pressed="${p === k}">${l}</button>`).join('')}</div></div></div>`; };
+ACTIONS.setMotion = el => { try { localStorage.setItem(MOTION_KEY, el.dataset.k); } catch (e) {} applyMotion(); render(); toast(el.dataset.k === 'auto' ? 'Animaciones automáticas' : 'Animaciones: ' + el.textContent.toLowerCase()); };
+
+// ---------- Ajustes: estado de la IA para leer fotos ----------
+let IA_STATE = 'comprobando';
+if (typeof fetch === 'function') fetch('/__ia', { cache: 'no-store' }).then(r => { IA_STATE = r.status === 204 ? 'local' : 'sin'; }, () => { IA_STATE = 'sin'; });
+const iaCard = () => { const inClaude = !!window.claude?.use; const st = inClaude ? 'La IA de Claude está disponible.' : IA_STATE === 'local' ? 'Conectada a Google Gemini a través del servidor local.' : IA_STATE === 'comprobando' ? 'Comprobando…' : 'Sin conectar: falta la clave GEMINI_API_KEY en Windows (ver instrucciones).';
+  return `<div class="card" style="margin-bottom:16px"><div class="between" style="gap:12px;flex-wrap:wrap"><div><h2 style="margin:0">IA para leer fotos</h2><div class="small muted">Facturas de compra y cajas de medicamentos. ${esc(st)}</div></div>
+    ${can('*') && !inClaude ? `<label class="hstack small" style="max-width:420px"><input type="checkbox" data-ch="iaClin" ${iaClinOn() ? 'checked' : ''}> Usarla también con fotos de pacientes (historias y resultados). El plan gratuito de Google puede usar lo enviado para mejorar sus modelos: déjelo apagado salvo que tenga un plan de pago.</label>` : ''}</div></div>`; };
+ACTIONS.iaClin = el => { try { localStorage.setItem(IA_CLIN_KEY, el.checked ? '1' : '0'); } catch (e) {} delete capCache['sample-clin']; log('IA con datos de pacientes', el.checked ? 'activada' : 'desactivada'); save(); toast(el.checked ? 'IA activada también para fotos de pacientes' : 'IA solo para facturas y productos'); };

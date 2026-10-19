@@ -1264,7 +1264,7 @@ async function test(name, fn) {
     assert.equal(c.rx[1].dose, undefined);
     assert.equal(c.rx[0].status, 'prescrito');
     assert.equal(c.rx[0].documentStatus, 'borrador');
-    assert.match(guidedRxOptions(''), /class="btn on"[^>]*aria-pressed="true"[^>]*>✓/);
+    assert.match(guidedRxOptions(''), /class="btn on"[^>]*aria-pressed="true"/);
     assert.ok(guidedSelected(c, 'rx', 'drug').includes('Quitar'));
     ACTIONS.guideRxPick({ dataset: { id: products[1].id } });
     assert.equal(c.rx.length, 1);
@@ -1309,7 +1309,7 @@ async function test(name, fn) {
     confirmResult = true;
     ACTIONS.guideRxPick({ dataset: { id: 'p-alergia' } });
     assert.equal(c.rx.length, 1);
-    assert.match(guidedRxOptions('ibuprofeno'), /aria-pressed="true"[^>]*>✓/);
+    assert.match(guidedRxOptions('ibuprofeno'), /aria-pressed="true"/);
     ACTIONS.guideRxPick({ dataset: { id: 'p-alergia' } });
     assert.equal(c.rx.length, 0);
     assert.equal(confirmCalls, 2);
@@ -1360,11 +1360,11 @@ async function test(name, fn) {
     assert.equal(c.dx.length, 2);
     assert.equal(c.dx[0].priority, 'principal');
     assert.equal(c.dx[1].priority, 'secundario');
-    assert.match(guidedDxOptions(''), /class="btn on"[^>]*aria-pressed="true"[^>]*>✓/);
+    assert.ok(guidedDxOptions('').includes('Escriba el diagnóstico'));   // el médico escribe el diagnóstico (sin sugerencias)
     assert.ok(guidedSelected(c, 'dx', 'label').includes('data-act="guideDxMain"'));
     const catalog = CONSULT.diagnoses.find(d => d.synonyms?.length && d.code);
-    assert.ok(guidedDxOptions(catalog.synonyms[0]).includes(catalog.label));
-    assert.ok(guidedDxOptions(catalog.code).includes(catalog.label));
+    assert.ok(guidedDxOptions(catalog.synonyms[0]).includes('Agregar diagnóstico'));
+    assert.ok(guidedDxOptions(catalog.code).includes('Agregar diagnóstico'));
     const certainty = c.dx[1].certainty;
     ACTIONS.guideDxMain({ dataset: { i: '1' } });
     assert.equal(c.dx[0].priority, 'secundario');
@@ -1373,10 +1373,13 @@ async function test(name, fn) {
     ACTIONS.guideDxPick({ dataset: { i: '1' } });
     assert.equal(c.dx.length, 1);
     assert.equal(c.dx[0].priority, 'principal');
+    // Diagnóstico escrito por el médico: se agrega una vez, la casilla queda vacía y repetirlo no lo duplica
     UI.ccDxQuery = 'Diagnóstico libre';
     ACTIONS.guideDxFree();
+    assert.equal(c.dx.length, 2);
+    assert.equal(UI.ccDxQuery, '');
     ACTIONS.guideDxFree();
-    assert.equal(c.dx.length, 1);
+    UI.ccDxQuery = 'diagnóstico libre';
     ACTIONS.guideDxFree();
     assert.equal(c.dx.length, 2);
     assert.ok(guidedConsultBody(c).includes('Presuntivo'));
@@ -1405,7 +1408,7 @@ async function test(name, fn) {
     ACTIONS.guideOrderPick({ dataset: { label: 'Hemograma', category: 'lab' } });
     assert.equal(c.guide.current, 'orders');
     assert.equal(guidedOrderDrafts(c)[0], null);
-    assert.match(guidedOrderOptions('Orina'), /aria-pressed="true"[^>]*>✓/);
+    assert.match(guidedOrderOptions('Orina'), /aria-pressed="true"/);
     assert.ok(!guidedSteps(c).some(s => s.key === 'orders-more'));
     assert.ok(!guidedConsultBody(c).includes('¿Desea agregar otro examen?'));
     ACTIONS.guideNext();
@@ -1778,7 +1781,7 @@ async function test(name, fn) {
     assert.ok(doctorFavorites(c.doc).rx[normQ('Losartán 50 mg')] >= 1);
     param = saved;
   });
-  await test('Un médico sin número de colegiado no puede firmar; al registrarlo sí, y pasa a su ficha (el MPPS ya no se usa)', () => {
+  await test('Un médico sin número de colegiado no puede firmar; al registrarlo sí, y pasa a su ficha con colegio y MPPS', () => {
     const me = meUser();
     const saved = { cm: me.cm };
     me.cm = '';
@@ -1790,9 +1793,33 @@ async function test(name, fn) {
     assert.equal(credsBlockSign(), false);
     assert.equal(med(me.doc).cm, saved.cm);
     assert.ok(docCreds(med(me.doc)).includes('C.M. ' + saved.cm));
-    assert.ok(!docCreds({ ci: 'V-1', mpps: '54321', cm: '123' }).includes('MPPS'), 'el MPPS no se imprime');
+    const cr = docCreds({ ci: 'V-1', mpps: '54321', cm: '123', colegio: 'MI' });
+    assert.ok(cr.includes('MPPS 54321') && cr.includes('C.M. 123 (CM Miranda)'), 'imprime colegio y MPPS: ' + cr);
+    assert.deepEqual([...credsPending({ cm: '1' })], ['MPPS']);
     // Administración: los datos son opcionales y nunca bloquean
     assert.equal(credsMissing({ role: 'admin' }), false);
+  });
+  await test('Amonestaciones y destacados: se registran en el perfil, cuentan hacia el límite y al anular no se borran', () => {
+    const d = S.doctors[0]; const who = 'doc:' + d.id; const before = (S.staffNotes = S.staffNotes || []).length; const ses = { ...S.session }; S.session.role = 'admin';
+    UI.stBack = null; ACTIONS.staffDoc({ dataset: { id: d.id } });
+    assert.ok(lastSheet.body.includes('Amonestaciones y destacados'), 'pestaña en el perfil');
+    assert.ok(lastSheet.body.includes('sd-mpps') && lastSheet.body.includes('sd-col'), 'campos MPPS y colegio');
+    for (let k = 0; k < 3; k++) S.staffNotes.push({ id: 'snt' + k, who, kind: 'amonestacion', motive: 'x', title: 'Falta ' + k, text: 'Explicación completa ' + k, date: '2026-10-1' + k, by: 'Prueba', at: '2026-10-19 10:00' });
+    assert.equal(amonCount(who), 3);
+    UI.stTab = 'notas'; ACTIONS.staffDoc({ dataset: { id: d.id, keep: '1' } });
+    assert.ok(lastSheet.body.includes('sn-item bad') && lastSheet.body.includes('alcanzó 3 amonestaciones'), 'en rojo y con aviso');
+    S.staffNotes.find(n => n.id === 'snt0').void = { by: 'Prueba', at: 'x', reason: 'error' };
+    assert.equal(amonCount(who), 2); assert.equal(S.staffNotes.length, before + 3, 'no se borra');
+    S.staffNotes.splice(before); UI.stTab = 'datos'; S.session = ses;
+  });
+  await test('Seguridad: direcciones peligrosas, contraseñas débiles y textos que no se interpretan como HTML', () => {
+    assert.equal(safeUrl('javascript:alert(1)'), '#'); assert.equal(safeUrl(' JaVaScRiPt:x'), '#'); assert.equal(safeUrl('data:text/html,<b>'), '#');
+    assert.equal(safeUrl('/archivos/a.jpg'), '/archivos/a.jpg'); assert.equal(safeUrl('blob:http://localhost/1'), 'blob:http://localhost/1');
+    assert.ok(!safeUrl('/x\"><img>').includes('\"'), 'escapa comillas');
+    assert.ok(passWeak('12345678a') === '' || passWeak('12345678a'));
+    assert.ok(passWeak('quiron123'), 'nombre de la clínica'); assert.ok(passWeak('Password1') , 'de las más usadas');
+    assert.ok(passWeak('carlos2026', { name: 'Carlos Pérez', email: 'cp@x.com' }), 'contiene el nombre');
+    assert.equal(passWeak('Tr3n-azul-Moriche', { name: 'Carlos Pérez' }), '');
   });
   await test('Preparar solicitud para probar fallo de almacenamiento sin duplicarla', () => {
     ACTIONS.guideStart({

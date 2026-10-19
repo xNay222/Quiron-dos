@@ -3,7 +3,7 @@
 const SECTORS = [
   { id: 1, name: 'Sector 1', desc: 'Entrada', size: '3,6 × 3,6 m', x: 270, y: 127, w: 360, h: 360, dx: -40 },
   { id: 2, name: 'Sector 2', desc: 'Central', size: '2,4 × 2,8 m', x: 270, y: 487, w: 240, h: 280, dx: 20, dy: 41, fs: 0.75 },
-  { id: 3, name: 'Sector 3', desc: 'Fondo', size: '2,7 × 3,6 m', x: 0, y: 640, w: 270, h: 360, dy: -75 },
+  { id: 3, name: 'Sector 3', desc: 'Reserva', size: '2,7 × 3,6 m', x: 0, y: 640, w: 270, h: 360, dx: 76, dy: -128, fs: 0.5 },
 ];
 // Estanterías A, B y C: en el Sector 1, detrás de la puerta de entrada, contra la pared derecha. La A es la más cercana a la puerta.
 // Cada una tiene 6 niveles (EST-A-01 … EST-A-06) y en cada nivel recipientes numerados donde se guardan las medicinas.
@@ -20,18 +20,38 @@ const SHELVES = [
   { id: 'F', sector: 2, name: 'Estantería F', x: 276, y: 508, w: 40, h: 56, levels: [1, 2, 3, 4] },
   { id: 'G', sector: 2, name: 'Estantería G', x: 276, y: 566, w: 40, h: 56 },
   { id: 'H', sector: 2, name: 'Estantería H', x: 278, y: 718, w: 80, h: 40 },
+  // Sector 3 (reserva): un estante sin pisos junto a la entrada y tres cajas en fila hacia el fondo
+  { id: 'R', sector: 3, name: 'Estante de reserva', code: 'EST-R', label: 'R', x: 94, y: 646, w: 56, h: 90, levels: [1], levelNames: { 1: 'Todo el estante' } },
+  { id: 'C1', sector: 3, name: 'Caja 1 de reserva', code: 'CAJA-1', label: '1', box: true, x: 84, y: 744, w: 68, h: 76, levels: [1], levelNames: { 1: 'Nebulización y oxígeno' } },
+  { id: 'C2', sector: 3, name: 'Caja 2 de reserva', code: 'CAJA-2', label: '2', box: true, x: 92, y: 826, w: 52, h: 68, levels: [1], levelNames: { 1: 'CPAP, anestesia e irrigación' } },
+  { id: 'C3', sector: 3, name: 'Caja 3 de reserva', code: 'CAJA-3', label: '3', box: true, x: 78, y: 900, w: 74, h: 72, levels: [1], levelNames: { 1: 'Circuitos de anestesia' } },
 ];
 const LEVELS = [1, 2, 3, 4, 5, 6];        // el nivel 01 es la repisa de arriba
 const sectorOf = n => SECTORS.find(s => s.id === +n);
 const shelfOf = id => SHELVES.find(s => s.id === id);
 const levelsOf = id => shelfOf(id)?.levels || LEVELS;
-const levelCode = (shelf, level) => `${shelfOf(shelf)?.fridge ? '' : 'EST-'}${shelf}-${String(level).padStart(2, '0')}`;
+const levelCode = (shelf, level) => shelfOf(shelf)?.code || `${shelfOf(shelf)?.fridge ? '' : 'EST-'}${shelf}-${String(level).padStart(2, '0')}`;
 // Texto corto de la ubicación dentro del sector: "EST-A-02 · Recipiente 3"
 const spotText = l => [l.shelf && (l.level ? levelCode(l.shelf, l.level) : shelfOf(l.shelf)?.name), l.bin && 'Recipiente ' + l.bin, l.spot].filter(Boolean).join(' · ');
-const locText = p => p.loc?.sector ? [sectorOf(p.loc.sector).name, spotText(p.loc)].filter(Boolean).join(' · ') : '';
+const locTextOf = l => l?.sector ? [sectorOf(l.sector).name, spotText(l)].filter(Boolean).join(' · ') : '';
+const locText = p => locTextOf(p.loc);
+// Cada lote puede estar en otro sitio (p. ej. la reserva o la cuarentena del Sector 3); si no, está donde el producto
+const lotLoc = (p, l) => l?.loc?.sector ? l.loc : (p.loc || {});
+const locKeyOf = l => [l.sector || '', l.shelf || '', l.level || '', l.bin || '', l.spot || ''].join('|');
+// Sitios donde hay existencia de un producto: [{ loc, usable, expired, main }]. Sin existencia: solo la ubicación principal.
+function placements(p) {
+  const g = new Map();
+  p.lots.filter(l => l.qty > 0).forEach(l => { const loc = lotLoc(p, l); if (!loc.sector) return; const k = locKeyOf(loc);
+    const e = g.get(k) || { loc, usable: 0, expired: 0, main: k === locKeyOf(p.loc || {}) }; if (daysTo(l.exp) < 0) e.expired += l.qty; else e.usable += l.qty; g.set(k, e); });
+  if (!g.size && p.loc?.sector) g.set('main', { loc: p.loc, usable: 0, expired: 0, main: true });
+  return [...g.values()].sort((a, b) => b.main - a.main);
+}
+const placeExpired = (e, plain = false) => e.expired ? (plain ? ' · ' + e.expired + ' vencidas' : ' <span class="pill bad" style="font-size:11px;padding:0 6px">+' + e.expired + ' vencidas</span>') : '';
+// Productos (uno por sitio) que están en una estantería o un sector
+const placedIn = test => S.products.flatMap(p => placements(p).filter(e => test(e.loc)).map(e => ({ p, ...e })));
 // Unidades vencidas que siguen físicamente en el recipiente (no se despachan, pero hay que verlas)
 const expiredNote = (p, plain = false) => { const n = stock(p) - usable(p); return n > 0 ? (plain ? ` · ${n} vencidas` : ` <span class="pill bad" style="font-size:11px;padding:0 6px">+${n} vencidas</span>`) : ''; };
-const byBin = (a, b) => (+a.loc.bin || 1e9) - (+b.loc.bin || 1e9) || a.name.localeCompare(b.name);
+const byBin = (a, b) => (+a.loc.bin || 1e9) - (+b.loc.bin || 1e9) || (a.p || a).name.localeCompare((b.p || b).name);
 
 // active: sector resaltado · shelf: estantería resaltada · counts: {sector: n} · act / shelfAct: acción al tocar (null = solo lectura)
 function warehouseMap({ active = null, shelf = null, counts = null, act = null, shelfAct = null, pid = '' } = {}) {
@@ -46,9 +66,9 @@ function warehouseMap({ active = null, shelf = null, counts = null, act = null, 
   // Las estanterías van aparte de los sectores para que el resaltado de uno no pinte al otro
   const sh = e => { const on = shelf === e.id;
     return `<g class="shelf${shelfAct ? ' pick' : ''}" ${shelfAct ? `data-act="${shelfAct}" data-e="${e.id}" data-id="${pid}" role="button" tabindex="0" aria-label="${e.name}"` : ''} aria-pressed="${on}">
-      <rect x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}" ${e.fridge ? 'rx="6"' : ''} fill="${on ? 'var(--accent)' : e.fridge ? 'var(--accent-soft)' : 'var(--card)'}" stroke="${on ? 'var(--accent)' : 'var(--fg2)'}" stroke-width="3"/>
+      <rect x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}" ${e.fridge || e.box ? 'rx="6"' : ''} fill="${on ? 'var(--accent)' : e.fridge ? 'var(--accent-soft)' : e.box ? 'rgba(160,120,60,.35)' : 'var(--card)'}" stroke="${on ? 'var(--accent)' : 'var(--fg2)'}" stroke-width="3"/>
       ${e.fridge ? `<path d="M${e.x + 4} ${e.y + 22}H${e.x + e.w - 4}" stroke="${on ? '#fff' : 'var(--fg2)'}" stroke-width="2"/>` : ''}
-      <text x="${e.x + e.w / 2}" y="${e.y + e.h / 2 + 9}" text-anchor="middle" font-size="26" font-weight="700" fill="${on ? '#fff' : 'var(--fg)'}">${e.id}</text>
+      <text x="${e.x + e.w / 2}" y="${e.y + e.h / 2 + 9}" text-anchor="middle" font-size="26" font-weight="700" fill="${on ? '#fff' : 'var(--fg)'}">${e.label || e.id}</text>
     </g>`; };
   return `<svg viewBox="-30 20 700 1010" role="img" aria-label="Mapa del almacén con tres sectores y las estanterías A, B, C y la nevera N del Sector 1 y las estanterías D a H del Sector 2" style="display:block;width:100%;max-width:440px;height:auto;margin:0 auto">
     ${SECTORS.map(sec).join('')}
@@ -66,12 +86,12 @@ function warehouseMap({ active = null, shelf = null, counts = null, act = null, 
 // Vista de frente de una estantería: sus 6 niveles con los productos de cada uno.
 // pick: nivel elegido · act: acción al tocar un nivel · open: si los productos se pueden abrir
 function shelfFront(id, { pick = null, act = null, pid = '', open = true } = {}) {
-  const items = S.products.filter(p => p.loc?.shelf === id);
+  const items = placedIn(l => l.shelf === id);
   return `<div class="shelf-front" role="group" aria-label="${shelfOf(id).name}, vista de frente">${levelsOf(id).map(n => {
     const here = items.filter(p => +p.loc.level === n).sort(byBin); const on = +pick === n;
     return `<div class="lvl${act ? ' pick' : ''}" ${act ? `data-act="${act}" data-e="${id}" data-l="${n}" data-id="${pid}" role="button" tabindex="0"` : ''} aria-pressed="${on}">
       <div class="lvl-code">${levelCode(id, n)}${shelfOf(id).levelNames?.[n] ? `<div style="font-weight:400;margin-top:3px">${shelfOf(id).levelNames[n]}</div>` : ''}</div>
-      <div class="lvl-items">${here.map(p => `<${open ? `button data-act="openProduct" data-id="${p.id}"` : 'span'} class="bin-chip">${p.loc.bin ? `<b>${esc(p.loc.bin)}</b>` : ''}${esc(p.name)} <span class="muted">· ${usable(p)}</span>${expiredNote(p)}</${open ? 'button' : 'span'}>`).join('') || '<span class="muted small">Vacío</span>'}</div></div>`; }).join('')}</div>`;
+      <div class="lvl-items">${here.map(e => `<${open ? `button data-act="openProduct" data-id="${e.p.id}"` : 'span'} class="bin-chip">${e.loc.bin ? `<b>${esc(e.loc.bin)}</b>` : ''}${esc(e.p.name)} <span class="muted">· ${e.usable}</span>${placeExpired(e)}</${open ? 'button' : 'span'}>`).join('') || '<span class="muted small">Vacío</span>'}</div></div>`; }).join('')}</div>`;
 }
 
 // Bloque de ubicación dentro de la ficha de un producto
@@ -79,7 +99,7 @@ function locationBlock(p) {
   const l = p.loc || {};
   return `<div class="card" style="display:grid;gap:12px"><div class="between"><h2 style="margin:0">Dónde está</h2>${l.sector ? `<span class="pill info">${esc(locText(p))}</span>` : '<span class="pill warn">Sin ubicación asignada</span>'}</div>
     ${warehouseMap({ active: l.sector, shelf: l.shelf, act: 'pickSector', shelfAct: 'pickShelf', pid: p.id })}
-    <div class="small muted" style="text-align:center">Toque un sector del mapa, o una estantería (A a H) o la nevera (N), para asignarle o cambiarle la ubicación.</div>
+    <div class="small muted" style="text-align:center">Toque un sector del mapa, o una estantería, la nevera (N) o el estante y las cajas de la reserva, para asignarle o cambiarle la ubicación.</div>
     ${l.shelf ? `<div class="small muted">Elija el nivel de la ${shelfOf(l.shelf).name}:</div>${shelfFront(l.shelf, { pick: l.level, act: 'pickLevel', pid: p.id, open: false })}` : ''}
     <div class="hstack" style="flex-wrap:nowrap">${l.shelf ? `<input class="input" id="loc-bin" inputmode="numeric" placeholder="Recipiente nº" value="${esc(l.bin || '')}" aria-label="Número del recipiente" style="max-width:140px">` : ''}<input class="input" id="loc-spot" placeholder="Detalle (opcional)" value="${esc(l.spot || '')}" aria-label="Detalle de la ubicación"><button class="btn" data-act="saveSpot" data-id="${p.id}" ${l.sector ? '' : 'disabled'}>Guardar</button></div></div>`;
 }
@@ -106,23 +126,23 @@ document.addEventListener('keydown', e => { const g = e.target.closest?.('.secto
 // Pestaña "Mapa" del inventario. Al tocar una estantería se abre su vista de frente (zoom) con todos sus medicamentos.
 function mapTab() {
   if (UI.mapShelf) return shelfZoom(UI.mapShelf);
-  const counts = {}; S.products.forEach(p => { if (p.loc?.sector) counts[p.loc.sector] = (counts[p.loc.sector] || 0) + 1; });
-  const sel = UI.mapSel; const none = S.products.filter(p => !p.loc?.sector);
-  const here = sel ? S.products.filter(p => +p.loc?.sector === +sel).sort(byBin) : [];
-  return `<div class="grid g2"><div class="card">${warehouseMap({ active: sel, counts, act: 'mapSel', shelfAct: 'mapShelf' })}<div class="small muted" style="text-align:center;margin-top:8px">Toque un sector para ver qué hay en él, o una estantería (A a H) o la nevera (N) para verla de cerca.</div></div>
+  const counts = {}; placedIn(() => true).forEach(e => { counts[e.loc.sector] = (counts[e.loc.sector] || 0) + 1; });
+  const sel = UI.mapSel; const none = S.products.filter(p => !placements(p).length);
+  const here = sel ? placedIn(l => +l.sector === +sel).sort(byBin) : [];
+  return `<div class="grid g2"><div class="card">${warehouseMap({ active: sel, counts, act: 'mapSel', shelfAct: 'mapShelf' })}<div class="small muted" style="text-align:center;margin-top:8px">Toque un sector para ver qué hay en él, o una estantería, la nevera (N) o el estante y las cajas de la reserva para verla de cerca.</div></div>
     <div class="stack">${sel ? `<div class="list"><div class="row"><div class="grow"><div class="t">${sectorOf(sel).name} · ${sectorOf(sel).desc}</div><div class="s">${here.length} productos</div></div></div>
-      ${here.map(p => `<button class="row" data-act="openProduct" data-id="${p.id}"><div class="grow"><div class="t">${esc(p.name)}</div><div class="s">${esc(spotText(p.loc) || 'Sin detalle')} · ${usable(p)} disponibles${expiredNote(p, true)}</div></div><span class="pill ${stockState(p).k}">${stockState(p).t}</span></button>`).join('') || '<div class="empty">Todavía no hay productos en este sector.</div>'}</div>`
+      ${here.map(e => `<button class="row" data-act="openProduct" data-id="${e.p.id}"><div class="grow"><div class="t">${esc(e.p.name)}</div><div class="s">${esc(spotText(e.loc) || 'Sin detalle')} · ${e.usable} disponibles${placeExpired(e, true)}</div></div><span class="pill ${stockState(e.p).k}">${stockState(e.p).t}</span></button>`).join('') || '<div class="empty">Todavía no hay productos en este sector.</div>'}</div>`
       : '<div class="card muted small">Elija un sector en el mapa.</div>'}
       ${none.length ? `<div class="banner warn">${none.length} de ${S.products.length} productos no tienen ubicación. Abra cada producto y toque su sector en el mapa.</div>` : ''}</div></div>`;
 }
 function shelfZoom(id) {
-  const e = shelfOf(id); const items = S.products.filter(p => p.loc?.shelf === id).sort((a, b) => (a.loc.level || 9) - (b.loc.level || 9) || byBin(a, b));
+  const e = shelfOf(id); const items = placedIn(l => l.shelf === id).sort((a, b) => (a.loc.level || 9) - (b.loc.level || 9) || byBin(a, b));
   return `<div class="stack"><div class="between"><button class="btn" data-act="mapBack">‹ Volver al mapa</button>
       <div class="seg" role="group" aria-label="Estantería">${SHELVES.map(s => `<button data-act="mapShelf" data-e="${s.id}" aria-pressed="${s.id === id}">${s.name}</button>`).join('')}</div></div>
-    <div class="grid g2"><div class="card"><h2 style="margin:0 0 4px">${e.name}</h2><div class="small muted" style="margin-bottom:12px">${sectorOf(e.sector).name} · detrás de la puerta · ${items.length} productos</div>${shelfFront(id)}</div>
+    <div class="grid g2"><div class="card"><h2 style="margin:0 0 4px">${e.name}</h2><div class="small muted" style="margin-bottom:12px">${sectorOf(e.sector).name} · ${esc(sectorOf(e.sector).desc)} · ${items.length} productos</div>${shelfFront(id)}</div>
     <div class="stack"><div class="field"><label for="shelf-pick">Medicamentos en esta estantería</label>
-      <select class="input" id="shelf-pick"${items.length ? '' : ' disabled'}><option value="">${items.length ? 'Elija un medicamento…' : 'Todavía no hay productos'}</option>${items.map(p => `<option value="${p.id}">${esc(p.name)} — ${esc(spotText(p.loc))}</option>`).join('')}</select></div>
-      <div class="list">${items.map(p => `<button class="row" data-act="openProduct" data-id="${p.id}"><div class="grow"><div class="t">${esc(p.name)}</div><div class="s">${esc(spotText(p.loc) || 'Sin nivel')} · ${usable(p)} ${esc(p.unit.toLowerCase())} disponibles${expiredNote(p, true)}</div></div><span class="pill ${stockState(p).k}">${stockState(p).t}</span></button>`).join('') || '<div class="empty">Para ubicar un producto aquí, ábralo y toque esta estantería en su mapa.</div>'}</div></div></div></div>`;
+      <select class="input" id="shelf-pick"${items.length ? '' : ' disabled'}><option value="">${items.length ? 'Elija un medicamento…' : 'Todavía no hay productos'}</option>${items.map(x => `<option value="${x.p.id}">${esc(x.p.name)} — ${esc(spotText(x.loc))}</option>`).join('')}</select></div>
+      <div class="list">${items.map(x => `<button class="row" data-act="openProduct" data-id="${x.p.id}"><div class="grow"><div class="t">${esc(x.p.name)}</div><div class="s">${esc(spotText(x.loc) || 'Sin nivel')} · ${x.usable} ${esc(x.p.unit.toLowerCase())} disponibles${placeExpired(x, true)}</div></div><span class="pill ${stockState(x.p).k}">${stockState(x.p).t}</span></button>`).join('') || '<div class="empty">Para ubicar un producto aquí, ábralo y toque esta estantería en su mapa.</div>'}</div></div></div></div>`;
 }
 ACTIONS.mapSel = el => { UI.mapSel = +el.dataset.s; render(); };
 ACTIONS.mapShelf = el => { UI.mapShelf = el.dataset.e; UI.mapSel = shelfOf(el.dataset.e).sector; render(); };

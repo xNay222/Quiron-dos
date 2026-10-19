@@ -158,3 +158,63 @@ inferior solo con iconos y botón de tres rayas (☰) que abre "Más secciones";
 Día → Noche → Esmeralda; Inicio con frase de estado + línea "Hoy en la clínica" (pendientes arriba, "Ahora", lo próximo;
 lo pasado plegado); Camas como fichas grandes por paciente; ventanas paso a paso (aprobado: "Pedir medicación").
 Descartado: estilo "Tablero de turno" (clínico sobrio). Trabajo con Codex para partes del código; Claude revisa y prueba.
+
+## Sesión del 14 de octubre de 2026: carga del Excel e inventario
+- Datos cargados desde "Quiron - toda la informacion 2026-10-14.xlsx" (inventario, pacientes, historias escaneadas y exámenes encontrados en ellas).
+  Copia: `copias de seguridad/Quiron Dos - carga inicial 2026-10-14.json`.
+- Las 223 historias que faltaban se leyeron a mano (`datos privados/lectura-pendientes.tsv`); la medicación de las 300 cirugías más recientes
+  (`datos privados/medicamentos-muestra.tsv`) quedó en `record.meds`. Informe: `../Estadisticas historias Quiron 2026-10-14.md`.
+- Correcciones del dueño: Kit de obstetricia 5 (EST-D-01); Pleurevac 1 (EST-D-01); de "Traje (bata) de paciente" 60 eran
+  "Traje de acompañante quirúrgico" (producto nuevo, EST-E-03; quedan 30 batas).
+- **Almacén sin entradas ni salidas manuales** ("Entrada / salida" solo Administración). Saca con la orden del médico o con
+  **"Hacer una solicitud extraordinaria"** (`views-extra.js`, permiso `inv.extra`): productos, motivo (cirugía, hospitalización,
+  emergencia, consulta, otro), médico que atendía y paciente. Se guarda como solicitud `kind: 'extra'` despachada al instante (FEFO),
+  ligada al ingreso o a la cirugía del paciente si los tiene; historial en Inventario › Órdenes pendientes.
+- **"Cambiar ubicación"** en la ficha del producto: sector, estantería, nivel, recipiente y detalle con listas simples.
+- **Facturas solo Administración** ("Cargar factura" y "Facturas por completar"). El almacén registra la mercancía que llega con
+  **"Producto o lote nuevo (con foto)"**: 1 a 3 fotos obligatorias para el almacén (caja, lote/vencimiento, nota de entrega), guardadas
+  con `storeFile` en `lot.photos` (carpeta `archivos/` con serve.ps1) y visibles en la ficha del producto; la lectura con IA es opcional.
+- Tutorial del almacén actualizado (qué puede hacer, foto obligatoria, solicitud extraordinaria, "Cambiar ubicación").
+- Tema Esmeralda: rojos más intensos (`--bad:#ff5c5c`, `--bad-soft:#421c24`, `--badge-bg:#d92d36`).
+- **Exoneración de gastos** (solo Administración): `exonerate(invId, motivo)` en `data.js`. La cuenta conserva conceptos y montos
+  (lo que representó la atención) y queda `status: 'exonerada'` con `inv.exon = { at, by, reason, usd, total, paid }`; `invDue` = 0,
+  sin ingreso en caja ni factura fiscal (no se exonera una cuenta con factura fiscal). Se ofrece al final del **alta** (casilla +
+  motivo obligatorio; exonera la cuenta del alta o la del paquete), en la ficha de la cuenta y en la ventana de cobro ("Exonerar gastos").
+  Filtro "Exoneradas" en Contabilidad › Cobros; el documento sale como "Constancia de exoneración" con lo exonerado y "A pagar 0".
+
+### Sincronización entre navegadores (14/10/2026)
+- Con serve.ps1 cada guardado se copia a `copias de seguridad/_estado-servidor.json` (+ `.meta.json` con `savedAt`). Al abrir, el navegador toma la versión del servidor si es más reciente (`serverPull` en data.js, llamado desde `start()` en app.js); `/__ping` responde 204 para detectar el servidor.
+- Cada minuto revisa si otro equipo guardó: recarga sola si la pestaña está oculta, si no avisa. Si otro equipo guardó antes, no sobrescribe (aviso "Otro equipo guardó cambios más recientes").
+
+### Ubicación por lote y almacén (15/10/2026)
+- `lot.loc` (opcional) sobrescribe `p.loc`. Helpers en views-map.js: `lotLoc`, `locTextOf`, `locKeyOf`, `placements(p)` (sitios con existencia), `placedIn(test)`. Mapa, tablas (`locCells(p, lot?)`) y ficha usan estos. "Mover" en cada lote → `locEdit` con `data-l`; `moveLot()` en views-extra.js separa una parte o junta mitades del mismo lote.
+- Sector 3: "Reserva" y "Cuarentena (vencidos)" como `spot`. Se unieron 7 productos duplicados (cefazolina, clorfeniramina, ampicilina+sulbactam, gentamicina, meropenem, llave de 3 vías, tubo de extensión).
+- Mínimos: top 10 de medicamentos = 10 (presentación principal), demás medicamentos = 2, insumos según uso.
+- Valor del inventario (`invValue`) excluye lotes vencidos; `expiredValue()` aparte.
+
+### Fondos, pacientes eliminados e inventario (17/10/2026)
+- views-funds.js: tarjetas de fondos en Contabilidad (USDT, Zelle, Bs Banesco, Bs Banco Plaza, dólares en efectivo, euros, euros España). Saldo = último conteo (`S.fundAdj`) + movimientos posteriores (`acctMoves` con `at`, fondo por `m.fund` o por método según `S.fundMap`) + cambios entre fondos (`S.fundTx`). Sellos con segundos (`nowStampS`). Euro: serve.ps1 `/__tasa` devuelve `eur` (Bs/€) → `S.ratesEUR`/`S.rateEUR`.
+- Eliminar paciente: motivo obligatorio, borra también consultas, botón en el expediente (admin), registro `S.deletedPatients` en Ajustes.
+- Inventario: gráfico con 3 vistas (`UI.invChart`: top del mes, USD por mes, USD del mes por medicamento; `monthUsage`, `moveUsd`), aviso de alertas arriba y alertas agrupadas por gravedad.
+- Movimiento (17/10/2026): bloque final de estilos "Movimiento cinematográfico" en index.html (enfoque con blur al entrar `focusIn/focusRow/focusSoft`, curva `--expo`, ventanas `cineSheetIn` en computadora, reflejo en `.btn.primary`, inclinación 3D en `.wcard`, resplandor `critGlow` en alertas, brillo `--glow` en lo seleccionado). Todo bajo `prefers-reduced-motion:no-preference`. `countUp` también anima `.wcard .wbal` y `.bh-val`.
+- Animaciones por equipo (17/10/2026): app.js `applyMotion()` pone `motion-lite`/`motion-off` en <html>. Automático: ≤4 núcleos, ≤4 GB o <45 fps medidos (una vez, con la pantalla visible) → ligero. Preferencia en localStorage `quiron-motion` (auto/full/lite/off), tarjeta "Animaciones" en Ajustes. Ligero quita desenfoques (también el vidrio esmerilado) y efectos continuos; conserva movimientos simples y la pastilla deslizante de `.seg` (app.js `segPills`).
+- Revisión general (17/10/2026): pruebas de herramientas/ actualizadas (diagnóstico libre, ✓ por CSS) → 110 grupos OK. app.js arranca sin esperar al servidor cuando no hay fetch/http (pruebas). Modo teléfono (≤600 px) al final de index.html. IA fuera de Claude: `getCap('sample')` usa `/__ia` de serve.ps1 (Gemini, clave `GEMINI_API_KEY` y opcional `GEMINI_MODEL` en variables de usuario de Windows); `getCap('sample-clin')` (historias, resultados) solo si `localStorage['quiron-ia-clinica']==='1'` (casilla en Ajustes → IA para leer fotos).
+- Protecciones de datos (17/10/2026): `serverPush` no envía si este equipo tiene <60 % de pacientes/productos/historias/consultas que el servidor (meta guarda `n`). serve.ps1 guarda historial comprimido en `copias de seguridad/historial` (hora-* 48 h, dia-* 60 días) antes de cada reemplazo de `_estado-servidor.json`.
+- Informe de egreso (epicrisis): views-egreso.js (`a.epicrisis`, `pdfEgreso`), botón en la ficha del ingreso, aviso al dar de alta y marca "Sin informe de egreso" en altas recientes.
+- Triaje (17/10/2026): views-triaje.js (`S.triage`, colores Manchester simplificados, `triSuggest`, sala de espera arriba de las camas de Emergencias, "Recibir en cama" enlaza el ingreso: `a.triage`).
+- Código de barras: views-scan.js (`p.barcodes`, escáner con BarcodeDetector o ZXing, lector USB por teclado, GS1 con lote/vencimiento `parseGS1`, etiquetas propias `Q-<ID>` en Code 128 con JsBarcode, tamaños 50×25/60×40/40×30 mm).
+- Plantillas de órdenes: views-plantillas.js (`S.orderTemplates`, borrador inicial con los 5 medicamentos más indicados tras cirugía, sin dosis; "Aplicar plantilla de órdenes" en el ingreso crea indicaciones + una solicitud al almacén).
+- Resumen del día (17/10/2026): views-resumen.js, tarjeta en Inicio solo para Administración (`can('*')`), Hoy/Ayer, "Copiar para WhatsApp" (`dailySummaryText`).
+
+## Personal: credenciales y amonestaciones (19/10/2026)
+- views-personal.js: COLEGIOS (24 colegios de médicos de Venezuela), credsFields/credsRead (cédula, n.º de colegiado, colegio, MPPS). docCreds imprime "C.M. n (CM Estado) · MPPS n".
+- Perfiles (médico, enfermera, usuario) con pestañas Datos / Amonestaciones y destacados. S.staffNotes {who:"doc:|nurse:|user:<id>", kind, title, text, date, by, at, void}. No se borran: se anulan con motivo. AMON_LIMIT=3 muestra aviso.
+- Las enfermeras ahora tienen id (migración en data.js).
+
+## Seguridad (19/10/2026, revisión según "20 formas de que tu app acabe hackeada")
+- serve.ps1: rechaza peticiones de otro origen (Origin / Sec-Fetch-Site) en /__*, archivos/ e historias/; cabeceras CSP, nosniff, X-Frame-Options, Referrer-Policy; subidas con tamaño máximo y tipo real comprobado (bytes mágicos), escritura atómica (.subiendo → definitivo); /__ia limitado a 15 lecturas por minuto; los errores no envían detalles internos (van a la consola).
+- La CSP exige: nada de onclick/onsubmit en el HTML (usar data-act); scripts externos solo de cdnjs y unpkg; fetch externos solo a ve.dolarapi.com y api.pwnedpasswords.com. Si se añade un servicio nuevo, añadirlo a $Csp.
+- safeUrl() (data.js) para todo href/src dinámico; esc() en todo texto de datos. Prueba de inyección: llenar S en memoria con '"><xss-probe>' y abrir todas las pantallas y fichas (0 hallazgos al cerrar).
+- Contraseñas: passCheck = longitud + passWeak (más usadas, nombre/correo/clínica) + passLeaked (HIBP por k-anonimato, solo 5 caracteres de SHA-1; sin internet no bloquea).
+- SRI en ZXing y JsBarcode (views-scan.js). Si se cambia la versión, recalcular la huella.
+- Pendiente para Supabase: RLS, permisos en el servidor (hoy can() es solo del navegador), sesión con cookie httpOnly, verificación de correo, IDs no predecibles (uid usa Math.random), límite de intentos de acceso en el servidor.

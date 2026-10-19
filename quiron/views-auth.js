@@ -22,6 +22,31 @@ const validEmail = s => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 const newCode = () => { const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; const c = [...crypto.getRandomValues(new Uint8Array(8))].map(n => A[n % A.length]).join(''); return c.slice(0, 4) + '-' + c.slice(4); };
 const tempPass = () => { const A = 'abcdefghjkmnpqrstuvwxyz23456789'; return [...crypto.getRandomValues(new Uint8Array(10))].map(n => A[n % A.length]).join(''); };
 const passProblem = (p, p2) => p.length < 8 ? 'La contraseña debe tener al menos 8 caracteres.' : !/\d/.test(p) || !/[a-zA-Z]/.test(p) ? 'La contraseña debe combinar letras y números.' : p !== p2 ? 'Las contraseñas no coinciden.' : '';
+// Contraseñas débiles o filtradas: además de la longitud, se rechazan las más usadas, las que contienen el nombre,
+// el correo o el de la clínica, y las que aparecen en filtraciones conocidas (Have I Been Pwned).
+// A ese servicio solo viajan los 5 primeros caracteres de la huella SHA-1: nunca la contraseña ni la huella completa.
+const PASS_COMUNES = ['12345678', '123456789', '1234567890', 'password', 'password1', 'contraseña', 'contrasena', 'qwerty123', 'abc12345', 'abcd1234', 'a1b2c3d4', '11111111', '00000000', '12341234', 'iloveyou', 'admin123', 'administrador', 'clinica123', 'quiron123', 'quiron2024', 'quiron2025', 'quiron2026', 'venezuela1', 'caracas123', 'medico123', 'doctor123', 'enfermera1', 'teamo123', 'qwertyuiop', 'asdf1234', 'zxcvbnm1', 'bienvenido1', 'hola1234', 'pass1234'];
+const passBase = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+function passWeak(p, ctx = {}) {
+  const b = passBase(p), core = b.replace(/[^a-z]/g, '');
+  if (PASS_COMUNES.includes(b) || /^(.)\1+$/.test(b) || /^(0123|1234|2345|abcd|qwer)/.test(b) && b.length <= 10) return 'Esa contraseña es de las más usadas. Elija otra más difícil de adivinar.';
+  const words = [...passBase(ctx.name).split(/\s+/), passBase(ctx.email).split('@')[0], 'quiron', 'clinica'].filter(w => w && w.length >= 4);
+  if (core.length >= 4 && words.some(w => b.includes(w))) return 'La contraseña no debe contener su nombre, su correo ni el nombre de la clínica.';
+  return '';
+}
+async function passLeaked(p) {
+  try {
+    const h = [...new Uint8Array(await crypto.subtle.digest('SHA-1', new TextEncoder().encode(p)))].map(x => x.toString(16).padStart(2, '0')).join('').toUpperCase();
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 4000);
+    const r = await fetch('https://api.pwnedpasswords.com/range/' + h.slice(0, 5), { signal: ctl.signal, referrerPolicy: 'no-referrer', headers: { 'Add-Padding': 'true' } }); clearTimeout(t);
+    if (!r.ok) return false;
+    return (await r.text()).split('\n').some(l => { const [suf, n] = l.trim().split(':'); return suf === h.slice(5) && +n > 0; });
+  } catch (e) { return false; }   // sin internet no se bloquea: quedan las otras comprobaciones
+}
+async function passCheck(p, p2, ctx) {
+  const prob = passProblem(p, p2) || passWeak(p, ctx); if (prob) return prob;
+  return await passLeaked(p) ? 'Esa contraseña aparece en filtraciones de datos de internet: los atacantes la prueban primero. Elija otra.' : '';
+}
 const meUser = () => (S.users || []).find(u => u.id === S.session?.uid);
 const activeAdmins = () => (S.users || []).filter(u => u.role === 'admin' && u.status === 'activo');
 
@@ -92,7 +117,7 @@ function showAuth(mode, msg = '') {
       ${themeSeg('authTheme')}</header>
     <div class="auth-hero"><h1>${title}</h1><p>${sub}</p></div>
     <div class="auth-grid">
-      <form class="auth-form" onsubmit="return false">${body}<div class="small" id="au-msg" role="alert" style="color:var(--bad);min-height:18px">${esc(msg)}</div><div class="auth-btns">${btn}</div></form>
+      <form class="auth-form">${body}<div class="small" id="au-msg" role="alert" style="color:var(--bad);min-height:18px">${esc(msg)}</div><div class="auth-btns">${btn}</div></form>
       <div class="auth-slash" aria-hidden="true">/</div>
       <div class="auth-side">${side}</div>
     </div>
@@ -104,6 +129,8 @@ ACTIONS.authTheme = el => { setTheme(el.dataset.k); document.querySelectorAll('#
 ACTIONS.authForgot = () => auMsg('Pida a la administración que le restablezca la contraseña o le envíe un código nuevo (Usuarios › su nombre).');
 const auMsg = t => { const m = document.getElementById('au-msg'); if (m) m.textContent = t; };
 ACTIONS.authMode = el => showAuth(el.dataset.k);
+// El formulario de acceso nunca se envía (todo se hace con los botones)
+document.addEventListener('submit', e => { if (e.target.closest?.('#auth')) e.preventDefault(); });
 // Enter en la contraseña = Entrar
 document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.closest?.('#auth form')) { e.preventDefault(); document.querySelector('#auth .auth-btns .auth-go')?.click(); } });
 
@@ -111,7 +138,7 @@ ACTIONS.authSetup = async () => {
   if (activeAdmins().length) { showAuth('login'); return; }
   const name = val('au-name').trim(), email = normEmail(val('au-email')), p = val('au-pass');
   if (!name) return auMsg('Escriba su nombre.'); if (!validEmail(email)) return auMsg('Escriba un correo válido.');
-  const prob = passProblem(p, val('au-pass2')); if (prob) return auMsg(prob);
+  auMsg('Comprobando la contraseña…'); const prob = await passCheck(p, val('au-pass2'), { name, email }); if (prob) return auMsg(prob);
   const salt = newSalt(); const u = { id: uid('u'), name, email, role: 'admin', doc: null, status: 'activo', salt, hash: await hashPass(p, salt), created: nowStamp(), lastLogin: nowStamp() };
   S.users.push(u); startSession(u, document.getElementById('au-keep').checked); log('Cuenta de administrador creada', email); save(); enterApp(); toast(`Bienvenido, ${name}`);
 };
@@ -133,13 +160,13 @@ ACTIONS.authInvite = async () => {
   const u = S.users.find(x => x.email === email && x.status === 'invitado' && x.invite);
   const ok = u && u.invite.exp > Date.now() && await sha256(code) === u.invite.hash;
   if (!ok) return auMsg(u && u.invite?.exp <= Date.now() ? 'El código venció. Pida uno nuevo a la administración.' : 'El correo o el código no coinciden con ninguna invitación.');
-  const prob = passProblem(p, val('au-pass2')); if (prob) return auMsg(prob);
+  auMsg('Comprobando la contraseña…'); const prob = await passCheck(p, val('au-pass2'), u); if (prob) return auMsg(prob);
   u.salt = newSalt(); u.hash = await hashPass(p, u.salt); u.status = 'activo'; delete u.invite; u.lastLogin = nowStamp();
   startSession(u, document.getElementById('au-keep').checked); log('Usuario activado', email); save(); enterApp(); toast(`Bienvenido, ${u.name}`);
 };
 ACTIONS.authChange = async () => {
   const u = meUser(); if (!u) { showAuth('login'); return; }
-  const p = val('au-pass'); const prob = passProblem(p, val('au-pass2')); if (prob) return auMsg(prob);
+  const p = val('au-pass'); auMsg('Comprobando la contraseña…'); const prob = await passCheck(p, val('au-pass2'), u); if (prob) return auMsg(prob);
   u.salt = newSalt(); u.hash = await hashPass(p, u.salt); u.mustChange = false; log('Contraseña cambiada', u.email); save(); enterApp(); toast('Contraseña guardada');
 };
 ACTIONS.logout = () => { const u = meUser(); if (u) { log('Cierre de sesión', u.email); save(); } endSession(); showAuth(activeAdmins().length ? 'login' : 'setup'); };
@@ -160,7 +187,7 @@ ACTIONS.switchUser = () => {
 ACTIONS.myPassSave = async () => {
   const u = meUser(); const m = document.getElementById('mc-msg');
   if (await hashPass(val('mc-old'), u.salt) !== u.hash) { m.textContent = 'La contraseña actual no es correcta.'; m.style.color = 'var(--bad)'; return; }
-  const prob = passProblem(val('mc-new'), val('mc-new2')); if (prob) { m.textContent = prob; m.style.color = 'var(--bad)'; return; }
+  m.textContent = 'Comprobando la contraseña…'; m.style.color = ''; const prob = await passCheck(val('mc-new'), val('mc-new2'), u); if (prob) { m.textContent = prob; m.style.color = 'var(--bad)'; return; }
   u.salt = newSalt(); u.hash = await hashPass(val('mc-new'), u.salt); log('Contraseña cambiada', u.email); save(); closeSheet(); toast('Contraseña actualizada');
 };
 
@@ -219,8 +246,10 @@ ACTIONS.userSave = async () => {
   log(acc.kind === 'invite' ? 'Usuario invitado' : 'Usuario creado', `${name} · ${email} · ${roleLabel(role)}`); save(); render(); showAccess(u, acc);
 };
 ACTIONS.userEdit = el => {
-  const u = S.users.find(x => x.id === el.dataset.id); const self = u.id === S.session?.uid; const lastAdmin = u.role === 'admin' && activeAdmins().length <= 1 && u.status === 'activo';
-  openSheet(self ? 'Su usuario' : `Usuario · ${u.name}`, userForm(u) + `<div class="small muted">${u.created ? 'Creado ' + u.created + (u.createdBy ? ' por ' + esc(u.createdBy) : '') : ''}${u.lastLogin ? ' · último acceso ' + u.lastLogin : ''}${u.invite ? ` · invitación vigente hasta ${fdate(iso(new Date(u.invite.exp)))}` : ''}</div>`,
+  const u = S.users.find(x => x.id === el.dataset.id); const self = u.id === S.session?.uid; const lastAdmin = u.role === 'admin' && activeAdmins().length <= 1 && u.status === 'activo'; staffTabInit(el);
+  staffBack('userEdit', { id: u.id }); const tabs = self ? '' : staffTabs('user:' + u.id);
+  if (!self && UI.stTab === 'notas') { openSheet(`Usuario · ${u.name}`, tabs + staffNotesTab('user:' + u.id, u.name), '<button class="btn" data-act="close">Cerrar</button>', { wide: true }); return; }
+  openSheet(self ? 'Su usuario' : `Usuario · ${u.name}`, tabs + userForm(u) + `<div class="small muted">${u.created ? 'Creado ' + u.created + (u.createdBy ? ' por ' + esc(u.createdBy) : '') : ''}${u.lastLogin ? ' · último acceso ' + u.lastLogin : ''}${u.invite ? ` · invitación vigente hasta ${fdate(iso(new Date(u.invite.exp)))}` : ''}</div>`,
     `<span class="note" id="us-msg"></span>${self ? '' : u.status === 'desactivado' ? `<button class="btn" data-act="userStatus" data-id="${u.id}" data-st="activo">Reactivar</button>` : lastAdmin ? '' : `<button class="btn danger" data-act="userStatus" data-id="${u.id}" data-st="desactivado">Desactivar</button>`}
     ${self ? '' : `<button class="btn" data-act="userReissue" data-id="${u.id}" data-k="invite">Nueva invitación</button><button class="btn" data-act="userReissue" data-id="${u.id}" data-k="temp">Contraseña temporal</button>`}
     <button class="btn primary" data-act="userUpdate" data-id="${u.id}">Guardar</button>`);
@@ -256,23 +285,25 @@ VIEWS.usuarios = () => {
     const users = (S.users || []).filter(u => u.role === r);
     const docs = ['medico', 'residente'].includes(r) ? (S.doctors || []).filter(d => !d.example && !!d.resident === (r === 'residente')) : [];
     const nurses = r === 'enfermeria' ? (S.nurseStaff || []) : [];
-    const staff = docs.map(d => `<button class="row" data-act="staffDoc" data-id="${d.id}"><span class="avatar">${initials(d.name)}</span><div class="grow"><div class="t">${esc(d.name)}</div><div class="s">${esc(d.esp)} · ${esc(hoursText(d.id))}</div></div>${d.active === false ? '<span class="pill">Inactivo</span>' : !d.cm ? '<span class="pill warn">Falta colegiado</span>' : ''}</button>`).join('') + nurses.map(n => `<button class="row" data-act="staffNurse" data-i="${S.nurseStaff.indexOf(n)}"><span class="avatar">${initials(n.name)}</span><div class="grow"><div class="t">${esc(n.name)}</div><div class="s">${n.days?.length ? 'Guardia fija: ' + n.days.map(d => DAY_NAMES[d]).join(', ') : 'Sin días fijos'}</div></div>${n.active === false ? '<span class="pill">Inactiva</span>' : ''}</button>`).join('');
-    const accounts = users.map(u => `<button class="row" data-act="userEdit" data-id="${u.id}"><span class="avatar">${initials(u.name)}</span><div class="grow"><div class="t">${esc(u.name)}${u.id === S.session?.uid ? ' <span class="pill info">Usted</span>' : ''}</div><div class="s">${esc(u.email || '')}${u.doc ? ' · ' + esc(med(u.doc)?.name || '') : ''}</div></div><div class="end"><span class="pill ${USER_ST[u.status]?.[1] || ''}">${USER_ST[u.status]?.[0] || esc(u.status)}</span><div class="small muted">${u.lastLogin ? 'Último acceso ' + esc(u.lastLogin) : 'Sin accesos'}</div></div></button>`).join('');
+    const staff = docs.map(d => `<button class="row" data-act="staffDoc" data-id="${d.id}"><span class="avatar">${initials(d.name)}</span><div class="grow"><div class="t">${esc(d.name)}</div><div class="s">${esc(d.esp)} · ${esc(hoursText(d.id))}</div></div>${amonPill('doc:' + d.id)}${d.active === false ? '<span class="pill">Inactivo</span>' : credsPending(d).length ? `<span class="pill warn">Falta ${credsPending(d).join(' y ')}</span>` : ''}</button>`).join('') + nurses.map(n => `<button class="row" data-act="staffNurse" data-i="${S.nurseStaff.indexOf(n)}"><span class="avatar">${initials(n.name)}</span><div class="grow"><div class="t">${esc(n.name)}</div><div class="s">${n.days?.length ? 'Guardia fija: ' + n.days.map(d => DAY_NAMES[d]).join(', ') : 'Sin días fijos'}</div></div>${amonPill('nurse:' + n.id)}${n.active === false ? '<span class="pill">Inactiva</span>' : ''}</button>`).join('');
+    const accounts = users.map(u => `<button class="row" data-act="userEdit" data-id="${u.id}"><span class="avatar">${initials(u.name)}</span><div class="grow"><div class="t">${esc(u.name)}${u.id === S.session?.uid ? ' <span class="pill info">Usted</span>' : ''}</div><div class="s">${esc(u.email || '')}${u.doc ? ' · ' + esc(med(u.doc)?.name || '') : ''}</div></div><div class="end" style="display:grid;justify-items:end;gap:6px"><span class="pill ${USER_ST[u.status]?.[1] || ''}">${USER_ST[u.status]?.[0] || esc(u.status)}</span><div class="small muted">${u.lastLogin ? 'Último acceso: ' + fdate(u.lastLogin.slice(0, 10)) + (u.lastLogin.length > 10 ? ', ' + esc(u.lastLogin.slice(11, 16)) : '') : 'Sin accesos'}</div></div></button>`).join('');
     const count = users.length + ' usuario(s)' + (['medico', 'residente'].includes(r) ? ' · ' + docs.length + ' en personal' : r === 'enfermeria' ? ' · ' + nurses.length + ' en personal' : '');
     const addStaff = ['medico', 'residente'].includes(r) ? `<button class="btn" data-act="staffDoc" data-kind="${r}">+ Agregar ${r === 'residente' ? 'residente' : 'médico'}</button>` : r === 'enfermeria' ? '<button class="btn" data-act="staffNurse">+ Agregar enfermera</button>' : '';
     return `<section class="sec" data-user-role="${r}"><div class="between"><h2>${esc(userRoleTitle(r))} <span class="pill">${count}</span></h2><div class="hstack">${addStaff}<button class="btn primary" data-act="userNew" data-role="${r}">+ Agregar usuario</button></div></div>${staff ? '<div class="small muted">Personal · editar datos, estado y guardias. Horarios de consulta en Agenda.</div><div class="list" style="margin:8px 0 14px">' + staff + '</div><div class="small muted">Acceso al sistema · invitaciones, contraseñas y permisos</div>' : ''}<div class="list" style="margin-top:8px">${accounts || '<div class="empty">No hay usuarios de este rol.</div>'}</div></section>`;
   }).join('');
 };
 ACTIONS.usTab = el => { UI.usTab = el.dataset.k; render(); };
-ACTIONS.staffDoc = el => { if (!can('*')) return; const d = (S.doctors || []).find(x => x.id === el.dataset?.id) || {};
-  openSheet(d.id ? d.name : 'Agregar médico', `<div class="form">
+ACTIONS.staffDoc = el => { if (!can('*')) return; const d = (S.doctors || []).find(x => x.id === el.dataset?.id) || {}; staffTabInit(el);
+  if (d.id) staffBack('staffDoc', { id: d.id });
+  if (d.id && UI.stTab === 'notas') { openSheet(d.name, staffTabs('doc:' + d.id) + staffNotesTab('doc:' + d.id, d.name), '<button class="btn" data-act="close">Cerrar</button>', { wide: true }); return; }
+  const linked = d.id && (S.users || []).some(u => u.doc === d.id);
+  openSheet(d.id ? d.name : 'Agregar médico', `${d.id ? staffTabs('doc:' + d.id) : ''}<div class="form">
     <div class="field"><label for="sd-n">Nombre (con Dr., Dra. o Lic.)</label><input class="input" id="sd-n" value="${esc(d.name || '')}" placeholder="Ej. Dr. Pedro Gómez"></div>
     <div class="field"><label for="sd-e">Especialidad</label><input class="input" id="sd-e" value="${esc(d.esp || '')}" placeholder="Ej. Traumatología"></div>
     <div class="field"><label for="sd-k">Tipo</label><select class="input" id="sd-k">${Object.entries(DOC_KIND).map(([k, t]) => `<option value="${k}" ${(d.id ? docKind(d) : el.dataset?.kind || 'medico') === k ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
     <label class="field hstack small" style="align-self:end"><input type="checkbox" id="sd-a" ${d.active !== false ? 'checked' : ''}> Activo (aparece en las listas)</label></div>
-    <div class="card small" style="margin-top:6px"><b>Datos profesionales</b><div class="muted">${d.id && (S.users || []).some(u => u.doc === d.id) ?
-      (d.cm ? 'C.I. ' + esc(d.ci || '—') + ' · C.M. ' + esc(d.cm) : 'Pendiente: el médico debe registrar su número de colegiado en Mi cuenta.') :
-      'Este médico aún no tiene usuario. Cuando lo tenga, registrará su cédula y su número de colegiado en Mi cuenta.'}</div></div>
+    <div class="card" style="display:grid;gap:8px;margin-top:6px"><b class="small">Datos profesionales</b>${credsFields('sd-', d)}
+      <div class="small muted">Salen bajo su firma en informes, récipes, órdenes y constancias.${linked ? ' El médico también puede actualizarlos en Mi cuenta.' : ''}</div></div>
     <div class="small muted">Su historial se conserva aunque lo desactive. El horario de consulta se carga en Agenda › Consultas › Horarios de médicos.</div><span class="note" id="sd-msg"></span>`,
     `<button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="staffDocSave" data-id="${d.id || ''}">Guardar</button>`); };
 ACTIONS.staffDocSave = el => { if (!can('*')) return;
@@ -282,10 +313,14 @@ ACTIONS.staffDocSave = el => { if (!can('*')) return;
   if (!esp) { msg.textContent = 'Escriba la especialidad.'; return; }
   if ((S.doctors || []).some(x => x.id !== el.dataset.id && !x.example && x.name.toLowerCase() === name.toLowerCase())) { msg.textContent = 'Ya hay un médico con ese nombre.'; return; }
   let d = (S.doctors || []).find(x => x.id === el.dataset.id); const isNew = !d; if (isNew) { d = { id: uid('dr') }; S.doctors.push(d); }
-  Object.assign(d, { name, esp, resident: kind === 'residente', anest: kind === 'anestesiologo', active: document.getElementById('sd-a').checked });
+  const cr = credsRead('sd-'); if (cr.cm && !/\d/.test(cr.cm)) { msg.textContent = 'El n.º de colegiado debe tener números.'; return; }
+  Object.assign(d, { name, esp, resident: kind === 'residente', anest: kind === 'anestesiologo', active: document.getElementById('sd-a').checked, ...cr });
+  (S.users || []).filter(u => u.doc === d.id).forEach(u => Object.assign(u, cr));   // la cuenta vinculada queda con los mismos datos
   syncStaff(); log(isNew ? 'Médico agregado' : 'Médico modificado', `${name} · ${esp}${d.active ? '' : ' · inactivo'}`); save(); closeSheet(); render(); toast('Guardado'); };
-ACTIONS.staffNurse = el => { if (!can('*')) return; const i = el.dataset?.i; const n = i != null ? S.nurseStaff[+i] : { name: '', days: [], active: true };
-  openSheet(i != null ? n.name : 'Agregar enfermera', `<div class="field"><label for="sn-n">Nombre</label><input class="input" id="sn-n" value="${esc(n.name)}"></div>
+ACTIONS.staffNurse = el => { if (!can('*')) return; const i = el.dataset?.i; const n = i != null && i !== '' ? S.nurseStaff[+i] : { name: '', days: [], active: true }; staffTabInit(el);
+  if (n.id) staffBack('staffNurse', { i });
+  if (n.id && UI.stTab === 'notas') { openSheet(n.name, staffTabs('nurse:' + n.id) + staffNotesTab('nurse:' + n.id, n.name), '<button class="btn" data-act="close">Cerrar</button>', { wide: true }); return; }
+  openSheet(i != null && i !== '' ? n.name : 'Agregar enfermera', `${n.id ? staffTabs('nurse:' + n.id) : ''}<div class="field"><label for="sn-n">Nombre</label><input class="input" id="sn-n" value="${esc(n.name)}"></div>
     <div><b class="small">Días fijos de guardia</b><div class="hstack" style="margin-top:6px">${[1, 2, 3, 4, 5, 6, 0].map(k => `<label class="hstack small"><input type="checkbox" class="sn-day" value="${k}" ${n.days?.includes(k) ? 'checked' : ''}> ${DAY_NAMES[k]}</label>`).join('')}</div></div>
     <label class="hstack small"><input type="checkbox" id="sn-a" ${n.active !== false ? 'checked' : ''}> Activa (aparece en las listas)</label><span class="note" id="sn-msg"></span>`,
     `<button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="staffNurseSave" data-i="${i ?? ''}">Guardar</button>`); };
@@ -295,14 +330,14 @@ ACTIONS.staffNurseSave = el => { if (!can('*')) return;
   // Un día fijo es de una sola enfermera: si ya lo tenía otra, se le quita
   S.nurseStaff.forEach((x, j) => { if (String(j) !== i) x.days = (x.days || []).filter(d => !days.includes(d)); });
   const data = { name, days, active: document.getElementById('sn-a').checked };
-  if (i === '') S.nurseStaff.push(data); else Object.assign(S.nurseStaff[+i], data);
+  if (i === '') S.nurseStaff.push({ id: uid('nr'), ...data }); else Object.assign(S.nurseStaff[+i], data);
   syncStaff(); log('Enfermera guardada', `${name} · ${days.map(d => DAY_NAMES[d]).join(', ') || 'sin días fijos'}`); save(); closeSheet(); render(); toast('Guardado'); };
 
 // ---------- Datos profesionales del usuario (cédula y Colegio de Médicos) ----------
 // Pertenecen a la cuenta de cada persona; si la cuenta está vinculada a un médico del personal, se copian a su ficha
 // para que salgan bajo la firma de récipes, informes y constancias.
 const CREDS_REQUIRED = ['medico', 'residente'];
-const credsOf = u => ({ ci: u?.ci || '', cm: u?.cm || '' });
+const credsOf = u => ({ ci: u?.ci || '', cm: u?.cm || '', colegio: u?.colegio || '', mpps: u?.mpps || '' });
 // Para firmar basta con el número de colegiado (Colegio de Médicos)
 const credsMissing = u => !!u && CREDS_REQUIRED.includes(u.role) && !u.cm;
 function credsCard(u) {
@@ -313,16 +348,14 @@ function credsCard(u) {
     ${u.role === 'admin' ? `<div class="field"><label for="mc-doc">Su ficha de médico <span class="small muted">(si también atiende pacientes)</span></label><select class="input" id="mc-doc">
       <option value="">No atiendo pacientes</option>${(S.doctors || []).filter(d => !d.resident && (d.active !== false || d.id === u.doc) && !(S.users || []).some(x => x.id !== u.id && x.doc === d.id)).map(d => `<option value="${d.id}" ${u.doc === d.id ? 'selected' : ''}>${esc(d.name)}${d.esp ? ' · ' + esc(d.esp) : ''}</option>`).join('')}</select>
       <div class="small muted" style="margin-top:4px">Con su ficha vinculada puede escribir y firmar evoluciones y consultas con su nombre.</div></div>` : ''}
-    <div class="form">
-      <div class="field"><label for="mc-ci">Cédula</label><input class="input" id="mc-ci" value="${esc(c.ci)}" placeholder="Ej. V-12.345.678"></div>
-      <div class="field"><label for="mc-cm">Colegio de Médicos: n.º y colegio${req ? ' *' : ''}</label><input class="input" id="mc-cm" value="${esc(c.cm)}" placeholder="Ej. 12345 · CM Miranda"></div></div>
+    ${credsFields('mc-', c, req)}
     <div class="small muted">Se imprimen bajo su firma en informes, récipes, órdenes y constancias.</div>
     <div class="hstack"><button class="btn sm primary" data-act="myCredsSave">Guardar datos profesionales</button><span class="small" id="mc-creds-msg"></span></div></div>`;
 }
 ACTIONS.myCredsSave = () => {
   const u = meUser(); if (!u) return;
   const m = document.getElementById('mc-creds-msg');
-  const ci = val('mc-ci').trim(), cm = val('mc-cm').trim().replace(/\s+/g, ' ');
+  const cr = credsRead('mc-'); const { ci, cm } = cr;
   const bad = t => { m.textContent = t; m.style.color = 'var(--bad)'; };
   if (CREDS_REQUIRED.includes(u.role) && !cm) return bad('El número de Colegio de Médicos es obligatorio para médicos y residentes.');
   if (cm && !/\d/.test(cm)) return bad('Indique el número de colegiado (y, si quiere, el colegio).');
@@ -330,10 +363,10 @@ ACTIONS.myCredsSave = () => {
     const docId = val('mc-doc') || null, d = docId && (S.doctors || []).find(x => x.id === docId);
     if (d && docId !== u.doc) { u.doc = docId; S.session.doc = docId; log('Administrador vinculado a su ficha de médico', u.name + ' · ' + d.name);
       // Al vincularse, los datos que ya tiene la ficha no se pierden si las casillas están vacías
-      Object.assign(u, { ci: ci || d.ci || '', cm: cm || d.cm || '' }); }
-    else if (!docId && u.doc) { log('Administrador desvinculado de su ficha de médico', u.name); u.doc = null; S.session.doc = null; Object.assign(u, { ci, cm }); }
-    else Object.assign(u, { ci, cm });
-  } else Object.assign(u, { ci, cm });
+      Object.assign(u, { ci: ci || d.ci || '', cm: cm || d.cm || '', colegio: cr.colegio || d.colegio || '', mpps: cr.mpps || d.mpps || '' }); }
+    else if (!docId && u.doc) { log('Administrador desvinculado de su ficha de médico', u.name); u.doc = null; S.session.doc = null; Object.assign(u, cr); }
+    else Object.assign(u, cr);
+  } else Object.assign(u, cr);
   syncCredsToDoctor(u);
   log('Datos profesionales actualizados', u.name + (cm ? ' · C.M. ' + cm : ''));
   save(); m.textContent = 'Guardado'; m.style.color = 'var(--good)'; render();
@@ -344,7 +377,7 @@ function syncCredsToDoctor(u) {
   Object.assign(d, credsOf(u)); syncStaff();
 }
 // Al abrir la app, la ficha de cada médico refleja los datos de su cuenta
-if (typeof S !== 'undefined' && S) (S.users || []).forEach(u => { if (u.doc && (u.cm || u.ci)) { const d = (S.doctors || []).find(x => x.id === u.doc); if (d) Object.assign(d, credsOf(u)); } });
+if (typeof S !== 'undefined' && S) (S.users || []).forEach(u => { if (u.doc && (u.cm || u.ci || u.mpps)) { const d = (S.doctors || []).find(x => x.id === u.doc); if (d) Object.assign(d, credsOf(u)); } });
 // Firma: un médico o residente sin sus números no puede firmar
 function credsBlockSign() {
   const u = meUser();

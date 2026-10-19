@@ -221,7 +221,8 @@ function save() {
     if (cur > STORE.rev) { STORE.stale = true; STORE.error = 'Los datos se modificaron en otra pestaña o ventana. Para no sobrescribir esos cambios, este no se guardó. Recargue la página.'; sysNotice(); return false; }
     // Datos y revisión forman una misma operación. Si falla la revisión, restaure el JSON anterior.
     const previousRaw = localStorage.getItem(KEY);
-    localStorage.setItem(KEY, JSON.stringify(S));
+    const prevSaved = S.savedAt; if (SYNC_READY) S.savedAt = new Date().toISOString();   // marca de tiempo para la sincronización; antes de consultar el servidor (datos de ejemplo de un navegador nuevo) no se marca
+    try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (writeError) { S.savedAt = prevSaved; throw writeError; }
     try { localStorage.setItem(REV_KEY, String(cur + 1)); }
     catch (revisionError) {
       try { if (previousRaw === null) localStorage.removeItem(KEY); else localStorage.setItem(KEY, previousRaw); }
@@ -230,12 +231,67 @@ function save() {
     }
     STORE.rev = cur + 1;
     if (STORE.error && !STORE.stale) { STORE.error = null; sysNotice(); }
+    serverPush();
     return true;
   } catch (e) {
     STORE.error = 'No se pudo guardar el último cambio (almacenamiento lleno o bloqueado). Descargue una copia de seguridad de inmediato.'; sysNotice(); return false;
   }
 }
 const sysNotice = () => { if (typeof renderSysBar === 'function') renderSysBar(); };
+
+// ---------- Sincronización con el servidor local (serve.ps1) ----------
+// Todos los navegadores comparten un mismo estado guardado en "copias de seguridad/_estado-servidor.json".
+// Al abrir, si el del servidor es más reciente, se adopta (se conserva la sesión de este navegador).
+// Al guardar, se sube; si otro equipo guardó algo más reciente desde que se cargó, no se sobrescribe: se pide recargar.
+const SYNC = { file: '_estado-servidor.json', meta: '_estado-servidor.meta.json', base: null, on: false, timer: null };
+var SYNC_READY = false;   // var: save() puede llamarse antes de esta línea al iniciar
+const syncUrl = n => '/__copia?nombre=' + encodeURIComponent(n);
+async function serverMeta() { try { const r = await fetch(syncUrl(SYNC.meta), { cache: 'no-store' }); return r.ok ? await r.json() : null; } catch (e) { return null; } }
+async function serverPull() {
+  SYNC.on = await fetch('/__ping', { cache: 'no-store' }).then(r => r.status === 204).catch(() => false);
+  const meta = SYNC.on ? await serverMeta() : null;
+  SYNC_READY = true;
+  if (!SYNC.on) return false;   // sin servidor local (p. ej. en la nube): solo este navegador
+  if (meta && meta.savedAt > (S.savedAt || '')) {
+    try {
+      const st = (await fetch(syncUrl(SYNC.file), { cache: 'no-store' }).then(r => r.json())).state;
+      const keepSession = S.session; S = st; S.session = keepSession; migrate();
+      localStorage.setItem(KEY, JSON.stringify(S)); STORE.rev = +(localStorage.getItem(REV_KEY) || 0) + 1; localStorage.setItem(REV_KEY, String(STORE.rev));
+      SYNC.base = S.savedAt; return true;
+    } catch (e) { return false; }
+  }
+  SYNC.base = meta?.savedAt || null;
+  if (S.savedAt && (!meta || S.savedAt > meta.savedAt)) serverPush(true);   // este navegador tiene lo más reciente (nunca se suben los datos de ejemplo sin guardar)
+  return false;
+}
+const SYNC_LABEL = { pat: 'pacientes', prod: 'productos', rec: 'historias', cons: 'consultas' };
+const syncCounts = () => ({ pat: (S.patients || []).length, prod: (S.products || []).length, rec: (S.records || []).length, cons: (S.consults || []).length });
+function serverPush(now = false) {
+  if (!SYNC.on || !SYNC_READY || !S.savedAt) return; clearTimeout(SYNC.timer);
+  SYNC.timer = setTimeout(async () => {
+    const meta = await serverMeta();
+    if (meta && SYNC.base && meta.savedAt > SYNC.base && meta.savedAt > (S.savedAt || '')) {   // otro equipo guardó después
+      STORE.stale = true; STORE.error = 'Otro equipo guardó cambios más recientes. Recargue la página para verlos; este cambio no se envió al servidor.'; sysNotice(); return;
+    }
+    // Freno: si este equipo tiene muchos menos datos que el servidor (p. ej. datos de ejemplo de un navegador nuevo), no se envía nada
+    const n = syncCounts(), m = meta?.n;
+    const shrink = m && Object.keys(n).find(k => m[k] >= 20 && n[k] < m[k] * 0.6);
+    if (shrink) { STORE.stale = true; STORE.error = `Este equipo tiene muchos menos datos que el servidor (${SYNC_LABEL[shrink]}: ${n[shrink]} aquí, ${m[shrink]} en el servidor). Para no borrar nada, no se envió. Recargue la página.`; sysNotice(); log('Envío al servidor bloqueado', `${SYNC_LABEL[shrink]}: ${n[shrink]} frente a ${m[shrink]}`); return; }
+    try {
+      const st = { ...S }; delete st.session;
+      const ok = (await fetch(syncUrl(SYNC.file), { method: 'PUT', body: JSON.stringify({ app: 'quiron', savedAt: S.savedAt, state: st }) })).ok;
+      if (ok) { await fetch(syncUrl(SYNC.meta), { method: 'PUT', body: JSON.stringify({ savedAt: S.savedAt, n }) }); SYNC.base = S.savedAt; }
+    } catch (e) {}
+  }, now ? 0 : 1200);
+}
+// Cada minuto: si otro equipo guardó, se avisa (y se recarga solo si no hay una ventana abierta)
+setInterval(async () => {
+  if (!SYNC.on || STORE.stale) return; const meta = await serverMeta();
+  if (meta && SYNC.base && meta.savedAt > SYNC.base && meta.savedAt > (S.savedAt || '')) {
+    if (!document.querySelector('.sheet, [role="dialog"]:not([hidden])') && document.visibilityState !== 'visible') location.reload();
+    else { STORE.stale = true; STORE.error = 'Hay cambios más recientes de otro equipo. Recargue la página para verlos.'; sysNotice(); }
+  }
+}, 60000);
 window.addEventListener('storage', e => { if (e.key === REV_KEY && +(e.newValue || 0) > STORE.rev) { STORE.stale = true; STORE.error = 'Los datos se modificaron en otra pestaña o ventana. Recargue la página para ver la versión más reciente; mientras tanto, esta pestaña no guardará cambios.'; sysNotice(); } });
 function resetDemo() {
   const keepUsers = S?.users || [], keepSession = S?.session;   // los usuarios y la sesión no se pierden al restablecer
@@ -263,8 +319,11 @@ const age = b => Math.floor((TODAY - new Date(b + 'T00:00')) / (365.25 * DAY));
 // Edad para mostrar: los pacientes traídos del archivo escaneado no tienen fecha de nacimiento, solo la edad que consta en su historia
 // Si solo se conoce la edad que tenía en un año (historias escaneadas), se calcula la de hoy sumando los años pasados
 const ageTxt = p => p.birth ? `${age(p.birth)} años` : p.ageAt ? `${+p.ageAt.age + Math.max(0, +dAt(0).slice(0, 4) - (parseInt(p.ageAt.year, 10) || +dAt(0).slice(0, 4)))} años` : 'edad no registrada';
+// Dirección segura para href/src: solo rutas del programa, http(s), blob: y data: de imagen o PDF (nunca javascript:)
+const safeUrl = u => { const s = String(u ?? '').trim(); return !/^[a-z][a-z0-9+.-]*:/i.test(s) || /^(https?:|blob:|data:(image\/(png|jpe?g|webp|gif)|application\/pdf)[;,])/i.test(s) ? esc(s) : '#'; };
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const nowStamp = () => { const d = new Date(); return iso(d) + ' ' + d.toTimeString().slice(0, 5); };
+const nowStampS = () => { const d = new Date(); return iso(d) + ' ' + d.toTimeString().slice(0, 8); };   // con segundos: orden exacto de los movimientos de fondos
 // Quién hace la acción: el médico, el laboratorio o rayos X que esté usando el sistema
 const actor = () => { const s = S.session || {}; return s.name ? s.name : s.role === 'enfermeria' ? 'Enfermería' : s.role === 'enfermeria_plus' ? 'Enfermería+' : ['medico', 'residente'].includes(s.role) ? (med(s.doc)?.name || 'Médico') : s.role === 'almacen' ? 'Almacén' : s.role === 'laboratorio' ? 'Laboratorio' : s.role === 'imagen' ? 'Rayos X e imagen' : s.role === 'recepcion' ? 'Recepción' : 'Administrador'; };
 function log(action, ref) { S.audit.unshift({ at: nowStamp(), user: actor(), action, ref }); }
@@ -274,7 +333,11 @@ const stock = p => (p?.lots || []).reduce((a, l) => a + l.qty, 0);
 const fefo = p => (p?.lots || []).filter(l => l.qty > 0 && daysTo(l.exp) >= 0).sort((a, b) => daysTo(a.exp) - daysTo(b.exp));
 const usable = p => fefo(p).reduce((a, l) => a + l.qty, 0);
 const avgCost = p => { const q = stock(p); return q ? (p?.lots || []).reduce((a, l) => a + l.qty * l.cost, 0) / q : (p?.lots?.at(-1)?.cost || 0); };
-const invValue = () => S.products.reduce((a, p) => a + p.lots.reduce((b, l) => b + l.qty * l.cost, 0), 0);
+// Valor del inventario: solo lo utilizable. Lo vencido se informa aparte como pérdida (no se puede despachar)
+const lotExpired = l => !!l.exp && daysTo(l.exp) < 0;
+const lotsValue = (p, expired = false) => (p?.lots || []).filter(l => lotExpired(l) === expired).reduce((b, l) => b + l.qty * (l.cost || 0), 0);
+const invValue = () => S.products.reduce((a, p) => a + lotsValue(p), 0);
+const expiredValue = () => S.products.reduce((a, p) => a + lotsValue(p, true), 0);
 function stockState(p) {
   const q = usable(p);
   if (q === 0) return stock(p) > 0 ? { k: 'bad', t: 'Solo vencidos' } : { k: 'bad', t: 'Agotado' };   // lo que hay está vencido: no se despacha, hay que retirarlo
@@ -326,12 +389,21 @@ function alerts() {
   return { low, exp, expired: exp.filter(e => e.d < 0), soon: exp.filter(e => e.d >= 0 && e.d <= 30) };
 }
 
+const moveUsd = m => m.cost || Math.abs(m.qty || 0) * avgCost(S.products.find(p => p.id === m.pid));
+// Lo que salió este mes (consumo y despachos), por producto: unidades y costo en USD
+function monthUsage(onlyMeds = true) {
+  const key = dAt(0).slice(0, 7); const g = {};
+  S.moves.filter(m => (m.type === 'consumo' || m.type === 'salida') && m.date.slice(0, 7) === key && m.pid).forEach(m => {
+    const p = S.products.find(x => x.id === m.pid); if (onlyMeds && (p?.cat || m.cat) !== 'Medicamento') return;
+    const e = g[m.pid] = g[m.pid] || { pid: m.pid, name: p?.name || m.name, unit: p?.unit || '', qty: 0, usd: 0 }; e.qty += Math.abs(m.qty || 0); e.usd += moveUsd(m); });
+  return Object.values(g);
+}
 function monthlyConsumption(months = 6) {
   const out = [];
   for (let i = months - 1; i >= 0; i--) {
     const d = new Date(TODAY.getFullYear(), TODAY.getMonth() - i, 1);
     const key = iso(d).slice(0, 7);
-    const usd = S.moves.filter(m => (m.type === 'consumo' || m.type === 'salida') && m.date.slice(0, 7) === key).reduce((a, m) => a + m.cost, 0);
+    const usd = S.moves.filter(m => (m.type === 'consumo' || m.type === 'salida') && m.date.slice(0, 7) === key).reduce((a, m) => a + moveUsd(m), 0);
     out.push({ key, label: d.toLocaleDateString('es-VE', { month: 'short' }).replace('.', ''), usd: r2(usd) });
   }
   return out;
@@ -412,7 +484,19 @@ const invRate = inv => inv.rate || S.rate;
 const bsOf = (usd, inv) => fmt(usd * invRate(inv), 'VES');
 const bsSum = (list, f) => fmt(list.reduce((a, i) => a + f(i) * invRate(i), 0), 'VES');
 const invPaid = inv => r2(inv.payments.reduce((a, p) => a + p.usd, 0));
-const invDue = inv => r2(invTotals(inv).total - invPaid(inv));
+const invDue = inv => inv.status === 'exonerada' ? 0 : r2(invTotals(inv).total - invPaid(inv));
+// Exoneración de gastos (solo Administración): la cuenta conserva todos sus conceptos y montos, así se sabe cuánto
+// representó el paciente, pero el saldo pendiente queda en cero, sin ingreso en caja ni factura fiscal.
+const invOpen = inv => !['pagada', 'exonerada'].includes(inv.status);
+function exonerate(invId, reason) {
+  const inv = byId(S.invoices, invId); if (!inv || !invOpen(inv)) return { ok: false, msg: 'Esta cuenta ya está saldada o exonerada.' };
+  if (isFiscal(inv)) return { ok: false, msg: 'Una cuenta con factura fiscal no se puede exonerar.' };
+  const usd = invDue(inv);
+  inv.exon = { at: nowStamp(), by: actor(), reason: reason.trim(), usd, total: invTotals(inv).total, paid: invPaid(inv) };
+  inv.status = 'exonerada'; if (!inv.rate) inv.rate = S.rate;   // el monto en Bs queda fijo a la tasa del día de la exoneración
+  log('Gastos exonerados', `${inv.num} · ${pat(inv.pid).name} · ${fmt(usd)} · ${reason.trim()}`); save();
+  return { ok: true, inv };
+}
 
 // El IGTF solo se agrega si quien cobra marca "Incluir IGTF" (aunque el pago sea en dólares)
 function pay(invId, { method, amount, igtf: withIgtf = false }) {
@@ -484,6 +568,7 @@ function migrate() {
   fix(!S.indications, () => { S.indications = []; });   // indicaciones médicas de medicación
   // Personal real: médicos (los de ejemplo quedan inactivos) y enfermeras con sus días de guardia
   fix(!S.doctors, () => { S.doctors = [...REAL_DOCS, ...DEMO_DOCS].map(d => ({ ...d })); });
+  fix((S.nurseStaff || []).some(n => !n.id), () => S.nurseStaff.forEach(n => { if (!n.id) n.id = uid('nr'); }));   // id para el perfil (amonestaciones y destacados)
   fix(!S.nurseStaff, () => { const extra = (S.nurses || []).filter(n => typeof n === 'string' && !DEMO_NURSES.includes(n) && !REAL_NURSES.some(r => r.name === n));
     S.nurseStaff = [...REAL_NURSES.map(n => ({ ...n, days: [...n.days] })), ...extra.map(name => ({ name, days: [], active: true }))]; });
   // Guardias de hoy en adelante que apuntaban a personal de ejemplo: quedan sin asignar (la enfermera sale de su día fijo)

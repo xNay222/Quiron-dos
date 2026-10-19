@@ -80,11 +80,11 @@ function acctMoves(from = '0000', to = '9999') {
   const out = [];
   S.invoices.forEach(inv => inv.payments.forEach(p => {
     const d = p.at.slice(0, 10); const m = metodo(p.method);
-    out.push({ id: p.id, date: d, type: 'entrada', cat: 'Cobros a pacientes', concept: `${inv.num} · ${pat(inv.pid)?.name || ''}`, amount: p.amount, cur: p.cur, method: m?.name || p.method, rate: p.rate || S.rate, auto: 'Facturación' , invId: inv.id });
-    if (p.igtf) out.push({ id: p.id + '-igtf', date: d, type: 'entrada', cat: 'IGTF cobrado (por pagar al SENIAT)', concept: `IGTF de ${inv.num}`, amount: p.igtf, cur: 'USD', method: m?.name || p.method, rate: p.rate || S.rate, auto: 'Facturación' });
+    out.push({ id: p.id, date: d, type: 'entrada', cat: 'Cobros a pacientes', concept: `${inv.num} · ${pat(inv.pid)?.name || ''}`, amount: p.amount, cur: p.cur, method: m?.name || p.method, rate: p.rate || S.rate, auto: 'Facturación' , invId: inv.id, at: p.at });
+    if (p.igtf) out.push({ id: p.id + '-igtf', date: d, type: 'entrada', cat: 'IGTF cobrado (por pagar al SENIAT)', concept: `IGTF de ${inv.num}`, amount: p.igtf, cur: 'USD', method: m?.name || p.method, rate: p.rate || S.rate, auto: 'Facturación', at: p.at });
   }));
   // Compras: la salida se registra cuando Contabilidad confirma y paga la orden
-  S.orders.filter(o => o.payment).forEach(o => out.push({ id: o.id, date: o.payment.date, type: 'salida', cat: 'Compras de inventario', concept: `${o.num} · ${sup(o.sup)?.name || ''}`, amount: o.payment.amount, cur: o.payment.cur, method: o.payment.method, rate: o.payment.rate, ref: o.payment.ref, auto: 'Compras' }));
+  S.orders.filter(o => o.payment).forEach(o => out.push({ id: o.id, date: o.payment.date, type: 'salida', cat: 'Compras de inventario', concept: `${o.num} · ${sup(o.sup)?.name || ''}`, amount: o.payment.amount, cur: o.payment.cur, method: o.payment.method, rate: o.payment.rate, ref: o.payment.ref, auto: 'Compras', at: o.payment.at }));
   (S.ledger || []).filter(g => !g.void).forEach(g => out.push({ ...g, auto: g.source || '' }));
   return out.filter(m => m.date >= from && m.date <= to).sort((a, b) => b.date.localeCompare(a.date));
 }
@@ -108,8 +108,8 @@ function acctMonthly(months = 6) {
 }
 
 // rate: tasa BCV del día de la operación (si no se indica, la de hoy)
-function addLedger({ date, type, cat, concept, amount, cur, method, ref, source, rate }) {
-  const g = { id: uid('g'), date, type, cat, concept, amount: r2(amount), cur, method, ref: ref || '', rate: rate > 0 ? r2(rate) : S.rate, source: source || '', confirmed: true };
+function addLedger({ date, type, cat, concept, amount, cur, method, ref, source, rate, fund }) {
+  const g = { id: uid('g'), date, type, cat, concept, amount: r2(amount), cur, method, ref: ref || '', rate: rate > 0 ? r2(rate) : S.rate, source: source || '', confirmed: true, at: nowStampS(), ...(fund ? { fund } : {}) };
   (S.ledger = S.ledger || []).unshift(g);
   log(type === 'entrada' ? 'Entrada registrada' : 'Salida registrada', `${concept} · ${fmt(amount, cur)}`);
   save();

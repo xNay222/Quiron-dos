@@ -12,7 +12,7 @@ const fcProd = l => S.products.find(p => p.name.toLowerCase() === String(l.name 
 const fcBlank = () => ({ name: '', lot: '', exp: '', qty: '', cost: '', brand: '', unit: 'Unidad' });
 
 ACTIONS.invoiceLoad = async el => {
-  if (!can('inv.gestionar')) return;
+  if (!can('*')) { toast('Las facturas las carga Administración. Para registrar mercancía nueva use "Producto o lote nuevo (con foto)".'); return; }   // facturas: solo Administración
   const pend = el?.dataset?.id ? (S.invPending || []).find(x => x.id === el.dataset.id) : null;
   const sample = await getCap('sample'); const lim = sample ? await sample.limits().catch(() => null) : null;
   UI.fcMax = Math.min(6, lim?.images?.maxCount || 0); UI.fcTypes = lim?.images?.mediaTypes || [];
