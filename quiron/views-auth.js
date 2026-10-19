@@ -69,9 +69,9 @@ function authBoot() {
   const s = readSession(); const u = s && S.users.find(x => x.id === s.uid && x.status === 'activo');
   if (u && idleExpired()) { log('Sesión cerrada por inactividad', u.email || u.name); endSession(); showAuth('login', IDLE_MSG); return false; }
   if (u) { idleMark(true); applyUser(u); if (u.mustChange) { showAuth('cambiar'); return false; } return true; }
-  // Sin administrador activo: si hay uno pendiente de activar (contraseña restablecida), se pide su código; nunca se ofrece crear otro
-  const pendingAdmin = S.users.some(x => x.role === 'admin' && x.status === 'invitado');
-  endSession(); showAuth(activeAdmins().length ? 'login' : pendingAdmin ? 'invite' : 'setup'); return false;
+  // Sin administrador activo no hay registro abierto: la cuenta se crea en la instalación (herramientas/crear-administrador.cjs)
+  // y aquí solo se activa con su código. Así nadie que abra el sistema puede adueñarse de él.
+  endSession(); showAuth(activeAdmins().length ? 'login' : 'invite'); return false;
 }
 function enterApp() {
   const box = document.getElementById('auth'); if (box) box.hidden = true;
@@ -94,15 +94,11 @@ function showAuth(mode, msg = '') {
   const opt = (act, k, title, sub) => `<button class="auth-opt" data-act="${act}" ${k ? `data-k="${k}"` : ''}><b>${title}</b><span>${sub}</span></button>`;
   const step = (n, title, sub) => `<div class="auth-opt static"><b><i>${n}</i>${title}</b><span>${sub}</span></div>`;
   const views = {
-    setup: ['Configuración inicial', 'Cree la cuenta del administrador (control maestro). Con ella podrá crear e invitar al resto de los usuarios.',
-      f('au-name', 'Nombre completo', 'text', 'autocomplete="name"') + f('au-email', 'Correo electrónico', 'email', 'autocomplete="username"') + f('au-pass', 'Contraseña', 'password', 'autocomplete="new-password"') + f('au-pass2', 'Repita la contraseña', 'password', 'autocomplete="new-password"') + keep,
-      go('authSetup', 'Crear cuenta y entrar'),
-      step(1, 'Cree su cuenta', 'Será el administrador: ve y controla todo el sistema.') + step(2, 'Invite a su equipo', 'En Usuarios, cada persona recibe su rol y un código.') + step(3, 'Cargue sus datos', 'Inventario, servicios, kits de cirugía y pacientes.')],
     login: ['Iniciar sesión', 'Sistema de gestión clínica de Quirón Especialidades Médicas. Ingrese con su correo y contraseña.',
       f('au-email', 'Correo electrónico', 'email', 'autocomplete="username"') + f('au-pass', 'Contraseña', 'password', 'autocomplete="current-password" data-enter="authLogin"') + keep,
       go('authLogin', 'Entrar'),
       opt('authMode', 'invite', 'Tengo un código de invitación', 'Active su usuario y cree su contraseña.') + opt('authForgot', '', '¿Olvidó su contraseña?', 'La administración se la restablece desde Usuarios.')],
-    invite: ['Activar mi usuario', 'Escriba su correo y el código que le entregó la administración. Luego cree su contraseña.',
+    invite: ['Activar mi usuario', activeAdmins().length ? 'Escriba su correo y el código que le entregó la administración. Luego cree su contraseña.' : 'El sistema aún no tiene un administrador activo. Por seguridad, esa cuenta se crea en la instalación y no desde esta pantalla: escriba el correo y el código de activación que recibió, y cree su contraseña.',
       f('au-email', 'Correo electrónico', 'email', 'autocomplete="username"') + f('au-code', 'Código de invitación', 'text', 'placeholder="ABCD-EFGH" autocapitalize="characters"') + f('au-pass', 'Nueva contraseña', 'password', 'autocomplete="new-password"') + f('au-pass2', 'Repita la contraseña', 'password', 'autocomplete="new-password"') + keep,
       go('authInvite', 'Activar y entrar'),
       opt('authMode', 'login', 'Ya tengo contraseña', 'Volver a iniciar sesión.') + opt('authForgot', '', '¿No tiene código o venció?', 'Pídalo a la administración: vale 7 días.')],
@@ -134,14 +130,6 @@ document.addEventListener('submit', e => { if (e.target.closest?.('#auth')) e.pr
 // Enter en la contraseña = Entrar
 document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.closest?.('#auth form')) { e.preventDefault(); document.querySelector('#auth .auth-btns .auth-go')?.click(); } });
 
-ACTIONS.authSetup = async () => {
-  if (activeAdmins().length) { showAuth('login'); return; }
-  const name = val('au-name').trim(), email = normEmail(val('au-email')), p = val('au-pass');
-  if (!name) return auMsg('Escriba su nombre.'); if (!validEmail(email)) return auMsg('Escriba un correo válido.');
-  auMsg('Comprobando la contraseña…'); const prob = await passCheck(p, val('au-pass2'), { name, email }); if (prob) return auMsg(prob);
-  const salt = newSalt(); const u = { id: uid('u'), name, email, role: 'admin', doc: null, status: 'activo', salt, hash: await hashPass(p, salt), created: nowStamp(), lastLogin: nowStamp() };
-  S.users.push(u); startSession(u, document.getElementById('au-keep').checked); log('Cuenta de administrador creada', email); save(); enterApp(); toast(`Bienvenido, ${name}`);
-};
 ACTIONS.authLogin = async () => {
   const wait = (UI.authLock || 0) - Date.now(); if (wait > 0) return auMsg(`Demasiados intentos. Espere ${Math.ceil(wait / 1000)} segundos.`);
   const email = normEmail(val('au-email')), p = val('au-pass'); if (!email || !p) return auMsg('Escriba su correo y su contraseña.');
@@ -169,13 +157,14 @@ ACTIONS.authChange = async () => {
   const p = val('au-pass'); auMsg('Comprobando la contraseña…'); const prob = await passCheck(p, val('au-pass2'), u); if (prob) return auMsg(prob);
   u.salt = newSalt(); u.hash = await hashPass(p, u.salt); u.mustChange = false; log('Contraseña cambiada', u.email); save(); enterApp(); toast('Contraseña guardada');
 };
-ACTIONS.logout = () => { const u = meUser(); if (u) { log('Cierre de sesión', u.email); save(); } endSession(); showAuth(activeAdmins().length ? 'login' : 'setup'); };
+ACTIONS.logout = () => { const u = meUser(); if (u) { log('Cierre de sesión', u.email); save(); } endSession(); showAuth(activeAdmins().length ? 'login' : 'invite'); };
 
 // ---------- Mi cuenta (botón de usuario en el menú lateral) ----------
 ACTIONS.switchUser = () => {
   const u = meUser(); if (!u) return;
   openSheet('Mi cuenta', `<div class="hstack" style="gap:14px"><span class="avatar" style="width:52px;height:52px;font-size:18px">${initials(u.name)}</span><div><b style="font-size:17px">${esc(u.name)}</b><div class="small muted">${esc(u.email)} · ${esc(roleLabel(u.role))}${u.doc ? ' · ' + esc(med(u.doc)?.name || '') : ''}</div></div></div>
     <div class="between"><span class="small muted">Apariencia</span>${themeSeg('setTheme')}</div>
+    ${can('*') ? `<div class="card" style="display:grid;gap:8px"><b class="small">Su equipo</b><div class="small muted">Invite a cada persona con su rol: verá qué puede hacer antes de crearla. La persona recibe un código y crea su propia contraseña.</div><div class="hstack"><button class="btn primary sm" data-act="userNew">Invitar a un usuario</button><button class="btn sm" data-go="usuarios">Ver usuarios</button></div></div>` : ''}
     ${credsCard(u)}
     <div class="card" style="display:grid;gap:10px"><b class="small">Cambiar contraseña</b><div class="form">
       <div class="field"><label for="mc-old">Contraseña actual</label><input class="input" type="password" id="mc-old" autocomplete="current-password"></div>
@@ -208,10 +197,27 @@ function userForm(u) {
     <div class="field"><label for="us-email">Correo electrónico</label><input class="input" type="email" id="us-email" value="${esc(u.email || '')}" ${u.id ? 'disabled' : ''}></div>
     <div class="field"><label for="us-role">Rol</label><select class="input" id="us-role" data-ch="usRole" ${u.id && u.id === S.session?.uid ? 'disabled' : ''}>${userRoles().map(r => `<option value="${r}" ${r === u.role ? 'selected' : ''}>${esc(roleLabel(r))}</option>`).join('')}</select></div>
     <div id="us-docbox">${docSelect(u.role, u.doc)}</div></div>
-    <div class="small muted" id="us-rolehelp">${roleHelp(u.role)}</div>`;
+    <div id="us-rolehelp">${roleHelp(u.role)}</div>`;
 }
-const roleHelp = r => ({ almacen: 'Inicio completo, inventario (sin el valor total; sí el de cada producto), compras y despacho a hospitalización y quirófano. Puede crear y editar citas y cirugías en la Agenda.', enfermeria_plus: 'Todo lo de enfermería (hospitalización, emergencias, medicación y material de quirófano) y además programa cirugías desde Quirófano. No agenda consultas.', admin: 'Acceso total, incluidos usuarios, contabilidad, presupuestos y ajustes.', recepcion: 'Agenda completa (citas y cirugías) y fichas de pacientes: datos de contacto, consentimientos y preoperatorios externos. No ve historias clínicas.', medico: 'Su consulta y su agenda: programa sus propias citas y cirugías; quirófano, hospitalización, pacientes, historias clínicas, informes y sus exámenes.', residente: 'Hospitalización completa; consulta de pacientes, exámenes e historias.', enfermeria: 'Hospitalización y emergencias: solicita medicación y material, registra aplicaciones y lee las evoluciones. No entra a Quirófano (eso es de Enfermeras+).', laboratorio: 'Laboratorio completo (sin rayos X) y pacientes: alergias, antecedentes y exámenes.', imagen: 'Rayos X e imagen: órdenes, estudios e informes.' })[r] || '';
-ACTIONS.usRole = el => { document.getElementById('us-docbox').innerHTML = docSelect(el.value, null); document.getElementById('us-rolehelp').textContent = roleHelp(el.value); };
+// Qué puede hacer cada rol, en palabras (refleja ROLES y PERMS de app.js; si cambian, actualizar aquí)
+const ROLE_CAN = {
+  admin: { can: ['Todo el sistema: clínica, pacientes, contabilidad, fondos, inventario y ajustes', 'Crear, invitar y desactivar usuarios, y elegir su rol', 'Registrar amonestaciones y destacados del personal', 'Eliminar pacientes (con motivo y copia previa)'], not: [] },
+  medico: { can: ['Consultas guiadas y firma de informes, récipes, órdenes y constancias', 'Su propia agenda: programa sus citas y cirugías', 'Quirófano: pide material y registra la cirugía realizada', 'Hospitalización y emergencias: evoluciones, indicaciones, plantillas de órdenes, informe de egreso y triaje', 'Historias clínicas, informes, consentimientos y pedido de exámenes'], not: ['Contabilidad, presupuestos e inventario', 'La agenda de otros médicos', 'Usuarios y ajustes'], need: 'Debe vincularse a su ficha de médico. Para firmar necesita su n.º de colegiado.' },
+  residente: { can: ['Consultas (ve las de todos los médicos)', 'Hospitalización y emergencias: evoluciones, indicaciones, plantillas de órdenes, informe de egreso y triaje', 'Historias clínicas, informes y pedido de exámenes'], not: ['Quirófano y agenda', 'Contabilidad, presupuestos e inventario', 'Usuarios y ajustes'], need: 'Debe vincularse a su ficha de residente. Para firmar necesita su n.º de colegiado.' },
+  enfermeria_plus: { can: ['Todo lo de enfermería', 'Quirófano: programa cirugías, pide la medicación y el material, registra la cirugía realizada y las devoluciones'], not: ['Agendar consultas', 'Historias clínicas, contabilidad e inventario', 'Usuarios y ajustes'] },
+  enfermeria: { can: ['Hospitalización y emergencias: ve las indicaciones con la hora de cada dosis', 'Solicita medicación y material, y registra cada aplicación', 'Registra la llegada de pacientes a emergencias (triaje)', 'Lee las evoluciones del médico'], not: ['Quirófano (eso es de Enfermería+)', 'Historias clínicas, contabilidad e inventario', 'Usuarios y ajustes'] },
+  almacen: { can: ['Inicio completo, como la administración', 'Despacha las órdenes de hospitalización y quirófano', 'Registra la mercancía que llega (con foto) y hace solicitudes extraordinarias con motivo', 'Compras, mapa del almacén, código de barras, etiquetas y retiro de vencidos', 'Agenda: crea y edita citas y cirugías; asigna las guardias'], not: ['Entradas o salidas libres del inventario', 'Facturas de proveedores y el valor total del inventario', 'Historias clínicas y contabilidad'] },
+  recepcion: { can: ['Agenda completa: citas y cirugías', 'Estado de las consultas del día', 'Registra pacientes y sus datos de contacto', 'Consentimientos y preoperatorios externos'], not: ['Historias clínicas', 'Contabilidad e inventario', 'Usuarios y ajustes'] },
+  laboratorio: { can: ['Exámenes de laboratorio pendientes: carga y valida resultados', 'Exámenes para pacientes que llegan directo', 'Registra pacientes y consulta alergias, antecedentes y exámenes anteriores'], not: ['Rayos X e imagen', 'Historias clínicas, contabilidad e inventario'] },
+  imagen: { can: ['Estudios de rayos X e imagen pendientes: informe e imágenes', 'Estudios para pacientes que llegan directo'], not: ['Laboratorio', 'Historias clínicas, contabilidad e inventario'] },
+};
+const roleSees = r => (ROLES[r]?.nav || []).filter(Array.isArray).filter(n => n[0] !== 'tutorial').map(n => n[1]);
+const roleHelp = r => { const c = ROLE_CAN[r]; if (!c) return '';
+  return `<div class="perm-box"><div class="perm-sees"><span class="small muted">Ve en su menú</span><div class="perm-chips">${roleSees(r).map(x => `<span class="pill">${esc(x)}</span>`).join('')}</div></div>
+    <div class="perm-cols"><div><b class="small">Puede</b><ul class="perm-list yes">${c.can.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>
+    ${c.not.length ? `<div><b class="small">No puede</b><ul class="perm-list no">${c.not.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}</div>
+    ${c.need ? `<div class="small muted">${esc(c.need)}</div>` : ''}</div>`; };
+ACTIONS.usRole = el => { document.getElementById('us-docbox').innerHTML = docSelect(el.value, null); document.getElementById('us-rolehelp').innerHTML = roleHelp(el.value); };
 ACTIONS.userNew = (el = {}) => { if (!can('*')) return;
   UI.usMode = 'invite';
   openSheet('Nuevo usuario', userForm({ role: ROLES[el.dataset?.role] ? el.dataset.role : 'recepcion' }) + `<div><b class="small">¿Cómo recibirá el acceso?</b><div class="seg" role="group" aria-label="Forma de acceso" style="margin-top:6px"><button data-act="usMode" data-k="invite" aria-pressed="true">Código de invitación</button><button data-act="usMode" data-k="temp" aria-pressed="false">Contraseña temporal</button></div>

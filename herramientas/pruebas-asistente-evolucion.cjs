@@ -1821,6 +1821,11 @@ async function test(name, fn) {
     assert.ok(passWeak('carlos2026', { name: 'Carlos Pérez', email: 'cp@x.com' }), 'contiene el nombre');
     assert.equal(passWeak('Tr3n-azul-Moriche', { name: 'Carlos Pérez' }), '');
   });
+  await test('Acceso: sin registro abierto del administrador y permisos explicados para cada rol', () => {
+    assert.equal(typeof ACTIONS.authSetup, 'undefined', 'no existe la creación libre del administrador');
+    for (const r of Object.keys(ROLES)) { assert.ok(ROLE_CAN[r] && ROLE_CAN[r].can.length, 'falta el resumen de ' + r); assert.ok(roleHelp(r).includes('Puede')); }
+    assert.ok(roleSees('enfermeria').includes('Emergencias') && !roleSees('enfermeria').includes('Quirófano'));
+  });
   await test('Preparar solicitud para probar fallo de almacenamiento sin duplicarla', () => {
     ACTIONS.guideStart({
       dataset: {

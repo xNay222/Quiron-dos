@@ -218,3 +218,10 @@ Descartado: estilo "Tablero de turno" (clínico sobrio). Trabajo con Codex para 
 - Contraseñas: passCheck = longitud + passWeak (más usadas, nombre/correo/clínica) + passLeaked (HIBP por k-anonimato, solo 5 caracteres de SHA-1; sin internet no bloquea).
 - SRI en ZXing y JsBarcode (views-scan.js). Si se cambia la versión, recalcular la huella.
 - Pendiente para Supabase: RLS, permisos en el servidor (hoy can() es solo del navegador), sesión con cookie httpOnly, verificación de correo, IDs no predecibles (uid usa Math.random), límite de intentos de acceso en el servidor.
+
+## Acceso, invitaciones y tutoriales (19/10/2026)
+- Ya no existe la pantalla de "Configuración inicial" (ni ACTIONS.authSetup): sin administrador activo se muestra "Activar mi usuario".
+  La cuenta del administrador se crea en la instalación con `node herramientas/crear-administrador.cjs "Nombre" correo` (código de 7 días, sin contraseñas; copia previa en copias de seguridad; no crea un segundo administrador; `--nuevo-codigo` lo renueva).
+- Invitar: Usuarios › Nuevo usuario o Mi cuenta › "Invitar a un usuario". `ROLE_CAN` (views-auth.js) explica qué ve, qué puede y qué no cada rol; si cambian ROLES o PERMS en app.js, actualizarlo.
+- Tutoriales al día (views-tour.js): pasos comunes TRIAGE, TPL_STEP, EGRESO_STEP; tour nuevo alm-codigos; adm-usuarios con permisos, datos profesionales y amonestaciones. Si un paso no tiene qué señalar (sin ingresos, órdenes o cirugías), lo dice.
+- Versión del teléfono: demo-movil.js (solo en scratchpad/movil) entra como "Invitado" administrador porque allí no hay instalación.

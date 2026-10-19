@@ -1555,6 +1555,14 @@ html.motion-off *,html.motion-off *::before,html.motion-off *::after{animation:n
 .sn-item .sn-date{font-size:12.5px;color:var(--fg2);font-variant-numeric:tabular-nums}
 .sn-item p{margin:10px 0 6px;line-height:1.55}
 .sn-item.void{opacity:.6}.sn-item.void summary b{text-decoration:line-through}
+/* Permisos del rol al invitar o editar un usuario */
+.perm-box{display:grid;gap:10px;padding:12px 14px;border-radius:12px;background:var(--fill)}
+.perm-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.perm-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.perm-list{margin:6px 0 0;padding:0;list-style:none;display:grid;gap:5px;font-size:13.5px;line-height:1.4}
+.perm-list li{position:relative;padding-left:20px}
+.perm-list.yes li::before{content:"✓";position:absolute;left:0;color:var(--good);font-weight:700}
+.perm-list.no li{color:var(--fg2)}.perm-list.no li::before{content:"✕";position:absolute;left:1px;color:var(--bad);font-weight:700}
 </style>
 </head>
 <body>
