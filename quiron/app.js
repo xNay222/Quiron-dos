@@ -578,9 +578,11 @@ function getCap(name) {
   capCache[name] = (window.claude?.use ? window.claude.use(real) : local).catch(() => null);
   return capCache[name];
 }
+// Dónde está la IA: el servidor local (/__ia) o, en la versión publicada, la función "ia" de Supabase (cloud.js)
+const iaFetch = init => (typeof window !== 'undefined' && window.iaFetchNube ? window.iaFetchNube(init) : fetch('/__ia', init));
 async function localAI() {
   if (typeof fetch !== 'function') return null;
-  const r = await fetch('/__ia', { cache: 'no-store' }).catch(() => null); if (!r || r.status !== 204) return null;
+  const r = await iaFetch({ cache: 'no-store' }).catch(() => null); if (!r || r.status !== 204) return null;
   const toPart = async f => {
     const b = String(f.type || '').startsWith('image/') ? await shrinkImage(f) : f; const url = await blobToDataURL(b);
     return { mime: url.slice(5, url.indexOf(';')), data: url.slice(url.indexOf(',') + 1) };
@@ -589,7 +591,7 @@ async function localAI() {
     limits: async () => ({ images: { maxCount: 6, mediaTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/heic'] } }),
     json: async (prompt, { images = [] } = {}) => {
       const body = JSON.stringify({ prompt: prompt + '\n\nResponde solo con JSON válido.', images: await Promise.all(images.map(toPart)) });
-      const res = await fetch('/__ia', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }); const t = await res.text();
+      const res = await iaFetch({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body }); const t = await res.text();
       if (!res.ok) throw new Error(t || 'La IA no respondió');
       const fence = String.fromCharCode(96).repeat(3);
       return JSON.parse(t.trim().replace(new RegExp('^' + fence + '(json)?'), '').replace(new RegExp(fence + '$'), ''));
@@ -701,8 +703,8 @@ ACTIONS.setMotion = el => { try { localStorage.setItem(MOTION_KEY, el.dataset.k)
 
 // ---------- Ajustes: estado de la IA para leer fotos ----------
 let IA_STATE = 'comprobando';
-if (typeof fetch === 'function') fetch('/__ia', { cache: 'no-store' }).then(r => { IA_STATE = r.status === 204 ? 'local' : 'sin'; }, () => { IA_STATE = 'sin'; });
-const iaCard = () => { const inClaude = !!window.claude?.use; const st = inClaude ? 'La IA de Claude está disponible.' : IA_STATE === 'local' ? 'Conectada a Google Gemini a través del servidor local.' : IA_STATE === 'comprobando' ? 'Comprobando…' : 'Sin conectar: falta la clave GEMINI_API_KEY en Windows (ver instrucciones).';
+if (typeof fetch === 'function') iaFetch({ cache: 'no-store' }).then(r => { IA_STATE = r.status === 204 ? 'local' : 'sin'; }, () => { IA_STATE = 'sin'; });
+const iaCard = () => { const inClaude = !!window.claude?.use; const st = inClaude ? 'La IA de Claude está disponible.' : IA_STATE === 'local' ? (typeof NUBE !== 'undefined' && NUBE.on ? 'Conectada a Google Gemini.' : 'Conectada a Google Gemini a través del servidor local.') : IA_STATE === 'comprobando' ? 'Comprobando…' : 'Sin conectar: falta la clave GEMINI_API_KEY en Windows (ver instrucciones).';
   return `<div class="card" style="margin-bottom:16px"><div class="between" style="gap:12px;flex-wrap:wrap"><div><h2 style="margin:0">IA para leer fotos</h2><div class="small muted">Facturas de compra y cajas de medicamentos. ${esc(st)}</div></div>
     ${can('*') && !inClaude ? `<label class="hstack small" style="max-width:420px"><input type="checkbox" data-ch="iaClin" ${iaClinOn() ? 'checked' : ''}> Usarla también con fotos de pacientes (historias y resultados). El plan gratuito de Google puede usar lo enviado para mejorar sus modelos: déjelo apagado salvo que tenga un plan de pago.</label>` : ''}</div></div>`; };
 ACTIONS.iaClin = el => { try { localStorage.setItem(IA_CLIN_KEY, el.checked ? '1' : '0'); } catch (e) {} delete capCache['sample-clin']; log('IA con datos de pacientes', el.checked ? 'activada' : 'desactivada'); save(); toast(el.checked ? 'IA activada también para fotos de pacientes' : 'IA solo para facturas y productos'); };

@@ -36,6 +36,12 @@ const nubeScript = (src, sri) => new Promise((ok, no) => {
   s.onload = ok; s.onerror = no; document.head.appendChild(s); });
 const nubeLib = () => window.supabase?.createClient ? Promise.resolve()
   : nubeScript('vendor/supabase.js').catch(() => nubeScript(NUBE_CFG.lib, NUBE_CFG.sri)).catch(() => { throw new Error('No se pudo cargar la conexión. Revise su internet.'); });
+// IA para leer fotos: la función "ia" de Supabase (la clave de Gemini vive allí, en sus secretos)
+async function nubeIaFetch(init = {}) {
+  const tok = NUBE.sb ? (await NUBE.sb.auth.getSession()).data.session?.access_token : null;
+  return fetch(NUBE_CFG.url + '/functions/v1/ia', { ...init, headers: { ...(init.headers || {}), apikey: NUBE_CFG.key, Authorization: 'Bearer ' + (tok || NUBE_CFG.key) } });
+}
+if (NUBE.on && typeof window !== 'undefined') window.iaFetchNube = nubeIaFetch;
 const nubeRowId = (col, rec) => NUBE_COMPARTIDAS.has(NUBE_TABLAS[col]) ? col + '|' + rec.id : rec.id;
 const nubeCan = (t, kind) => (NUBE.acceso[t]?.[kind] || []).includes(NUBE.me?.rol);
 const nubeMsg = e => { const m = String(e?.message || e || ''); return /fetch|network|Failed/i.test(m) ? 'Sin conexión con el servidor. Revise su internet.' : m; };
