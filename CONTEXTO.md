@@ -225,3 +225,12 @@ Descartado: estilo "Tablero de turno" (clínico sobrio). Trabajo con Codex para 
 - Invitar: Usuarios › Nuevo usuario o Mi cuenta › "Invitar a un usuario". `ROLE_CAN` (views-auth.js) explica qué ve, qué puede y qué no cada rol; si cambian ROLES o PERMS en app.js, actualizarlo.
 - Tutoriales al día (views-tour.js): pasos comunes TRIAGE, TPL_STEP, EGRESO_STEP; tour nuevo alm-codigos; adm-usuarios con permisos, datos profesionales y amonestaciones. Si un paso no tiene qué señalar (sin ingresos, órdenes o cirugías), lo dice.
 - Versión del teléfono: demo-movil.js (solo en scratchpad/movil) entra como "Invitado" administrador porque allí no hay instalación.
+
+## Nube: Supabase + Vercel (19/10/2026)
+- Supabase: organización "Clinica Quiron" (plan gratuito por ahora), proyecto `quiron` (ref jcfvgoaqwngesjktmcip, us-east-1).
+  Esquema en supabase/migrations (aplicado desde el editor SQL). Registro público desactivado; anónimos sin privilegios.
+  Función `usuarios` (supabase/functions/usuarios, desplegada desde el editor; verificación JWT propia).
+- Vercel: proyecto `quiron-dos` (equipo Nay, plan Hobby), carpeta raíz `quiron/`, rama de producción `actualizacion-2026-10-19`.
+  Dirección: https://quiron-dos.vercel.app. Cabeceras en quiron/vercel.json.
+- quiron/cloud.js se activa solo en *.vercel.app / quiron* (o con localStorage 'quiron-nube'='1'). En local todo sigue igual.
+- Pendiente: crear el primer administrador en la nube, importar los datos reales, historias escaneadas (requiere plan Pro), IA y archivos.
