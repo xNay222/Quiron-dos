@@ -76,8 +76,8 @@ function tpaForm() { const o = UI.tpa; const a = admOf(o.admId);
   ${o.lines.map((l, i) => `<div class="card tpl-card${l.on ? '' : ' off'}"><label class="hstack"><input type="checkbox" data-ch="tpaOn" data-i="${i}" ${l.on ? 'checked' : ''}> <b>${esc(l.med || 'Medicamento')}</b>${l.pidProd ? ` <span class="small muted">· en piso ${floorUnits(a.id, l.pidProd)} · almacén ${usable(prod(l.pidProd))}</span>` : ' <span class="small muted">· no está en el inventario</span>'}</label>${l.on ? tplLineFields(l, i, 'ta-') : ''}</div>`).join('')}
   <div class="field"><label for="ta-care">Cuidados generales</label><textarea class="input" id="ta-care" rows="2">${esc(o.care)}</textarea></div>
   <label class="hstack small"><input type="checkbox" id="ta-send" ${o.send ? 'checked' : ''}> Enviar al almacén la solicitud con las cantidades indicadas</label>
-  <div class="field"><label for="ta-dr">Médico que indica</label><select class="input" id="ta-dr"><option value="">Seleccione…</option>${docOptGroups(o.reqDoc)}</select></div>`; }
-const tpaKeep = () => { const o = UI.tpa; tplKeepLines(o.lines, 'ta-'); o.care = val('ta-care').trim(); o.send = !!document.getElementById('ta-send')?.checked; o.reqDoc = val('ta-dr'); };
+  ${lockedDoc() ? docFieldLocked('ta-dr', 'Médico que indica') : `<div class="field"><label for="ta-dr">Médico que indica</label><select class="input" id="ta-dr"><option value="">Seleccione…</option>${docOptGroups(o.reqDoc)}</select></div>`}`; }
+const tpaKeep = () => { const o = UI.tpa; tplKeepLines(o.lines, 'ta-'); o.care = val('ta-care').trim(); o.send = !!document.getElementById('ta-send')?.checked; o.reqDoc = lockedDoc() || val('ta-dr'); };
 ACTIONS.tpaPick = el => { tpaKeep(); UI.tpa.tplId = el.value; tpaLoad(); refreshSheet(tpaForm()); };
 ACTIONS.tpaOn = el => { tpaKeep(); UI.tpa.lines[+el.dataset.i].on = el.checked; refreshSheet(tpaForm()); };
 ACTIONS.tplApplySave = () => {

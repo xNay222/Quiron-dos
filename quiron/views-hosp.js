@@ -165,7 +165,7 @@ function medOrderForm() {
   ${qx ? '' : '<div class="small muted">Aquí solo se pide lo que debe salir del almacén. Cómo y cada cuánto se coloca lo indica el médico en la pestaña Indicaciones del paciente.</div>'}
   <button class="btn sm" style="justify-self:start" data-act="moAdd">+ Agregar medicamento</button>
   ${sheetStep(2, '¿Quién lo solicita?')}<div class="form">
-    <div class="field"><label for="mo-dr">Médico que solicita <span style="color:var(--bad)">*</span></label><select class="input" id="mo-dr"><option value="">Seleccione el médico…</option>${docOptGroups(o.reqDoc)}</select></div>
+    ${lockedDoc() ? docFieldLocked('mo-dr', 'Médico que solicita') : `<div class="field"><label for="mo-dr">Médico que solicita <span style="color:var(--bad)">*</span></label><select class="input" id="mo-dr"><option value="">Seleccione el médico…</option>${docOptGroups(o.reqDoc)}</select></div>`}
     ${qx ? `<div class="field"><label for="mo-cx">Cirujano <span class="muted">· bloqueado</span></label><input class="input" id="mo-cx" value="${esc(med(qx.doc)?.name || '—')}" disabled title="Se toma de la cirugía programada"></div>
     <div class="field"><label for="mo-an">Anestesiólogo <span class="muted">· bloqueado</span></label><input class="input" id="mo-an" value="${esc(med(qx.anest)?.name || '—')}" disabled title="Se toma de la cirugía programada"></div>`
     : `<div class="field"><label for="mo-gd">Médico de guardia <span class="muted">· bloqueado</span></label><input class="input" id="mo-gd" value="${esc(dutyDocName())}" disabled title="Se toma de la guardia del día y no se puede modificar"></div>`}
@@ -174,7 +174,7 @@ function medOrderForm() {
 }
 // Médico de guardia del día (según la pestaña de guardias de la agenda); queda fijo en la solicitud
 const dutyDocName = () => med(dutyOf(dAt(0)).doc)?.name || 'Sin guardia asignada';
-const moKeep = () => { const o = UI.mo; const n = document.getElementById('mo-n'); if (n) o.note = n.value; const dr = document.getElementById('mo-dr'); if (dr) o.reqDoc = dr.value; const u = document.getElementById('mo-u'); if (u) o.urgent = u.checked; };
+const moKeep = () => { const o = UI.mo; const n = document.getElementById('mo-n'); if (n) o.note = n.value; const dr = document.getElementById('mo-dr'); if (dr) o.reqDoc = dr.value; if (lockedDoc()) o.reqDoc = lockedDoc(); const u = document.getElementById('mo-u'); if (u) o.urgent = u.checked; };
 const moRedraw = () => { moKeep(); refreshSheet(medOrderForm()); };
 ACTIONS.newMedOrder = el => { const first = firstMedPid(false); if (!first) return noMedProducts();
   UI.mo = { admId: el.dataset.id, items: [{ pid: el.dataset.prod || '', qty: 1, freq: '' }], note: '', urgent: false, fOpen: null, reqDoc: myDoc() || '' };

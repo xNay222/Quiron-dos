@@ -261,7 +261,7 @@ function render() {
   renderSide();
   renderTopbar();
   const v = VIEWS[route] || VIEWS.inicio; const main = document.getElementById('main');
-  main.innerHTML = v(param);
+  main.innerHTML = (typeof credsAlert === 'function' ? credsAlert() : '') + v(param);
   presentContent(main);
   const key = route + '|' + (param || '');
   if (key !== lastView || animNext) {

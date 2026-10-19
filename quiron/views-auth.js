@@ -181,11 +181,24 @@ ACTIONS.myPassSave = async () => {
 };
 
 // ---------- Usuarios (solo administrador) ----------
+// Personal registrado por Administración que todavía no tiene cuenta. No se envía nada hasta tocar "Invitar".
+const rosterPending = () => (S.staffRoster || []).filter(r => !(S.users || []).some(u => r.email && u.email === normEmail(r.email)));
+function rosterBlock() {
+  const l = rosterPending(); if (!l.length) return '';
+  return `<div class="card sec"><div class="between" style="gap:10px;flex-wrap:wrap"><div><h2 style="margin:0">Personal por invitar (${l.length})</h2><div class="small muted">Registrados, sin invitación enviada. Toque "Invitar" cuando quiera darle acceso a cada persona.</div></div></div>
+    <div class="list" style="margin-top:10px">${l.map((r, i) => `<div class="row"><span class="avatar">${initials(r.name)}</span><div class="grow"><div class="t">${esc(r.name)}</div><div class="s">${esc(roleLabel(r.role))}${r.doc && med(r.doc) ? ' · ' + esc(med(r.doc).name) : ''} · ${r.email ? esc(r.email) : '<span style="color:var(--bad)">falta el correo</span>'}${r.note ? ' · ' + esc(r.note) : ''}</div></div>
+      <button class="btn sm" data-act="rosterInvite" data-i="${(S.staffRoster || []).indexOf(r)}" ${r.email ? '' : 'disabled'}>Invitar</button></div>`).join('')}</div></div>`;
+}
+ACTIONS.rosterInvite = el => { const r = (S.staffRoster || [])[+el.dataset.i]; if (!r || !can('*')) return;
+  ACTIONS.userNew({ dataset: { role: r.role } });
+  setTimeout(() => { const s = (id, v) => { const e = document.getElementById(id); if (e && v) e.value = v; }; s('us-name', r.name); s('us-email', r.email);
+    if (r.doc) { document.getElementById('us-role')?.dispatchEvent(new Event('change', { bubbles: true })); setTimeout(() => s('us-doc', r.doc), 30); } }, 60); };
 const usersList = () => {
   const list = [...(S.users || [])].sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role) || a.name.localeCompare(b.name));
   const count = st => list.filter(u => u.status === st).length;
   return header('Usuarios', 'Solo el administrador puede crear, invitar y desactivar usuarios', `<button class="btn primary" data-act="userNew">+ Nuevo usuario</button>`) +
   `<div class="grid g4">${kpi('Activos', count('activo'))}${kpi('Invitaciones pendientes', count('invitado'))}${kpi('Desactivados', count('desactivado'))}</div>
+  ${rosterBlock()}
   <div class="banner sec">Cada persona entra con su propio correo y contraseña, y solo ve las secciones de su rol. Lo que hace queda registrado con su nombre en el historial de acciones.</div>
   <div class="list sec">${list.map(u => `<button class="row" data-act="userEdit" data-id="${u.id}"><span class="avatar">${initials(u.name)}</span>
     <div class="grow"><div class="t">${esc(u.name)}${u.id === S.session?.uid ? ' <span class="pill info">Usted</span>' : ''}</div><div class="s">${esc(u.email)} · ${esc(roleLabel(u.role))}${u.doc ? ' · ' + esc(med(u.doc)?.name || '') : ''}</div></div>
@@ -291,7 +304,7 @@ VIEWS.usuarios = () => {
     const users = (S.users || []).filter(u => u.role === r);
     const docs = ['medico', 'residente'].includes(r) ? (S.doctors || []).filter(d => !d.example && !!d.resident === (r === 'residente')) : [];
     const nurses = r === 'enfermeria' ? (S.nurseStaff || []) : [];
-    const staff = docs.map(d => `<button class="row" data-act="staffDoc" data-id="${d.id}"><span class="avatar">${initials(d.name)}</span><div class="grow"><div class="t">${esc(d.name)}</div><div class="s">${esc(d.esp)} · ${esc(hoursText(d.id))}</div></div>${amonPill('doc:' + d.id)}${d.active === false ? '<span class="pill">Inactivo</span>' : credsPending(d).length ? `<span class="pill warn">Falta ${credsPending(d).join(' y ')}</span>` : ''}</button>`).join('') + nurses.map(n => `<button class="row" data-act="staffNurse" data-i="${S.nurseStaff.indexOf(n)}"><span class="avatar">${initials(n.name)}</span><div class="grow"><div class="t">${esc(n.name)}</div><div class="s">${n.days?.length ? 'Guardia fija: ' + n.days.map(d => DAY_NAMES[d]).join(', ') : 'Sin días fijos'}</div></div>${amonPill('nurse:' + n.id)}${n.active === false ? '<span class="pill">Inactiva</span>' : ''}</button>`).join('');
+    const staff = docs.map(d => `<button class="row" data-act="staffDoc" data-id="${d.id}"><span class="avatar">${initials(d.name)}</span><div class="grow"><div class="t">${esc(d.name)}</div><div class="s">${esc(d.esp)} · ${esc(hoursText(d.id))}</div></div>${amonPill('doc:' + d.id)}${d.active === false ? '<span class="pill">Inactivo</span>' : credsPending(d).length ? `<span class="pill warn">Falta ${credsPendingText(d)}</span>` : ''}</button>`).join('') + nurses.map(n => `<button class="row" data-act="staffNurse" data-i="${S.nurseStaff.indexOf(n)}"><span class="avatar">${initials(n.name)}</span><div class="grow"><div class="t">${esc(n.name)}</div><div class="s">${n.days?.length ? 'Guardia fija: ' + n.days.map(d => DAY_NAMES[d]).join(', ') : 'Sin días fijos'}</div></div>${amonPill('nurse:' + n.id)}${n.active === false ? '<span class="pill">Inactiva</span>' : ''}</button>`).join('');
     const accounts = users.map(u => `<button class="row" data-act="userEdit" data-id="${u.id}"><span class="avatar">${initials(u.name)}</span><div class="grow"><div class="t">${esc(u.name)}${u.id === S.session?.uid ? ' <span class="pill info">Usted</span>' : ''}</div><div class="s">${esc(u.email || '')}${u.doc ? ' · ' + esc(med(u.doc)?.name || '') : ''}</div></div><div class="end" style="display:grid;justify-items:end;gap:6px"><span class="pill ${USER_ST[u.status]?.[1] || ''}">${USER_ST[u.status]?.[0] || esc(u.status)}</span><div class="small muted">${u.lastLogin ? 'Último acceso: ' + fdate(u.lastLogin.slice(0, 10)) + (u.lastLogin.length > 10 ? ', ' + esc(u.lastLogin.slice(11, 16)) : '') : 'Sin accesos'}</div></div></button>`).join('');
     const count = users.length + ' usuario(s)' + (['medico', 'residente'].includes(r) ? ' · ' + docs.length + ' en personal' : r === 'enfermeria' ? ' · ' + nurses.length + ' en personal' : '');
     const addStaff = ['medico', 'residente'].includes(r) ? `<button class="btn" data-act="staffDoc" data-kind="${r}">+ Agregar ${r === 'residente' ? 'residente' : 'médico'}</button>` : r === 'enfermeria' ? '<button class="btn" data-act="staffNurse">+ Agregar enfermera</button>' : '';
@@ -321,7 +334,7 @@ ACTIONS.staffDocSave = el => { if (!can('*')) return;
   let d = (S.doctors || []).find(x => x.id === el.dataset.id); const isNew = !d; if (isNew) { d = { id: uid('dr') }; S.doctors.push(d); }
   const cr = credsRead('sd-'); if (cr.cm && !/\d/.test(cr.cm)) { msg.textContent = 'El n.º de colegiado debe tener números.'; return; }
   Object.assign(d, { name, esp, resident: kind === 'residente', anest: kind === 'anestesiologo', active: document.getElementById('sd-a').checked, ...cr });
-  (S.users || []).filter(u => u.doc === d.id).forEach(u => Object.assign(u, cr));   // la cuenta vinculada queda con los mismos datos
+  (S.users || []).filter(u => u.doc === d.id).forEach(u => { const before = JSON.stringify(credsOf(u)); Object.assign(u, cr); if (u.credsLock && before !== JSON.stringify(credsOf(u))) { u.credsLock = { ...u.credsLock, fixedAt: nowStamp(), fixedBy: actor() }; log('Datos profesionales corregidos por Administración', `${d.name} · C.M. ${cr.cm} · MPPS ${cr.mpps}`); } });   // la cuenta vinculada queda con los mismos datos
   syncStaff(); log(isNew ? 'Médico agregado' : 'Médico modificado', `${name} · ${esp}${d.active ? '' : ' · inactivo'}`); save(); closeSheet(); render(); toast('Guardado'); };
 ACTIONS.staffNurse = el => { if (!can('*')) return; const i = el.dataset?.i; const n = i != null && i !== '' ? S.nurseStaff[+i] : { name: '', days: [], active: true }; staffTabInit(el);
   if (n.id) staffBack('staffNurse', { i });
@@ -344,27 +357,39 @@ ACTIONS.staffNurseSave = el => { if (!can('*')) return;
 // para que salgan bajo la firma de récipes, informes y constancias.
 const CREDS_REQUIRED = ['medico', 'residente'];
 const credsOf = u => ({ ci: u?.ci || '', cm: u?.cm || '', colegio: u?.colegio || '', mpps: u?.mpps || '' });
-// Para firmar basta con el número de colegiado (Colegio de Médicos)
-const credsMissing = u => !!u && CREDS_REQUIRED.includes(u.role) && !u.cm;
+// Para firmar hacen falta cédula, n.º de colegiado, Colegio de Médicos y código MPPS (salen en el sello del documento)
+const credsMissing = u => !!u && CREDS_REQUIRED.includes(u.role) && credsPending(u).length > 0;
 function credsCard(u) {
   if (![...CREDS_REQUIRED, 'admin'].includes(u.role)) return '';
-  const req = CREDS_REQUIRED.includes(u.role), c = credsOf(u);
+  const req = CREDS_REQUIRED.includes(u.role); const locked = req && !!u.credsLock && !can('*');   // una vez confirmados, solo Administración los corrige
+  const ref = !u.credsLock && u.doc ? (S.doctors || []).find(x => x.id === u.doc)?.credsRef : null;   // datos que entregó a Administración: solo una sugerencia
+  const c = ref ? Object.fromEntries(Object.entries(credsOf(u)).map(([k, v]) => [k, v || ref[k] || ''])) : credsOf(u);
   return `<div class="card" style="display:grid;gap:10px"><b class="small">Datos profesionales ${req ? '<span class="pill warn">Obligatorios para firmar</span>' : '<span class="pill">Opcional</span>'}</b>
-    ${req && credsMissing(u) ? '<div class="banner warn">Registre su número de Colegio de Médicos: sin él no puede firmar consultas, evoluciones ni récipes.</div>' : ''}
+    ${req && credsMissing(u) ? `<div class="banner" style="background:var(--bad-soft)"><span>Le faltan: <b>${esc(credsPendingText(u))}</b>. No puede firmar informes, consultas, evoluciones ni récipes hasta registrarlos. Revíselos bien: una vez guardados no podrá cambiarlos.</span></div>` : ''}
+    ${locked ? `<div class="small muted">Registrados el ${esc(u.credsLock.at)}. Si hay un error, pida a Administración que los corrija.</div>` : ''}
     ${u.role === 'admin' ? `<div class="field"><label for="mc-doc">Su ficha de médico <span class="small muted">(si también atiende pacientes)</span></label><select class="input" id="mc-doc">
       <option value="">No atiendo pacientes</option>${(S.doctors || []).filter(d => !d.resident && (d.active !== false || d.id === u.doc) && !(S.users || []).some(x => x.id !== u.id && x.doc === d.id)).map(d => `<option value="${d.id}" ${u.doc === d.id ? 'selected' : ''}>${esc(d.name)}${d.esp ? ' · ' + esc(d.esp) : ''}</option>`).join('')}</select>
       <div class="small muted" style="margin-top:4px">Con su ficha vinculada puede escribir y firmar evoluciones y consultas con su nombre.</div></div>` : ''}
-    ${credsFields('mc-', c, req)}
+    ${ref ? '<div class="small muted">Administración dejó precargados los datos que usted entregó. <b>Revíselos uno por uno</b> antes de guardar.</div>' : ''}
+    ${credsFields('mc-', c, req, locked)}
     <div class="small muted">Se imprimen bajo su firma en informes, récipes, órdenes y constancias.</div>
-    <div class="hstack"><button class="btn sm primary" data-act="myCredsSave">Guardar datos profesionales</button><span class="small" id="mc-creds-msg"></span></div></div>`;
+    ${locked ? '' : `<div class="hstack"><button class="btn sm primary" data-act="myCredsSave">Guardar datos profesionales</button><span class="small" id="mc-creds-msg"></span></div>`}</div>`;
 }
 ACTIONS.myCredsSave = () => {
   const u = meUser(); if (!u) return;
   const m = document.getElementById('mc-creds-msg');
   const cr = credsRead('mc-'); const { ci, cm } = cr;
   const bad = t => { m.textContent = t; m.style.color = 'var(--bad)'; };
-  if (CREDS_REQUIRED.includes(u.role) && !cm) return bad('El número de Colegio de Médicos es obligatorio para médicos y residentes.');
-  if (cm && !/\d/.test(cm)) return bad('Indique el número de colegiado (y, si quiere, el colegio).');
+  const req = CREDS_REQUIRED.includes(u.role);
+  if (req && u.credsLock) return bad('Sus datos ya están registrados. Para corregirlos, pida a Administración.');
+  if (req && credsPending(cr).length) return bad('Complete: ' + credsPendingText(cr) + '.');
+  if (cr.ci && !/^[VEJPG]-?\s?[\d.]{5,}$/i.test(cr.ci)) return bad('Escriba la cédula así: V-12.345.678.');
+  if (cm && !/^\d[\d.\s-]*$/.test(cm)) return bad('El n.º de colegiado lleva solo números.');
+  if (cr.mpps && !/^\d[\d.\s-]*$/.test(cr.mpps)) return bad('El código MPPS lleva solo números.');
+  // Médicos y residentes: confirmación antes de guardar, porque después no se pueden cambiar
+  if (req) { UI.credsDraft = cr; openSheet('¿Son correctos sus datos?', `<div class="banner"><span>Revíselos con cuidado. <b>Una vez guardados no podrá cambiarlos</b>: saldrán en el sello de todos los documentos que firme. Si luego hay un error, solo Administración puede corregirlos.</span></div>
+    <div class="list">${[['Cédula', cr.ci], ['N.º de colegiado', cr.cm], ['Colegio de Médicos', colegioName(cr.colegio)], ['Código MPPS', cr.mpps]].map(([k, v]) => `<div class="row"><div class="grow"><div class="s">${k}</div><div class="t">${esc(v)}</div></div></div>`).join('')}</div>`,
+    '<button class="btn" data-act="myCredsBack">Volver a editar</button><button class="btn primary" data-act="myCredsConfirm">Sí, son mis datos: guardar</button>'); return; }
   if (u.role === 'admin') {
     const docId = val('mc-doc') || null, d = docId && (S.doctors || []).find(x => x.id === docId);
     if (d && docId !== u.doc) { u.doc = docId; S.session.doc = docId; log('Administrador vinculado a su ficha de médico', u.name + ' · ' + d.name);
@@ -377,6 +402,14 @@ ACTIONS.myCredsSave = () => {
   log('Datos profesionales actualizados', u.name + (cm ? ' · C.M. ' + cm : ''));
   save(); m.textContent = 'Guardado'; m.style.color = 'var(--good)'; render();
 };
+ACTIONS.myCredsConfirm = () => {
+  const u = meUser(); const cr = UI.credsDraft; if (!u || !cr || u.credsLock) return;
+  Object.assign(u, cr, { credsLock: { at: nowStamp(), by: u.name } }); UI.credsDraft = null;
+  syncCredsToDoctor(u); log('Datos profesionales registrados', `${u.name} · C.I. ${cr.ci} · C.M. ${cr.cm} (${colegioShort(cr.colegio)}) · MPPS ${cr.mpps}`);
+  save(); closeSheet(); render(); toast('Datos registrados. Ya puede firmar sus documentos.');
+};
+ACTIONS.myCredsBack = () => { const cr = UI.credsDraft; ACTIONS.switchUser(); if (!cr) return;
+  setTimeout(() => { const s = (id, v) => { const e = document.getElementById(id); if (e) e.value = v || ''; }; s('mc-ci', cr.ci); s('mc-cm', cr.cm); s('mc-col', cr.colegio); s('mc-mpps', cr.mpps); }, 60); };
 // La ficha del médico toma los números de la cuenta vinculada (no se escriben a mano en Usuarios)
 function syncCredsToDoctor(u) {
   const d = u?.doc && (S.doctors || []).find(x => x.id === u.doc); if (!d) return;
@@ -388,7 +421,7 @@ if (typeof S !== 'undefined' && S) (S.users || []).forEach(u => { if (u.doc && (
 function credsBlockSign() {
   const u = meUser();
   if (!credsMissing(u)) return false;
-  toast('Antes de firmar, registre su número de Colegio de Médicos en Mi cuenta.');
+  toast('Antes de firmar, registre sus datos profesionales en Mi cuenta: ' + credsPendingText(u) + '.');
   setTimeout(() => ACTIONS.switchUser(), 400);
   return true;
 }

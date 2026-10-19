@@ -88,7 +88,7 @@ function pdfReferral(r) {
   if (r.dx) { y = pdfSection(doc, y + 6, 'Impresión diagnóstica'); y = pdfPara(doc, y, r.dx, { size: 11 }); }
   if (r.summary) { y = pdfSection(doc, y + 6, 'Resumen clínico'); y = pdfPara(doc, y, r.summary, { size: 11 }); }
   y = pdfPara(doc, y + 8, 'Agradezco su valoración y conducta.', { size: 11 });
-  pdfSignature(doc, y, from?.name || r.fromName || '', from?.esp ? from.esp + ' · firma y sello' : 'Firma y sello', null, from ? docCreds(from) : '');
+  if (from) pdfDocSign(doc, y, from, from.esp ? from.esp + ' · firma y sello' : 'Firma y sello', { at: r.at, ref: r.num }); else pdfSignature(doc, y, r.fromName || '', 'Firma y sello', null, '');
   return doc;
 }
 ACTIONS.refPdf = async el => {

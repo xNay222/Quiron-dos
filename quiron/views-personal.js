@@ -10,13 +10,22 @@ const COLEGIOS = [['DC', 'Distrito Metropolitano de Caracas'], ['AM', 'Estado Am
 const colegioName = k => { const c = COLEGIOS.find(x => x[0] === k); return c ? 'Colegio de Médicos del ' + c[1] : (k || ''); };
 const colegioShort = k => { const c = COLEGIOS.find(x => x[0] === k); return c ? 'CM ' + c[1].replace(/^Estado |^Distrito Metropolitano de /, '') : (k || ''); };
 // Campos de datos profesionales (los usan "Mi cuenta" y la ficha del médico en Usuarios)
-const credsFields = (pre, c = {}, req = false) => `<div class="form">
-    <div class="field"><label for="${pre}ci">Cédula</label><input class="input" id="${pre}ci" value="${esc(c.ci || '')}" placeholder="Ej. V-12.345.678"></div>
-    <div class="field"><label for="${pre}cm">N.º de colegiado${req ? ' *' : ''}</label><input class="input" id="${pre}cm" inputmode="numeric" value="${esc(c.cm || '')}" placeholder="Ej. 12345"></div>
-    <div class="field"><label for="${pre}col">Colegio de Médicos donde está inscrito</label><select class="input" id="${pre}col"><option value="">Elija el colegio…</option>${COLEGIOS.map(([k, n]) => `<option value="${k}" ${c.colegio === k ? 'selected' : ''}>Colegio de Médicos del ${n}</option>`).join('')}</select></div>
-    <div class="field"><label for="${pre}mpps">Código MPPS</label><input class="input" id="${pre}mpps" inputmode="numeric" value="${esc(c.mpps || '')}" placeholder="Ej. 98765"></div></div>`;
+const credsFields = (pre, c = {}, req = false, locked = false) => { const ro = locked ? 'disabled' : ''; return `<div class="form">
+    <div class="field"><label for="${pre}ci">Cédula</label><input class="input" id="${pre}ci" ${ro} value="${esc(c.ci || '')}" placeholder="Ej. V-12.345.678"></div>
+    <div class="field"><label for="${pre}cm">N.º de colegiado${req ? ' *' : ''}</label><input class="input" id="${pre}cm" inputmode="numeric" ${ro} value="${esc(c.cm || '')}" placeholder="Ej. 12345"></div>
+    <div class="field"><label for="${pre}col">Colegio de Médicos donde está inscrito</label><select class="input" id="${pre}col" ${ro}><option value="">Elija el colegio…</option>${COLEGIOS.map(([k, n]) => `<option value="${k}" ${c.colegio === k ? 'selected' : ''}>Colegio de Médicos del ${n}</option>`).join('')}</select></div>
+    <div class="field"><label for="${pre}mpps">Código MPPS</label><input class="input" id="${pre}mpps" inputmode="numeric" ${ro} value="${esc(c.mpps || '')}" placeholder="Ej. 98765"></div></div>`; };
 const credsRead = pre => ({ ci: val(pre + 'ci').trim(), cm: val(pre + 'cm').trim().replace(/\s+/g, ' '), colegio: val(pre + 'col'), mpps: val(pre + 'mpps').trim().replace(/\s+/g, ' ') });
-const credsPending = c => [!c?.cm && 'colegiado', !c?.mpps && 'MPPS'].filter(Boolean);
+// Para firmar hacen falta los cuatro datos: salen en el sello de cada documento
+const credsPending = c => [!c?.ci && 'cédula', !c?.cm && 'n.º de colegiado', !c?.colegio && 'Colegio de Médicos', !c?.mpps && 'código MPPS'].filter(Boolean);
+const listText = a => a.length > 1 ? a.slice(0, -1).join(', ') + ' y ' + a[a.length - 1] : (a[0] || '');
+const credsPendingText = c => listText(credsPending(c));
+// Aviso fijo arriba de todas las pantallas para el médico o residente al que le faltan datos
+const credsAlert = () => { const u = typeof meUser === 'function' ? meUser() : null; if (!u || typeof credsMissing !== 'function' || !credsMissing(u)) return '';
+  return `<div class="banner" role="alert" style="background:var(--bad-soft);margin-bottom:14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><span style="flex:1;min-width:220px"><b>Le faltan sus datos profesionales:</b> ${esc(credsPendingText(u))}. No puede firmar informes, consultas, evoluciones ni récipes hasta registrarlos.</span><button class="btn sm primary" data-act="switchUser">Completar mis datos</button></div>`; };
+// Médico de la cuenta: un médico o residente solo solicita, indica y firma a su nombre; Administración elige a cualquiera
+const lockedDoc = () => (typeof isClin === 'function' && isClin()) ? (myDoc() || null) : null;
+const docFieldLocked = (id, label) => { const d = med(lockedDoc()); return `<div class="field"><label for="${id}-ro">${label}</label><input class="input" id="${id}-ro" value="${esc(d?.name || '')}${d?.esp ? ' · ' + esc(d.esp) : ''}" disabled><input type="hidden" id="${id}" value="${esc(d?.id || '')}"><span class="small muted">Su cuenta: no se puede cambiar.</span></div>`; };
 
 // ---------- Amonestaciones y destacados ----------
 const AMON_MOTIVOS = [

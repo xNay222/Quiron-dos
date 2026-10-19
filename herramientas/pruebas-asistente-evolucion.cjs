@@ -122,7 +122,9 @@ run('window.resetGuided=' + function () {
       doc: d.id,
       status: 'activo',
       mpps: '54321',
-      cm: '12345 · CM Miranda'
+      cm: '12345',
+      ci: 'V-12.345.678',
+      colegio: 'MI'
     };
   S.users = [u];
   applyUser(u);
@@ -1795,7 +1797,8 @@ async function test(name, fn) {
     assert.ok(docCreds(med(me.doc)).includes('C.M. ' + saved.cm));
     const cr = docCreds({ ci: 'V-1', mpps: '54321', cm: '123', colegio: 'MI' });
     assert.ok(cr.includes('MPPS 54321') && cr.includes('C.M. 123 (CM Miranda)'), 'imprime colegio y MPPS: ' + cr);
-    assert.deepEqual([...credsPending({ cm: '1' })], ['MPPS']);
+    assert.deepEqual([...credsPending({ cm: '1' })], ['cédula', 'Colegio de Médicos', 'código MPPS']);
+    me.mpps = ''; assert.equal(credsMissing(me), true, 'sin MPPS tampoco firma'); me.mpps = '54321';
     // Administración: los datos son opcionales y nunca bloquean
     assert.equal(credsMissing({ role: 'admin' }), false);
   });
@@ -1825,6 +1828,25 @@ async function test(name, fn) {
     assert.equal(typeof ACTIONS.authSetup, 'undefined', 'no existe la creación libre del administrador');
     for (const r of Object.keys(ROLES)) { assert.ok(ROLE_CAN[r] && ROLE_CAN[r].can.length, 'falta el resumen de ' + r); assert.ok(roleHelp(r).includes('Puede')); }
     assert.ok(roleSees('enfermeria').includes('Emergencias') && !roleSees('enfermeria').includes('Quirófano'));
+  });
+  await test('Datos profesionales: se confirman, quedan bloqueados para el médico y el documento sale con sello de firma electrónica', () => {
+    const me = meUser(); const saved = { ...me }; delete me.credsLock;
+    ['ci', 'cm', 'colegio', 'mpps'].forEach(k => delete me[k]);
+    ACTIONS.switchUser();
+    assert.ok(lastSheet.body.includes('Le faltan') && lastSheet.body.includes('myCredsSave'), 'aviso y botón de guardar');
+    assert.ok(credsAlert().includes('No puede firmar'), 'aviso fijo arriba');
+    UI.credsDraft = { ci: 'V-12.345.678', cm: '12345', colegio: 'MI', mpps: '54321' }; ACTIONS.myCredsConfirm();
+    assert.ok(me.credsLock && me.credsLock.at, 'quedan bloqueados');
+    assert.equal(credsMissing(me), false); assert.equal(credsAlert(), '');
+    ACTIONS.switchUser();
+    assert.ok(!lastSheet.body.includes('myCredsSave') && lastSheet.body.includes('disabled'), 'ya no se pueden editar');
+    UI.credsDraft = { ci: 'V-1', cm: '9', colegio: 'ZU', mpps: '1' }; ACTIONS.myCredsConfirm(); assert.equal(me.cm, '12345', 'una segunda confirmación no cambia nada');
+    // Solicitud de medicación: el médico de la cuenta, fijo
+    assert.equal(lockedDoc(), me.doc); assert.ok(docFieldLocked('mo-dr', 'Médico').includes('disabled'));
+    // Sello: con los cuatro datos y la fecha de firma
+    const d = med(me.doc); assert.ok(credsComplete(d));
+    assert.match(sealCode('a|b'), /^QX-[A-Z2-9]{4}-[A-Z2-9]{4}$/); assert.notEqual(sealCode('a|b'), sealCode('a|c'));
+    Object.assign(me, saved); syncCredsToDoctor(me);
   });
   await test('Preparar solicitud para probar fallo de almacenamiento sin duplicarla', () => {
     ACTIONS.guideStart({

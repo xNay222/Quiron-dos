@@ -39,7 +39,7 @@ function egresoForm(a) {
     ${ta('tto', 'Tratamiento recibido', g.tto, 3)}
     ${ta('exams', 'Exámenes realizados y hallazgos relevantes', g.exams, 3)}
     <div class="field"><label for="eg-cond">Condición al egreso</label><select class="input" id="eg-cond" ${ro ? 'disabled' : ''}><option value="">Elija…</option>${EGRESO_COND.map(c => `<option ${g.cond === c ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
-    <div class="field"><label for="eg-doc">Médico que firma</label><select class="input" id="eg-doc" ${ro ? 'disabled' : ''}>${(S.doctors || []).filter(d => d.active !== false).map(d => `<option value="${d.id}" ${d.id === g.doc ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select></div>
+    ${lockedDoc() ? docFieldLocked('eg-doc', 'Médico que firma') : `<div class="field"><label for="eg-doc">Médico que firma</label><select class="input" id="eg-doc" ${ro ? 'disabled' : ''}>${(S.doctors || []).filter(d => d.active !== false).map(d => `<option value="${d.id}" ${d.id === g.doc ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select></div>`}
     ${ta('indic', 'Indicaciones al alta (tratamiento en casa, cuidados, signos de alarma)', g.indic, 4)}
     ${inp('control', 'Control', g.control, 'Ej. consulta en 7 días con el Dr. …')}
   </div>`;
@@ -47,7 +47,8 @@ function egresoForm(a) {
 const egKeep = () => { const g = UI.eg; ['dxIn', 'dxOut', 'motivo', 'curso', 'proc', 'tto', 'exams', 'indic', 'control', 'cond', 'doc'].forEach(k => { const e = document.getElementById('eg-' + k); if (e) g[k] = e.value; }); };
 ACTIONS.egresoReset = el => { const a = admOf(el.dataset.id); egKeep(); const d = egresoDraft(a); Object.assign(UI.eg, { curso: d.curso, proc: d.proc, tto: d.tto, exams: d.exams }); refreshSheet(egresoForm(a)); toast('Evolución, tratamiento y exámenes propuestos de nuevo desde el sistema'); };
 function egresoStore(a) {
-  egKeep(); const g = UI.eg; const msg = document.getElementById('eg-msg');
+  egKeep(); const g = UI.eg; const msg = document.getElementById('eg-msg'); if (lockedDoc()) g.doc = lockedDoc();
+  if (lockedDoc() && typeof credsBlockSign === 'function' && credsBlockSign()) return false;   // el informe sale firmado a su nombre
   if (!g.dxOut.trim()) { if (msg) msg.textContent = 'Escriba el diagnóstico de egreso.'; return false; }
   if (!g.cond) { if (msg) msg.textContent = 'Elija la condición al egreso.'; return false; }
   const { id, ...data } = g; const first = !a.epicrisis;
@@ -71,6 +72,6 @@ function pdfEgreso(a) {
   sec('Diagnóstico de ingreso', g.dxIn); sec('Motivo de ingreso', g.motivo); sec('Evolución durante el ingreso', g.curso);
   sec('Procedimientos y cirugías', g.proc); sec('Tratamiento recibido', g.tto); sec('Exámenes realizados', g.exams);
   sec('Diagnóstico de egreso', g.dxOut); sec('Condición al egreso', g.cond); sec('Indicaciones al alta', g.indic); sec('Control', g.control);
-  pdfSignature(doc, Math.max(y, 600), d.name || 'Médico tratante', `${d.esp || ''}${d.esp ? ' · ' : ''}firma y sello`, null, docCreds(d));
+  pdfDocSign(doc, Math.max(y, 600), d.name ? d : { name: 'Médico tratante' }, `${d.esp || ''}${d.esp ? ' · ' : ''}firma y sello`, { at: g.savedAt, ref: a.num + ':egreso' });
   return doc;
 }

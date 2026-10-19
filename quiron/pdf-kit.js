@@ -143,6 +143,33 @@ function pdfSignature(doc, y, name, sub, img, creds = '') {
     const lines = doc.splitTextToSize(creds, 200); lines.forEach((l, i) => doc.text(l, x + 100, y + 78 + i * 11, { align: 'center' })); return y + 92 + (lines.length - 1) * 11; }
   return y + 80;
 }
+// Sello de firma electrónica: el documento sale firmado a nombre del médico con todos sus datos, como un sello húmedo.
+// El código de verificación sale del documento, el médico, sus números y la fecha de firma: si algo cambia, ya no coincide.
+const credsComplete = d => !!(d && d.ci && d.cm && d.colegio && d.mpps);
+function sealCode(s) {
+  let a = 0x811c9dc5, b = 0x9e3779b1; for (const ch of String(s)) { const c = ch.codePointAt(0); a = Math.imul(a ^ c, 16777619) >>> 0; b = Math.imul((b + c) >>> 0, 2246822519) >>> 0; }
+  const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; const enc = n => Array.from({ length: 4 }, (_, i) => A[(n >>> (i * 5)) & 31]).join('');
+  return 'QX-' + enc(a) + '-' + enc(b);
+}
+const sealDate = s => { const d = new Date(String(s || '').replace(' ', 'T')); return isNaN(d) ? String(s || '') : d.toLocaleString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); };
+function pdfDocSign(doc, y, d, sub, { at, ref } = {}) {
+  if (!credsComplete(d) || !at) return pdfSignature(doc, y, d?.name || '', sub, null, docCreds(d));   // sin datos completos: línea para firmar a mano
+  const GREEN = [12, 120, 92], w = 262, x = PG.R - w, pad = 12;
+  const col = typeof colegioName === 'function' ? colegioName(d.colegio) : d.colegio;
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+  const body = [[d.name, 'bold', 10.5, INK], ...(d.esp ? [[d.esp, 'normal', 8.5, GREY]] : []), ['C.I. ' + d.ci + '   ·   MPPS ' + d.mpps, 'normal', 8.5, INK],
+    ...doc.splitTextToSize('C.M. ' + d.cm + ' · ' + col, w - pad * 2).map(l => [l, 'normal', 8.5, INK])];
+  const h = 22 + body.length * 12 + 30;
+  y = pdfEnsure(doc, y + 24, h + 8);
+  doc.setDrawColor(...GREEN); doc.setLineWidth(1.3); doc.roundedRect(x, y, w, h, 7, 7); doc.setLineWidth(.4); doc.roundedRect(x + 3, y + 3, w - 6, h - 6, 5, 5);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(...GREEN); doc.text('FIRMADO ELECTRÓNICAMENTE', x + w / 2, y + 16, { align: 'center', charSpace: .6 });
+  let yy = y + 31; body.forEach(([t, f, s, c]) => { doc.setFont('helvetica', f); doc.setFontSize(s); doc.setTextColor(...c); doc.text(pdfClean(t), x + w / 2, yy, { align: 'center' }); yy += 12; });
+  doc.setDrawColor(...GREEN); doc.setLineWidth(.3); doc.line(x + pad, yy - 4, x + w - pad, yy - 4);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...GREY);
+  doc.text('Fecha y hora: ' + sealDate(at), x + w / 2, yy + 7, { align: 'center' });
+  doc.text('Verificación: ' + sealCode([ref, d.id, d.ci, d.cm, d.colegio, d.mpps, at].join('|')), x + w / 2, yy + 17, { align: 'center' });
+  return y + h + 10;
+}
 // Nombre de archivo válido en Windows, macOS y teléfonos (sin / \\ : * ? " < > |)
 const safeName = n => String(n).replace(/[\\/:*?"<>|\u0000-\u001F]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 140);
 function pdfFinish(doc, filename) {
@@ -229,7 +256,7 @@ function pdfNote(n) {
   y = pdfInfoBox(doc, y, patientPairs(p), 3);
   if (p.allergies.length) { doc.setFillColor(253, 236, 236); doc.roundedRect(PG.L, y - 8, PG.R - PG.L, 24, 5, 5, 'F'); doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...RED); doc.text(`ALERGIAS: ${p.allergies.join(', ')}`, PG.L + 12, y + 7.5); y += 30; }
   y = pdfNoteBody(doc, y, n, false);
-  pdfSignature(doc, y, d?.name || '', d?.esp || '', null, docCreds(d));
+  pdfDocSign(doc, y, d, d?.esp || '', { at: n.status === 'firmada' ? n.signedAt : null, ref: n.id });
   return doc;
 }
 
@@ -264,7 +291,7 @@ function pdfRecipe(n) {
   n.recipe.forEach((r, i) => { y = pdfEnsure(doc, y, 44); doc.setFont('helvetica', 'bold'); doc.setFontSize(11.5); doc.setTextColor(...INK); doc.text(`${i + 1}.  ${r.med}`, PG.L + 6, y);
     const ind = [r.dosis, r.frec, r.dur].filter(Boolean).join('  ·  '); if (ind) { doc.setFont('helvetica', 'normal'); doc.setFontSize(9.8); doc.setTextColor(...GREY); doc.text(ind, PG.L + 22, y + 15); } y += ind ? 36 : 24; });
   if (n.indicaciones) { y = pdfSection(doc, y + 6, 'Indicaciones'); y = pdfPara(doc, y, n.indicaciones, { size: 9.8 }); }
-  pdfSignature(doc, Math.max(y, 560), d.name, `${d.esp} · firma y sello`, null, docCreds(d));
+  pdfDocSign(doc, Math.max(y, 560), d, `${d.esp} · firma y sello`, { at: n.signedAt, ref: n.id + ':rx' });
   return doc;
 }
 
