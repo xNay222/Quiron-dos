@@ -627,6 +627,7 @@ async function loadFromServerCopy(name) {
   if (cargar) { loadFromServerCopy(cargar); return; }
   const h = (location.hash || '').slice(1);
   if (h && VIEWS[h]) route = h;
+  if (typeof NUBE !== 'undefined' && NUBE.on) { nubeBoot(); return; }   // publicada en la nube: datos y acceso desde Supabase (cloud.js)
   const boot = () => { if (authBoot()) render(); };   // sin sesión válida: pantalla de acceso
   // Con el servidor local, primero toma los datos más recientes de cualquier equipo; sin él (o en pruebas) arranca de inmediato
   if (!STORE.blocked && typeof fetch === 'function' && /^https?:$/.test(location?.protocol || '')) serverPull().then(boot, boot); else boot();

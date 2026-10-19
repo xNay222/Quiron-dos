@@ -320,7 +320,7 @@ const age = b => Math.floor((TODAY - new Date(b + 'T00:00')) / (365.25 * DAY));
 // Si solo se conoce la edad que tenía en un año (historias escaneadas), se calcula la de hoy sumando los años pasados
 const ageTxt = p => p.birth ? `${age(p.birth)} años` : p.ageAt ? `${+p.ageAt.age + Math.max(0, +dAt(0).slice(0, 4) - (parseInt(p.ageAt.year, 10) || +dAt(0).slice(0, 4)))} años` : 'edad no registrada';
 // Dirección segura para href/src: solo rutas del programa, http(s), blob: y data: de imagen o PDF (nunca javascript:)
-const safeUrl = u => { const s = String(u ?? '').trim(); return !/^[a-z][a-z0-9+.-]*:/i.test(s) || /^(https?:|blob:|data:(image\/(png|jpe?g|webp|gif)|application\/pdf)[;,])/i.test(s) ? esc(s) : '#'; };
+const safeUrl = u => { const s = String(u ?? '').trim(); return !/^[a-z][a-z0-9+.-]*:/i.test(s) || /^(https?:|blob:|sb:\/\/[a-z0-9_-]+\/|data:(image\/(png|jpe?g|webp|gif)|application\/pdf)[;,])/i.test(s) ? esc(s) : '#'; };
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const nowStamp = () => { const d = new Date(); return iso(d) + ' ' + d.toTimeString().slice(0, 5); };
 const nowStampS = () => { const d = new Date(); return iso(d) + ' ' + d.toTimeString().slice(0, 8); };   // con segundos: orden exacto de los movimientos de fondos
