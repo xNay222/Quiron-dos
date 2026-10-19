@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <title>Quirón</title>
+  <defs>
+    <!-- Fondo y verde del tema Esmeralda -->
+    <radialGradient id="halo" cx="50%" cy="46%" r="55%">
+      <stop offset="0" stop-color="#1fc79e" stop-opacity=".22"/>
+      <stop offset="1" stop-color="#1fc79e" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="7"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#111317"/>
+  <rect width="512" height="512" rx="112" fill="url(#halo)"/>
+  <!-- La Q del logo de Quirón (mismo círculo y trazo), centrada -->
+  <g transform="translate(256 262) scale(2.55) translate(-45 -60)">
+    <g opacity=".75" filter="url(#glow)">
+      <circle cx="45" cy="50" r="43" fill="none" stroke="#1fc79e" stroke-width="14"/>
+      <rect x="38" y="93" width="14" height="27" rx="3" fill="#1fc79e"/>
+    </g>
+    <circle cx="45" cy="50" r="43" fill="none" stroke="#1fc79e" stroke-width="14"/>
+    <rect x="38" y="93" width="14" height="27" rx="3" fill="#1fc79e"/>
+  </g>
+</svg>

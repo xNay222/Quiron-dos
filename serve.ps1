@@ -28,7 +28,7 @@ function HistoriasIndex($base) {
       ci = ([regex]::Match($stem, '\d{6,9}')).Value; mb = [math]::Round($_.Length / 1MB, 2) }
   }
 }
-$types = @{ '.jpg'='image/jpeg'; '.jpeg'='image/jpeg'; '.html'='text/html; charset=utf-8'; '.js'='text/javascript; charset=utf-8'; '.css'='text/css'; '.webp'='image/webp'; '.png'='image/png'; '.svg'='image/svg+xml'; '.json'='application/json'; '.pdf'='application/pdf' }
+$types = @{ '.jpg'='image/jpeg'; '.jpeg'='image/jpeg'; '.html'='text/html; charset=utf-8'; '.js'='text/javascript; charset=utf-8'; '.css'='text/css'; '.webp'='image/webp'; '.png'='image/png'; '.svg'='image/svg+xml'; '.json'='application/json'; '.pdf'='application/pdf'; '.webmanifest'='application/manifest+json' }
 function SendFile($c, $f) {
   $t = $types[[IO.Path]::GetExtension($f).ToLower()]; if (-not $t) { $t = 'application/octet-stream' }
   $c.Response.ContentType = $t; $c.Response.Headers.Add('Cache-Control', 'no-cache')   # que siempre cargue la versión más reciente
