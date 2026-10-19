@@ -288,20 +288,22 @@ ACTIONS.nubeImportFile = async el => {
     const n = k => (st[k] || []).length;
     openSheet('Subir a la nube', `<div class="banner"><span>Se subirán <b>${n('patients')} pacientes</b>, ${n('records')} historias, ${n('exams')} exámenes, ${n('products')} productos, ${n('moves')} movimientos, ${n('invoices')} cuentas y la configuración. Lo que ya esté en la nube con el mismo código se reemplaza.</span></div>
       <div class="small muted">Puede tardar un par de minutos. No cierre la ventana hasta que diga "Listo".</div><div id="ni-prog" class="small" style="margin-top:8px"></div>`,
-      `<button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="nubeImportDo">Subir</button>`);
+      `<button class="btn" data-act="close">Cancelar</button><button class="btn" data-act="nubeImportDo" data-k="inventario">Solo el inventario (${n('products')} productos)</button><button class="btn primary" data-act="nubeImportDo">Subir todo</button>`);
   } catch (e) { if (out) out.textContent = e.message; }
 };
-ACTIONS.nubeImportDo = async () => {
+const NUBE_INVENTARIO = ['products', 'moves', 'suppliers', 'orders', 'kits'];
+ACTIONS.nubeImportDo = async el => {
   const st = UI.nubeImp; const prog = document.getElementById('ni-prog'); if (!st) return;
+  const soloInv = el?.dataset?.k === 'inventario';
   document.querySelectorAll('[data-act="nubeImportDo"],[data-act="close"]').forEach(b => b.disabled = true);
   prog.textContent = 'Subiendo…';
   const keep = { users: S.users, session: S.session, audit: S.audit };
-  Object.keys(st).forEach(k => { if (!['users', 'session', 'audit', 'savedAt', 'backups', 'backupKey'].includes(k)) S[k] = st[k]; });
+  Object.keys(st).forEach(k => { if (soloInv ? NUBE_INVENTARIO.includes(k) : !['users', 'session', 'audit', 'savedAt', 'backups', 'backupKey'].includes(k)) S[k] = st[k]; });
   Object.assign(S, keep); migrate();
-  log('Datos subidos desde el servidor local', `${(st.patients || []).length} pacientes · ${(st.products || []).length} productos`);
+  log(soloInv ? 'Inventario subido desde el servidor local' : 'Datos subidos desde el servidor local', soloInv ? `${(st.products || []).length} productos · ${(st.moves || []).length} movimientos` : `${(st.patients || []).length} pacientes · ${(st.products || []).length} productos`);
   await nubePush();
   // Verificación: lo que quedó en cada tabla contra lo que había en el archivo
-  const checks = [['patients', 'pacientes'], ['records', 'historias'], ['exams', 'examenes'], ['products', 'productos'], ['moves', 'movimientos'], ['services', 'servicios'], ['doctors', 'medicos']];
+  const checks = (soloInv ? [] : [['patients', 'pacientes'], ['records', 'historias'], ['exams', 'examenes'], ['services', 'servicios'], ['doctors', 'medicos']]).concat([['products', 'productos'], ['moves', 'movimientos'], ['suppliers', 'proveedores']]);
   const res = await Promise.all(checks.map(async ([c, t]) => { const { count } = await NUBE.sb.from(t).select('id', { count: 'exact', head: true }).eq('borrado', false); return [c, (S[c] || []).length, count]; }));
   const bad = res.filter(([, a, b]) => a !== b);
   prog.innerHTML = (bad.length ? '<b style="color:var(--bad)">Faltan registros:</b> ' : '<b style="color:var(--good)">Listo.</b> ') + res.map(([c, a, b]) => `${c}: ${b}/${a}`).join(' · ') + (STORE.error ? `<div style="color:var(--bad)">${esc(STORE.error)}</div>` : '');

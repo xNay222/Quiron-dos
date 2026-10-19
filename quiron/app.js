@@ -598,9 +598,9 @@ async function localAI() {
 
 // Modo día / noche, recordado en este navegador
 const THEME_KEY = 'quiron-theme';
-function getTheme() { try { return localStorage.getItem(THEME_KEY) || 'light'; } catch (e) { return 'light'; } }
+function getTheme() { try { return localStorage.getItem(THEME_KEY) || 'verde'; } catch (e) { return 'verde'; } }   // Esmeralda por defecto; Día y Noche son opcionales
 function applyTheme(t) { if (t === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', t); }
-const THEMES = [['light', 'Día'], ['dark', 'Noche'], ['verde', 'Esmeralda']];   // Esmeralda: negro con verde, como el diseño de referencia
+const THEMES = [['verde', 'Esmeralda'], ['light', 'Día'], ['dark', 'Noche']];   // Esmeralda: negro con verde, como el diseño de referencia
 function setTheme(t) { try { localStorage.setItem(THEME_KEY, t); } catch (e) {}
   if (!matchMedia('(prefers-reduced-motion: reduce)').matches) { const h = document.documentElement; h.classList.add('theme-fade'); clearTimeout(setTheme.t); setTheme.t = setTimeout(() => h.classList.remove('theme-fade'), 400); }
   applyTheme(t); updateThemeButton();
