@@ -191,11 +191,18 @@ ACTIONS.emitFiscal = el => openFacturaIssue({ id: el.dataset.id });
 const toCSV = rows => rows.map(r => r.map(v => { const s = String(v ?? ''); return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; }).join(';')).join('\n');
 
 // ---------- Ajustes ----------
+// Ajustes personales (todos los roles): apariencia, animaciones y su cuenta. Lo de la clínica es solo de Administración.
+const appearanceCard = () => `<div class="card" style="margin-bottom:16px"><div class="between" style="gap:12px;flex-wrap:wrap"><div><h2 style="margin:0">Apariencia</h2><div class="small muted">Esmeralda (predeterminado), Día (fondo blanco) o Noche (fondo negro). Se guarda en este equipo.</div></div>
+    ${themeSeg('setTheme')}</div></div>`;
+const personalSettings = () => { const u = meUser();
+  return header('Ajustes', 'Apariencia y rendimiento en este equipo, y su cuenta') + appearanceCard() + motionCard() +
+  `<div class="card"><div class="between" style="gap:12px;flex-wrap:wrap"><div><h2 style="margin:0">Mi cuenta</h2><div class="small muted">${esc(u?.name || '')} · ${esc(roleLabel(role()))}. Contraseña${CREDS_REQUIRED.includes(role()) ? ', datos profesionales' : ''} y cierre de sesión.</div></div>
+    <button class="btn" data-act="switchUser">Abrir mi cuenta</button></div></div>`; };
 VIEWS.ajustes = () => {
+  if (!can('*')) return personalSettings();
   const c = S.backupCfg; const th = getTheme(); const cl = S.clinic;
   return header('Ajustes', 'Apariencia, tasa, datos de la clínica, respaldos e historial') +
-  `<div class="card" style="margin-bottom:16px"><div class="between"><div><h2 style="margin:0">Apariencia</h2><div class="small muted">Modo día (fondo blanco) o modo noche (fondo negro).</div></div>
-    ${themeSeg('setTheme')}</div></div>
+  appearanceCard() + `
   ${motionCard()}
   ${iaCard()}
   <div class="grid g2">

@@ -29,20 +29,20 @@ const icon = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" st
 
 // Cada tipo de usuario ve solo su parte del sistema. Los médicos no ven finanzas; el laboratorio y rayos X solo sus órdenes.
 const ROLES = {
-  recepcion: { name: 'Recepción', nav: [['agenda', 'Agenda'], ['consultas', 'Consultas'], ['pacientes', 'Pacientes'], null, ['tutorial', 'Tutorial']] },
+  recepcion: { name: 'Recepción', nav: [['agenda', 'Agenda'], ['consultas', 'Consultas'], ['pacientes', 'Pacientes'], null, ['ajustes', 'Ajustes'], ['tutorial', 'Tutorial']] },
   // Un texto en el menú es el título de un grupo; null es una línea separadora
   admin: { name: 'Administrador · control maestro', nav: [
     'Clínica', ['inicio', 'Inicio'], ['agenda', 'Agenda'], ['consultas', 'Consultas'], ['quirofano', 'Quirófano'], ['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'],
     'Pacientes', ['pacientes', 'Pacientes'], ['historias', 'Historias'], ['examenes', 'Exámenes'],
     'Gestión', ['atencion', 'Presupuestos'], ['contabilidad', 'Contabilidad'], ['inventario', 'Inventario'], ['servicios', 'Servicios'],
     'Sistema', ['usuarios', 'Usuarios'], ['ajustes', 'Ajustes'], ['tutorial', 'Tutorial']] },
-  medico: { name: 'Médico', nav: ['Clínica', ['consultas', 'Consultas'], ['consultorio', 'Mi consulta'], ['agenda', 'Agenda'], ['quirofano', 'Quirófano'], ['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], 'Pacientes', ['pacientes', 'Pacientes'], ['examenes', 'Exámenes'], ['historias', 'Historias'], null, ['tutorial', 'Tutorial']] },
-  residente: { name: 'Médico residente', nav: ['Clínica', ['consultas', 'Consultas'], ['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], 'Pacientes', ['pacientes', 'Pacientes'], ['examenes', 'Exámenes'], ['historias', 'Historias'], null, ['tutorial', 'Tutorial']] },
-  almacen: { name: 'Almacén', nav: [['inicio', 'Inicio'], ['inventario', 'Inventario'], ['agenda', 'Agenda'], ['quirofano', 'Quirófano'], ['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], null, ['tutorial', 'Tutorial']] },
-  enfermeria_plus: { name: 'Enfermería+', nav: [['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], ['quirofano', 'Quirófano'], ['pacientes', 'Pacientes'], null, ['tutorial', 'Tutorial']] },
-  enfermeria: { name: 'Enfermería', nav: [['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], ['pacientes', 'Pacientes'], null, ['tutorial', 'Tutorial']] },   // sin Quirófano (eso es de Enfermeras+)
-  laboratorio: { name: 'Laboratorio', nav: [['examenes', 'Laboratorio'], ['pacientes', 'Pacientes'], null, ['tutorial', 'Tutorial']] },
-  imagen: { name: 'Rayos X e imagen', nav: [['examenes', 'Rayos X e imagen'], ['pacientes', 'Pacientes'], null, ['tutorial', 'Tutorial']] },
+  medico: { name: 'Médico', nav: ['Clínica', ['consultas', 'Consultas'], ['consultorio', 'Mi consulta'], ['agenda', 'Agenda'], ['quirofano', 'Quirófano'], ['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], 'Pacientes', ['pacientes', 'Pacientes'], ['examenes', 'Exámenes'], ['historias', 'Historias'], null, ['ajustes', 'Ajustes'], ['tutorial', 'Tutorial']] },
+  residente: { name: 'Médico residente', nav: ['Clínica', ['consultas', 'Consultas'], ['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], 'Pacientes', ['pacientes', 'Pacientes'], ['examenes', 'Exámenes'], ['historias', 'Historias'], null, ['ajustes', 'Ajustes'], ['tutorial', 'Tutorial']] },
+  almacen: { name: 'Almacén', nav: [['inicio', 'Inicio'], ['inventario', 'Inventario'], ['agenda', 'Agenda'], ['quirofano', 'Quirófano'], ['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], null, ['ajustes', 'Ajustes'], ['tutorial', 'Tutorial']] },
+  enfermeria_plus: { name: 'Enfermería+', nav: [['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], ['quirofano', 'Quirófano'], ['pacientes', 'Pacientes'], null, ['ajustes', 'Ajustes'], ['tutorial', 'Tutorial']] },
+  enfermeria: { name: 'Enfermería', nav: [['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], ['pacientes', 'Pacientes'], null, ['ajustes', 'Ajustes'], ['tutorial', 'Tutorial']] },   // sin Quirófano (eso es de Enfermeras+)
+  laboratorio: { name: 'Laboratorio', nav: [['examenes', 'Laboratorio'], ['pacientes', 'Pacientes'], null, ['ajustes', 'Ajustes'], ['tutorial', 'Tutorial']] },
+  imagen: { name: 'Rayos X e imagen', nav: [['examenes', 'Rayos X e imagen'], ['pacientes', 'Pacientes'], null, ['ajustes', 'Ajustes'], ['tutorial', 'Tutorial']] },
 };
 const role = () => S.session?.role || 'admin';
 const isClin = () => ['medico', 'residente'].includes(role());
