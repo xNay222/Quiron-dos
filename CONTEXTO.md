@@ -234,3 +234,10 @@ Descartado: estilo "Tablero de turno" (clínico sobrio). Trabajo con Codex para 
   Dirección: https://quiron-dos.vercel.app. Cabeceras en quiron/vercel.json.
 - quiron/cloud.js se activa solo en *.vercel.app / quiron* (o con localStorage 'quiron-nube'='1'). En local todo sigue igual.
 - Pendiente: crear el primer administrador en la nube, importar los datos reales, historias escaneadas (requiere plan Pro), IA y archivos.
+
+## Incidente en la nube (20/10/2026, 22:10)
+- Un equipo recién instalado (iPhone, app en pantalla de inicio) arrancó con los datos de ejemplo de seed() y, al guardar mientras cargaba, los subió: aparecieron ingresos/exámenes/historias de ejemplo y se marcó como borrado el inventario real.
+- Recuperado por SQL: productos 198, movimientos 302 y proveedores 2 con borrado=false; todo lo de ejemplo con borrado=true; contadores vaciados.
+- Arreglo en cloud.js: S = nubeBlank() en modo nube, NUBE.loaded (no se guarda nada antes de cargar) y freno si un guardado marca como borrada más de la mitad de una tabla.
+- Tabla `errores` (solo Administración): registra errores de cualquier equipo (mensaje, pantalla, navegador). Consultarla primero ante fallos en teléfonos.
+- Se quitó la compatibilidad con Safari antiguo (traducción con esbuild y compat.js): no era la causa, pero el usuario prefirió quitarla.
