@@ -15,6 +15,3 @@ archivos/
 .claude/data/
 .impeccable/
 
-# Publicación (Vercel la genera sola)
-quiron/node_modules/
-quiron/dist/

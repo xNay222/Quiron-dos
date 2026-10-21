@@ -1,7 +1,0 @@
-{
-  "name": "quiron",
-  "private": true,
-  "description": "Publicación en Vercel: traduce el código para Safari antiguo (ver _build.mjs). En local no hace falta.",
-  "scripts": { "build": "node _build.mjs" },
-  "devDependencies": { "esbuild": "0.23.1" }
-}

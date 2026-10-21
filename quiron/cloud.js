@@ -30,12 +30,9 @@ try {
   NUBE.on = typeof location !== 'undefined' && /^https?:$/.test(location.protocol) && (forced || (location.protocol === 'https:' && NUBE_CFG.hosts.some(h => h.test(location.hostname))));
 } catch (e) {}
 
-// Primero la copia propia (traducida para Safari antiguo al publicar, ver _build.mjs); si no existe (local), la del CDN con su huella
-const nubeScript = (src, sri) => new Promise((ok, no) => {
-  const s = document.createElement('script'); s.src = src; if (sri) { s.integrity = sri; s.crossOrigin = 'anonymous'; } s.referrerPolicy = 'no-referrer';
-  s.onload = ok; s.onerror = no; document.head.appendChild(s); });
-const nubeLib = () => window.supabase?.createClient ? Promise.resolve()
-  : nubeScript('vendor/supabase.js').catch(() => nubeScript(NUBE_CFG.lib, NUBE_CFG.sri)).catch(() => { throw new Error('No se pudo cargar la conexión. Revise su internet.'); });
+const nubeLib = () => window.supabase?.createClient ? Promise.resolve() : new Promise((ok, no) => {
+  const s = document.createElement('script'); s.src = NUBE_CFG.lib; s.integrity = NUBE_CFG.sri; s.crossOrigin = 'anonymous'; s.referrerPolicy = 'no-referrer';
+  s.onload = ok; s.onerror = () => no(new Error('No se pudo cargar la conexión. Revise su internet.')); document.head.appendChild(s); });
 // IA para leer fotos: la función "ia" de Supabase (la clave de Gemini vive allí, en sus secretos)
 async function nubeIaFetch(init = {}) {
   const tok = NUBE.sb ? (await NUBE.sb.auth.getSession()).data.session?.access_token : null;
