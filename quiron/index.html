@@ -1567,6 +1567,11 @@ html.motion-off *,html.motion-off *::before,html.motion-off *::after{animation:n
 .perm-list li{position:relative;padding-left:20px}
 .perm-list.yes li::before{content:"✓";position:absolute;left:0;color:var(--good);font-weight:700}
 .perm-list.no li{color:var(--fg2)}.perm-list.no li::before{content:"✕";position:absolute;left:1px;color:var(--bad);font-weight:700}
+/* Mensajes «en curso» (Entrando…, Enviando…): no son errores */
+.is-busy{color:var(--busy,var(--good))!important;animation:busyPulse 1.4s ease-in-out infinite}
+:root[data-theme="verde"]{--busy:#e9d58b}
+@keyframes busyPulse{50%{opacity:.6}}
+html.motion-off .is-busy,html.motion-lite .is-busy{animation:none}
 </style>
 </head>
 <body>

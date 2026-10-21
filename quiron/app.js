@@ -486,6 +486,13 @@ async function copyText(text, okMsg) {
 }
 
 // ---------- Delegación ----------
+// Mensajes de estado: lo que termina en «…» (Entrando…, Creando la invitación…) es algo en curso, no un error.
+// Se pinta en el color de «en curso» (amarillo suave en Esmeralda, verde en Día y Noche) y vuelve al normal al cambiar.
+const BUSY_SEL = '#au-msg, [id$="-msg"], [id$="-prog"], .note';
+if (typeof MutationObserver === 'function' && typeof document !== 'undefined') new MutationObserver(ms => ms.forEach(m => {
+  const el = m.target.nodeType === 1 ? m.target : m.target.parentElement; if (!el || !el.matches?.(BUSY_SEL)) return;
+  el.classList.toggle('is-busy', /…\s*$/.test(el.textContent || ''));
+})).observe(document.documentElement, { childList: true, characterData: true, subtree: true });
 document.addEventListener('click', e => {
   const g = e.target.closest('[data-go]');
   if (g) { e.preventDefault(); if (!canSee(g.dataset.go)) { toast('Esa sección no está en su menú.'); return; } closeShellDialogs(); closeSheet(); go(g.dataset.go, g.dataset.param || null, { root: !!g.closest('#side, #more-sections') }); return; }
