@@ -3,7 +3,7 @@
 // Los enlaces se devuelven a la aplicación para enviarlos por WhatsApp: no depende del correo.
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
-const ROLES = ['admin', 'medico', 'residente', 'enfermeria_plus', 'enfermeria', 'almacen', 'recepcion', 'laboratorio', 'imagen'];
+const ROLES = ['admin', 'medico', 'anestesiologo', 'residente', 'enfermeria_plus', 'enfermeria', 'almacen', 'recepcion', 'laboratorio', 'imagen'];
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 

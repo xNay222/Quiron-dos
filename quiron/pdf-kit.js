@@ -233,7 +233,8 @@ function pdfNoteBody(doc, y, n, compact) {
   const v = n.vitals || {}; const d = med(n.doc);
   if (compact) { y = pdfEnsure(doc, y, 60); doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...INK); doc.text(`${clinicalNoteTitle(n)} · ${fdate(n.date)} ${n.time}`, PG.L, y); doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...GREY); doc.text(`${d?.name || ''} · ${d?.esp || ''}`, PG.R, y, { align: 'right' }); y += 16; }
   const block = (label, text) => { if (!text) return; y = pdfEnsure(doc, y, 34); doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...GREY); doc.setCharSpace(.5); doc.text(label.toUpperCase(), PG.L, y); doc.setCharSpace(0); y = pdfPara(doc, y + 4, text, { size: 9.8, gap: 10 }); };
-  if (n.type === 'informe') { if (n.to) block('Dirigido a', n.to); block(compact ? (n.motivo || 'Informe médico') : 'Contenido', n.actual); }
+  if (n.type === 'anestesia') { if (n.anes) { const a = n.anes; block('Cirugía o procedimiento', a.proc); String(n.actual || '').split('\n').forEach(l => { const i = l.indexOf(': '); if (i > 0) block(l.slice(0, i), l.slice(i + 2)); }); } else block('Informe de anestesia', n.actual); }
+  else if (n.type === 'informe') { if (n.to) block('Dirigido a', n.to); block(compact ? (n.motivo || 'Informe médico') : 'Contenido', n.actual); }
   else if (n.type === 'libre') block(n.motivo || 'Nota', n.actual);
   else {
     block(n.type === 'operatoria' ? 'Cirugía realizada' : n.type === 'ingreso' ? 'Motivo de ingreso' : 'Motivo de consulta', n.motivo);
@@ -252,7 +253,7 @@ function pdfNoteBody(doc, y, n, compact) {
 }
 function pdfNote(n) {
   const p = pat(n.pid); const d = med(n.doc);
-  const doc = pdfNew(n.evolutionId ? clinicalNoteTitle(n) : n.type === 'informe' ? (n.motivo || 'Informe médico') : 'Historia clínica', [clinicalNoteTitle(n), `Fecha ${fdate(n.date)} · ${n.time}`, d?.name || '']); let y = PG.top;
+  const doc = pdfNew(n.evolutionId ? clinicalNoteTitle(n) : n.type === 'informe' ? (n.motivo || 'Informe médico') : n.type === 'anestesia' ? 'Informe de anestesia' : 'Historia clínica', [clinicalNoteTitle(n), `Fecha ${fdate(n.date)} · ${n.time}`, d?.name || '']); let y = PG.top;
   y = pdfInfoBox(doc, y, patientPairs(p), 3);
   if (p.allergies.length) { doc.setFillColor(253, 236, 236); doc.roundedRect(PG.L, y - 8, PG.R - PG.L, 24, 5, 5, 'F'); doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...RED); doc.text(`ALERGIAS: ${p.allergies.join(', ')}`, PG.L + 12, y + 7.5); y += 30; }
   y = pdfNoteBody(doc, y, n, false);

@@ -252,10 +252,10 @@ function nubeInstall() {
     const msg = document.getElementById('us-msg'); const name = val('us-name').trim(), email = normEmail(val('us-email')), role = val('us-role'), doc = val('us-doc') || null;
     if (!name) { msg.textContent = 'Escriba el nombre.'; return; } if (!validEmail(email)) { msg.textContent = 'Escriba un correo válido.'; return; }
     if (S.users.some(u => u.email === email)) { msg.textContent = 'Ya existe un usuario con ese correo.'; return; }
-    if (['medico', 'residente'].includes(role) && !doc) { msg.textContent = 'Seleccione el médico vinculado.'; return; }
+    if (DOC_ROLES.includes(role) && !doc) { msg.textContent = 'Seleccione el médico vinculado.'; return; }
     msg.textContent = 'Creando la invitación…';
     try {
-      const r = await nubeFn('usuarios', { accion: 'invitar', nombre: name, correo: email, rol: role, doc: ['medico', 'residente'].includes(role) ? doc : null, volver: location.origin });
+      const r = await nubeFn('usuarios', { accion: 'invitar', nombre: name, correo: email, rol: role, doc: DOC_ROLES.includes(role) ? doc : null, volver: location.origin });
       const u = nubeUser(r.perfil); S.users.push(u); NUBE.snap.__users[u.id] = JSON.stringify(u);
       log('Usuario invitado', `${name} · ${email} · ${roleLabel(role)}`); save(); render(); nubeShowLink(u, r.enlace);
     } catch (e) { msg.textContent = nubeMsg(e); }

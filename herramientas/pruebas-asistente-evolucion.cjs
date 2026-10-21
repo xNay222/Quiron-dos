@@ -1848,6 +1848,25 @@ async function test(name, fn) {
     assert.match(sealCode('a|b'), /^QX-[A-Z2-9]{4}-[A-Z2-9]{4}$/); assert.notEqual(sealCode('a|b'), sealCode('a|c'));
     Object.assign(me, saved); syncCredsToDoctor(me);
   });
+  await test('Anestesiólogo: rol propio con informe de anestesia; residente solo ve pacientes activos', () => {
+    const ses = { ...S.session };
+    // Anestesiólogo
+    assert.ok(ROLES.anestesiologo && PERMS.anestesiologo.includes('anest.informe'));
+    S.session = { ...ses, role: 'anestesiologo' }; assert.ok(isClin()); assert.ok(canAnesReport()); assert.ok(CREDS_REQUIRED.includes('anestesiologo'));
+    const txt = anesText({ asa: 'II', emerg: true, tipo: 'Raquídea (subaracnoidea)', mallampati: 'I', induccion: 'Bupivacaína 12 mg', sangrado: '200', ia: '08:00', fa: '09:30', aldrete: '9', destino: 'Hospitalización' });
+    assert.ok(txt.includes('Clasificación ASA: II E (emergencia)') && txt.includes('Tipo de anestesia: Raquídea') && txt.includes('Sangrado estimado 200 mL') && txt.includes('Aldrete al salir: 9/10'));
+    S.session = { ...ses, role: 'medico' }; assert.equal(canAnesReport(), false, 'un médico no hace informes de anestesia');
+    // Residente
+    const p = S.patients.find(x => !(S.admissions || []).some(a => a.pid === x.id && a.status === 'ingresado') && !(S.appts || []).some(a => a.pid === x.id && a.kind === 'cirugia' && a.date === dAt(0)));
+    S.session = { ...ses, role: 'residente', doc: 'rs01' };
+    assert.equal(canSee('historias'), false, 'sin el archivo de historias');
+    assert.equal(clinVisible(p.id), false, 'paciente no activo: sin acceso');
+    S.admissions.push({ id: 'adm-prueba-res', pid: p.id, status: 'ingresado', bed: 'H-99', doc: 'dr01', admittedAt: nowStamp() });
+    assert.equal(clinVisible(p.id), true, 'ingresado: con acceso');
+    S.admissions = S.admissions.filter(a => a.id !== 'adm-prueba-res');
+    S.session = { ...ses, role: 'medico' }; assert.equal(clinVisible(p.id), true, 'los médicos no cambian por ahora');
+    S.session = ses;
+  });
   await test('Preparar solicitud para probar fallo de almacenamiento sin duplicarla', () => {
     ACTIONS.guideStart({
       dataset: {

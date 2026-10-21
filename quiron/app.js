@@ -37,7 +37,8 @@ const ROLES = {
     'Gestión', ['atencion', 'Presupuestos'], ['contabilidad', 'Contabilidad'], ['inventario', 'Inventario'], ['servicios', 'Servicios'],
     'Sistema', ['usuarios', 'Usuarios'], ['ajustes', 'Ajustes'], ['tutorial', 'Tutorial']] },
   medico: { name: 'Médico', nav: ['Clínica', ['consultas', 'Consultas'], ['consultorio', 'Mi consulta'], ['agenda', 'Agenda'], ['quirofano', 'Quirófano'], ['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], 'Pacientes', ['pacientes', 'Pacientes'], ['examenes', 'Exámenes'], ['historias', 'Historias'], null, ['ajustes', 'Ajustes'], ['tutorial', 'Tutorial']] },
-  residente: { name: 'Médico residente', nav: ['Clínica', ['consultas', 'Consultas'], ['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], 'Pacientes', ['pacientes', 'Pacientes'], ['examenes', 'Exámenes'], ['historias', 'Historias'], null, ['ajustes', 'Ajustes'], ['tutorial', 'Tutorial']] },
+  anestesiologo: { name: 'Médico anestesiólogo', nav: ['Clínica', ['quirofano', 'Quirófano'], ['consultorio', 'Mi consulta'], ['agenda', 'Agenda'], ['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], 'Pacientes', ['pacientes', 'Pacientes'], ['examenes', 'Exámenes'], null, ['ajustes', 'Ajustes'], ['tutorial', 'Tutorial']] },
+  residente: { name: 'Médico residente', nav: ['Clínica', ['consultas', 'Consultas'], ['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], 'Pacientes', ['pacientes', 'Pacientes'], ['examenes', 'Exámenes'], null, ['ajustes', 'Ajustes'], ['tutorial', 'Tutorial']] },
   almacen: { name: 'Almacén', nav: [['inicio', 'Inicio'], ['inventario', 'Inventario'], ['agenda', 'Agenda'], ['quirofano', 'Quirófano'], ['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], null, ['ajustes', 'Ajustes'], ['tutorial', 'Tutorial']] },
   enfermeria_plus: { name: 'Enfermería+', nav: [['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], ['quirofano', 'Quirófano'], ['pacientes', 'Pacientes'], null, ['ajustes', 'Ajustes'], ['tutorial', 'Tutorial']] },
   enfermeria: { name: 'Enfermería', nav: [['hospitalizacion', 'Hospitalización'], ['emergencias', 'Emergencias'], ['pacientes', 'Pacientes'], null, ['ajustes', 'Ajustes'], ['tutorial', 'Tutorial']] },   // sin Quirófano (eso es de Enfermeras+)
@@ -45,7 +46,16 @@ const ROLES = {
   imagen: { name: 'Rayos X e imagen', nav: [['examenes', 'Rayos X e imagen'], ['pacientes', 'Pacientes'], null, ['ajustes', 'Ajustes'], ['tutorial', 'Tutorial']] },
 };
 const role = () => S.session?.role || 'admin';
-const isClin = () => ['medico', 'residente'].includes(role());
+// Roles de médico (con ficha vinculada y datos profesionales)
+const DOC_ROLES = ['medico', 'residente', 'anestesiologo'];
+const isClin = () => DOC_ROLES.includes(role());
+// Paciente activo: ingresado (hospitalización o emergencia), con cirugía hoy o en la sala de espera de triaje.
+// Los residentes solo ven la historia clínica, exámenes y consultas de estos pacientes (y lo que ellos mismos hicieron).
+const patActive = pid => !!pid && ((S.admissions || []).some(a => a.pid === pid && a.status === 'ingresado')
+  || (S.appts || []).some(a => a.pid === pid && a.kind === 'cirugia' && a.date === dAt(0) && isActive(a))
+  || (S.triage || []).some(t => t.pid === pid && t.status === 'espera'));
+const clinVisible = pid => role() !== 'residente' || patActive(pid);
+const CLIN_LOCKED_MSG = 'Como residente, solo puede ver la historia clínica, los exámenes y las consultas de pacientes ingresados en hospitalización o emergencias, o con cirugía hoy.';
 const isNurse = (r = role()) => r === 'enfermeria' || r === 'enfermeria_plus';   // Enfermeras y Enfermeras+
 const canScheduleQx = () => can('agenda.programar') || can('qx.programar');   // médicos tratantes y residentes
 const myDoc = () => isClin() ? S.session.doc : null;
@@ -64,7 +74,10 @@ const canSee = r => NAV_ITEMS().some(n => n[0] === r) || (role() === 'admin' && 
 const PERMS = {
   admin: ['*'],
   medico: ['consulta.estado', 'consulta.clinico', 'consulta.crear', 'consulta.registrar', 'consulta.agendar', 'agenda.propia', 'agenda.programar', 'qx.solicitar', 'qx.devolver', 'hosp.clinico', 'hosp.ingresar', 'hosp.solicitar', 'hosp.aplicar', 'pac.clinico', 'pac.historia', 'pac.escribir', 'pac.papeles', 'pac.registrar', 'examen.pedir', 'imagen.subir'],
-  residente: ['consulta.estado', 'consulta.clinico', 'consulta.crear', 'consulta.registrar', 'consulta.agendar', 'consulta.ver_todas', 'hosp.clinico', 'hosp.ingresar', 'hosp.solicitar', 'hosp.aplicar', 'pac.clinico', 'pac.historia', 'pac.escribir', 'examen.pedir', 'imagen.subir'],
+  // anest.informe: informe de anestesia. Ve su agenda (cirugías donde es el anestesiólogo) y los pacientes que opera
+  anestesiologo: ['consulta.estado', 'consulta.clinico', 'consulta.crear', 'consulta.registrar', 'agenda.propia', 'qx.solicitar', 'hosp.clinico', 'hosp.solicitar', 'hosp.aplicar', 'pac.clinico', 'pac.historia', 'pac.escribir', 'examen.pedir', 'anest.informe'],
+  // Residentes: sin consulta.ver_todas; la historia, los exámenes y las consultas solo de pacientes activos (ver patActive)
+  residente: ['consulta.estado', 'consulta.clinico', 'consulta.crear', 'consulta.registrar', 'consulta.agendar', 'hosp.clinico', 'hosp.ingresar', 'hosp.solicitar', 'hosp.aplicar', 'pac.clinico', 'pac.historia', 'pac.escribir', 'examen.pedir', 'imagen.subir'],
   enfermeria: ['hosp.clinico', 'hosp.solicitar', 'hosp.aplicar'],
   // Enfermeras+: todo lo de enfermería y además programan cirugías (no agendan consultas)
   enfermeria_plus: ['hosp.clinico', 'hosp.solicitar', 'hosp.aplicar', 'qx.solicitar', 'qx.devolver', 'qx.programar'],

@@ -7,7 +7,8 @@ const consultOf = id => (S.consults || []).find(c => c.id === id);
 const consultClinical = () => can('consulta.clinico');
 const consultCanEdit = c => !!c && c.status !== 'firmada' && consultClinical() && (c.doc === myDoc() || can('consulta.editar_ajena'));
 const consultCanSign = c => consultCanEdit(c) && (c.doc === myDoc() || can('consulta.firmar'));
-const consultAccessible = c => consultClinical() && (c.doc === myDoc() || can('consulta.ver_todas'));
+// Residentes: sus propias consultas y las de pacientes activos (ingresados o con cirugía hoy)
+const consultAccessible = c => consultClinical() && (c.doc === myDoc() || can('consulta.ver_todas') || (role() === 'residente' && patActive(c.pid)));
 const consultSession = () => S.session?.uid;
 let consultSaveTimer = null;
 addEventListener('pagehide', () => {

@@ -6,9 +6,9 @@
 // Importante: en este prototipo todo vive en el navegador; en el sistema definitivo la validación la hace el servidor.
 
 const SESSION_KEY = 'quiron-sesion';
-const ROLE_ORDER = ['admin', 'medico', 'residente', 'enfermeria_plus', 'enfermeria', 'almacen', 'recepcion', 'laboratorio', 'imagen'];
+const ROLE_ORDER = ['admin', 'medico', 'anestesiologo', 'residente', 'enfermeria_plus', 'enfermeria', 'almacen', 'recepcion', 'laboratorio', 'imagen'];
 const userRoles = () => [...ROLE_ORDER.filter(r => ROLES[r]), ...Object.keys(ROLES).filter(r => !ROLE_ORDER.includes(r))];
-const userRoleTitle = r => ({ admin: 'Administradores', medico: 'Médicos', residente: 'Residentes', enfermeria_plus: 'Enfermeras+', enfermeria: 'Enfermeras', almacen: 'Almacén', recepcion: 'Recepción', laboratorio: 'Laboratorio', imagen: 'Imagen/Radiología' })[r] || ROLES[r]?.name || r;
+const userRoleTitle = r => ({ admin: 'Administradores', medico: 'Médicos', anestesiologo: 'Anestesiólogos', residente: 'Residentes', enfermeria_plus: 'Enfermeras+', enfermeria: 'Enfermeras', almacen: 'Almacén', recepcion: 'Recepción', laboratorio: 'Laboratorio', imagen: 'Imagen/Radiología' })[r] || ROLES[r]?.name || r;
 const roleLabel = r => r === 'admin' ? 'Administrador · control maestro' : ROLES[r]?.name || r;
 const USER_ST = { activo: ['Activo', 'good'], invitado: ['Invitación pendiente', 'warn'], desactivado: ['Desactivado', ''] };
 const b64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
@@ -204,7 +204,7 @@ const usersList = () => {
     <div class="grow"><div class="t">${esc(u.name)}${u.id === S.session?.uid ? ' <span class="pill info">Usted</span>' : ''}</div><div class="s">${esc(u.email)} · ${esc(roleLabel(u.role))}${u.doc ? ' · ' + esc(med(u.doc)?.name || '') : ''}</div></div>
     <div class="end"><span class="pill ${USER_ST[u.status][1]}">${USER_ST[u.status][0]}</span><div class="small muted">${u.lastLogin ? 'último acceso ' + u.lastLogin : 'sin accesos'}</div></div></button>`).join('')}</div>`;
 };
-const docSelect = (role, sel) => ['medico', 'residente'].includes(role) ? `<div class="field"><label for="us-doc">Médico vinculado <span style="color:var(--bad)">*</span></label><select class="input" id="us-doc"><option value="">Seleccione…</option>${activeDocs().filter(m => role === 'residente' ? m.resident : !m.resident).map(m => `<option value="${m.id}" ${m.id === sel ? 'selected' : ''}>${esc(m.name)} · ${esc(m.esp)}</option>`).join('')}</select></div>` : '';
+const docSelect = (role, sel) => DOC_ROLES.includes(role) ? `<div class="field"><label for="us-doc">Médico vinculado <span style="color:var(--bad)">*</span></label><select class="input" id="us-doc"><option value="">Seleccione…</option>${activeDocs().filter(m => role === 'residente' ? m.resident : role === 'anestesiologo' ? isAnest(m) && !m.resident : !m.resident).map(m => `<option value="${m.id}" ${m.id === sel ? 'selected' : ''}>${esc(m.name)} · ${esc(m.esp)}</option>`).join('')}</select></div>` : '';
 function userForm(u) {
   return `<div class="form"><div class="field"><label for="us-name">Nombre completo</label><input class="input" id="us-name" value="${esc(u.name || '')}"></div>
     <div class="field"><label for="us-email">Correo electrónico</label><input class="input" type="email" id="us-email" value="${esc(u.email || '')}" ${u.id ? 'disabled' : ''}></div>
@@ -216,7 +216,8 @@ function userForm(u) {
 const ROLE_CAN = {
   admin: { can: ['Todo el sistema: clínica, pacientes, contabilidad, fondos, inventario y ajustes', 'Crear, invitar y desactivar usuarios, y elegir su rol', 'Registrar amonestaciones y destacados del personal', 'Eliminar pacientes (con motivo y copia previa)'], not: [] },
   medico: { can: ['Consultas guiadas y firma de informes, récipes, órdenes y constancias', 'Su propia agenda: programa sus citas y cirugías', 'Quirófano: pide material y registra la cirugía realizada', 'Hospitalización y emergencias: evoluciones, indicaciones, plantillas de órdenes, informe de egreso y triaje', 'Historias clínicas, informes, consentimientos y pedido de exámenes'], not: ['Contabilidad, presupuestos e inventario', 'La agenda de otros médicos', 'Usuarios y configuración de la clínica'], need: 'Debe vincularse a su ficha de médico. Para firmar necesita su n.º de colegiado.' },
-  residente: { can: ['Consultas (ve las de todos los médicos)', 'Hospitalización y emergencias: evoluciones, indicaciones, plantillas de órdenes, informe de egreso y triaje', 'Historias clínicas, informes y pedido de exámenes'], not: ['Quirófano y agenda', 'Contabilidad, presupuestos e inventario', 'Usuarios y configuración de la clínica'], need: 'Debe vincularse a su ficha de residente. Para firmar necesita su n.º de colegiado.' },
+  anestesiologo: { can: ['Informe de anestesia (ASA, técnica, vía aérea, fármacos, líquidos, tiempos, eventos y recuperación) con firma electrónica', 'Su agenda: las cirugías donde es el anestesiólogo', 'Quirófano: pide la medicación y el material de anestesia', 'Hospitalización y emergencias: evoluciones, indicaciones y medicación', 'Consultas preanestésicas y pedido de exámenes'], not: ['Contabilidad, presupuestos e inventario', 'La agenda de otros médicos', 'Usuarios y configuración de la clínica'], need: 'Debe vincularse a su ficha de anestesiólogo. Para firmar necesita sus datos profesionales.' },
+  residente: { can: ['Sus consultas', 'Hospitalización y emergencias: evoluciones, indicaciones, plantillas de órdenes, informe de egreso y triaje', 'Historia clínica, exámenes y consultas solo de pacientes ingresados o con cirugía hoy'], not: ['El archivo de historias de todos los pacientes', 'Quirófano y agenda', 'Contabilidad, presupuestos e inventario', 'Usuarios y configuración de la clínica'], need: 'Debe vincularse a su ficha de residente. Para firmar necesita su n.º de colegiado.' },
   enfermeria_plus: { can: ['Todo lo de enfermería', 'Quirófano: programa cirugías, pide la medicación y el material, registra la cirugía realizada y las devoluciones'], not: ['Agendar consultas', 'Historias clínicas, contabilidad e inventario', 'Usuarios y configuración de la clínica'] },
   enfermeria: { can: ['Hospitalización y emergencias: ve las indicaciones con la hora de cada dosis', 'Solicita medicación y material, y registra cada aplicación', 'Registra la llegada de pacientes a emergencias (triaje)', 'Lee las evoluciones del médico'], not: ['Quirófano (eso es de Enfermería+)', 'Historias clínicas, contabilidad e inventario', 'Usuarios y configuración de la clínica'] },
   almacen: { can: ['Inicio completo, como la administración', 'Despacha las órdenes de hospitalización y quirófano', 'Registra la mercancía que llega (con foto) y hace solicitudes extraordinarias con motivo', 'Compras, mapa del almacén, código de barras, etiquetas y retiro de vencidos', 'Agenda: crea y edita citas y cirugías; asigna las guardias'], not: ['Entradas o salidas libres del inventario', 'Facturas de proveedores y el valor total del inventario', 'Historias clínicas y contabilidad'] },
@@ -259,8 +260,8 @@ ACTIONS.userSave = async () => {
   if (!name) { msg.textContent = 'Escriba el nombre.'; return; }
   if (!validEmail(email)) { msg.textContent = 'Escriba un correo válido.'; return; }
   if (S.users.some(u => u.email === email)) { msg.textContent = 'Ya existe un usuario con ese correo.'; return; }
-  if (['medico', 'residente'].includes(role) && !doc) { msg.textContent = 'Seleccione el médico vinculado.'; return; }
-  const u = { id: uid('u'), name, email, role, doc: ['medico', 'residente'].includes(role) ? doc : null, status: 'invitado', created: nowStamp(), createdBy: actor() };
+  if (DOC_ROLES.includes(role) && !doc) { msg.textContent = 'Seleccione el médico vinculado.'; return; }
+  const u = { id: uid('u'), name, email, role, doc: DOC_ROLES.includes(role) ? doc : null, status: 'invitado', created: nowStamp(), createdBy: actor() };
   const acc = await issueAccess(u, UI.usMode); S.users.push(u);
   log(acc.kind === 'invite' ? 'Usuario invitado' : 'Usuario creado', `${name} · ${email} · ${roleLabel(role)}`); save(); render(); showAccess(u, acc);
 };
@@ -277,9 +278,9 @@ ACTIONS.userUpdate = el => {
   const u = S.users.find(x => x.id === el.dataset.id); const msg = document.getElementById('us-msg'); const self = u.id === S.session?.uid;
   const name = val('us-name').trim(); const role = self ? u.role : val('us-role'); const doc = val('us-doc') || null;
   if (!name) { msg.textContent = 'Escriba el nombre.'; return; }
-  if (['medico', 'residente'].includes(role) && !doc) { msg.textContent = 'Seleccione el médico vinculado.'; return; }
+  if (DOC_ROLES.includes(role) && !doc) { msg.textContent = 'Seleccione el médico vinculado.'; return; }
   if (u.role === 'admin' && role !== 'admin' && activeAdmins().length <= 1) { msg.textContent = 'Debe quedar al menos un administrador activo.'; return; }
-  const changed = u.role !== role; u.name = name; u.role = role; u.doc = ['medico', 'residente'].includes(role) ? doc : null;
+  const changed = u.role !== role; u.name = name; u.role = role; u.doc = DOC_ROLES.includes(role) ? doc : null;
   if (self) applyUser(u);
   log('Usuario actualizado', `${name}${changed ? ' · nuevo rol: ' + roleLabel(role) : ''}`); save(); closeSheet(); render(); toast('Usuario actualizado');
 };
@@ -302,12 +303,12 @@ VIEWS.usuarios = () => {
   if (!can('*')) return '<div class="empty">No tiene permiso para administrar usuarios.</div>';
   return header('Usuarios', 'Personal y acceso al sistema, organizados por rol') + userRoles().map(r => {
     const users = (S.users || []).filter(u => u.role === r);
-    const docs = ['medico', 'residente'].includes(r) ? (S.doctors || []).filter(d => !d.example && !!d.resident === (r === 'residente')) : [];
+    const docs = DOC_ROLES.includes(r) ? (S.doctors || []).filter(d => !d.example && docKind(d) === r) : [];
     const nurses = r === 'enfermeria' ? (S.nurseStaff || []) : [];
     const staff = docs.map(d => `<button class="row" data-act="staffDoc" data-id="${d.id}"><span class="avatar">${initials(d.name)}</span><div class="grow"><div class="t">${esc(d.name)}</div><div class="s">${esc(d.esp)} · ${esc(hoursText(d.id))}</div></div>${amonPill('doc:' + d.id)}${d.active === false ? '<span class="pill">Inactivo</span>' : credsPending(d).length ? `<span class="pill warn">Falta ${credsPendingText(d)}</span>` : ''}</button>`).join('') + nurses.map(n => `<button class="row" data-act="staffNurse" data-i="${S.nurseStaff.indexOf(n)}"><span class="avatar">${initials(n.name)}</span><div class="grow"><div class="t">${esc(n.name)}</div><div class="s">${n.days?.length ? 'Guardia fija: ' + n.days.map(d => DAY_NAMES[d]).join(', ') : 'Sin días fijos'}</div></div>${amonPill('nurse:' + n.id)}${n.active === false ? '<span class="pill">Inactiva</span>' : ''}</button>`).join('');
     const accounts = users.map(u => `<button class="row" data-act="userEdit" data-id="${u.id}"><span class="avatar">${initials(u.name)}</span><div class="grow"><div class="t">${esc(u.name)}${u.id === S.session?.uid ? ' <span class="pill info">Usted</span>' : ''}</div><div class="s">${esc(u.email || '')}${u.doc ? ' · ' + esc(med(u.doc)?.name || '') : ''}</div></div><div class="end" style="display:grid;justify-items:end;gap:6px"><span class="pill ${USER_ST[u.status]?.[1] || ''}">${USER_ST[u.status]?.[0] || esc(u.status)}</span><div class="small muted">${u.lastLogin ? 'Último acceso: ' + fdate(u.lastLogin.slice(0, 10)) + (u.lastLogin.length > 10 ? ', ' + esc(u.lastLogin.slice(11, 16)) : '') : 'Sin accesos'}</div></div></button>`).join('');
-    const count = users.length + ' usuario(s)' + (['medico', 'residente'].includes(r) ? ' · ' + docs.length + ' en personal' : r === 'enfermeria' ? ' · ' + nurses.length + ' en personal' : '');
-    const addStaff = ['medico', 'residente'].includes(r) ? `<button class="btn" data-act="staffDoc" data-kind="${r}">+ Agregar ${r === 'residente' ? 'residente' : 'médico'}</button>` : r === 'enfermeria' ? '<button class="btn" data-act="staffNurse">+ Agregar enfermera</button>' : '';
+    const count = users.length + ' usuario(s)' + (DOC_ROLES.includes(r) ? ' · ' + docs.length + ' en personal' : r === 'enfermeria' ? ' · ' + nurses.length + ' en personal' : '');
+    const addStaff = DOC_ROLES.includes(r) ? `<button class="btn" data-act="staffDoc" data-kind="${r}">+ Agregar ${r === 'residente' ? 'residente' : r === 'anestesiologo' ? 'anestesiólogo' : 'médico'}</button>` : r === 'enfermeria' ? '<button class="btn" data-act="staffNurse">+ Agregar enfermera</button>' : '';
     return `<section class="sec" data-user-role="${r}"><div class="between"><h2>${esc(userRoleTitle(r))} <span class="pill">${count}</span></h2><div class="hstack">${addStaff}<button class="btn primary" data-act="userNew" data-role="${r}">+ Agregar usuario</button></div></div>${staff ? '<div class="small muted">Personal · editar datos, estado y guardias. Horarios de consulta en Agenda.</div><div class="list" style="margin:8px 0 14px">' + staff + '</div><div class="small muted">Acceso al sistema · invitaciones, contraseñas y permisos</div>' : ''}<div class="list" style="margin-top:8px">${accounts || '<div class="empty">No hay usuarios de este rol.</div>'}</div></section>`;
   }).join('');
 };
@@ -355,7 +356,7 @@ ACTIONS.staffNurseSave = el => { if (!can('*')) return;
 // ---------- Datos profesionales del usuario (cédula y Colegio de Médicos) ----------
 // Pertenecen a la cuenta de cada persona; si la cuenta está vinculada a un médico del personal, se copian a su ficha
 // para que salgan bajo la firma de récipes, informes y constancias.
-const CREDS_REQUIRED = ['medico', 'residente'];
+const CREDS_REQUIRED = ['medico', 'residente', 'anestesiologo'];   // los mismos que DOC_ROLES (app.js carga después)
 const credsOf = u => ({ ci: u?.ci || '', cm: u?.cm || '', colegio: u?.colegio || '', mpps: u?.mpps || '' });
 // Para firmar hacen falta cédula, n.º de colegiado, Colegio de Médicos y código MPPS (salen en el sello del documento)
 const credsMissing = u => !!u && CREDS_REQUIRED.includes(u.role) && credsPending(u).length > 0;

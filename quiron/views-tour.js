@@ -104,6 +104,13 @@ const TOURS = {
       TPL_STEP, EGRESO_STEP,
       { go: 'hospitalizacion', param: firstAdm, setup: () => { UI.hospTab = 'medicacion'; }, el: '.main [data-act="hospTab"][data-k="medicacion"]', t: 'Medicación', d: 'Lo solicitado, lo que entregó el almacén y cada aplicación registrada por enfermería.' }] },
   ],
+  anestesiologo: [
+    { id: 'an-general', title: 'Primeros pasos', desc: 'Sus cirugías, el informe de anestesia y sus datos para firmar.', steps: [MENU,
+      { go: 'quirofano', el: '.main .head', t: 'Quirófano', d: 'Las cirugías del día. Ve el cirujano y el anestesiólogo de cada una, y puede pedir la medicación y el material de anestesia.' },
+      { go: 'agenda', el: '.main .seg', t: 'Su agenda', d: 'Solo sus cirugías: las que tienen su nombre como anestesiólogo.' },
+      { go: 'consultorio', el: '.main [data-act="newNote"], .main .head', t: 'Informe de anestesia', d: 'Con "Nueva historia" se abre directamente el informe de anestesia: ASA, tipo de anestesia, vía aérea, fármacos, líquidos, tiempos, eventos, Aldrete y destino. Al firmarlo sale con su sello de firma electrónica.' },
+      TRIAGE, ACCOUNT_CLIN, BACK_HERE()] },
+  ],
   residente: [
     { id: 'res-general', title: 'Primeros pasos', desc: 'Hospitalización, emergencias, triaje, plantillas de órdenes e informe de egreso.', steps: [MENU,
       { go: 'hospitalizacion', el: '.bedgrid', t: 'Mapa de camas', d: 'Toque una cama ocupada para trabajar en ese ingreso.' },

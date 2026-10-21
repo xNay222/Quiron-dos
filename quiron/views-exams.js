@@ -65,7 +65,7 @@ function queueView() {
 function listView() {
   const me = myDoc(); const wa = workerArea();
   const area = wa || UI.exA || 'todos'; const st = UI.exS || 'todos';
-  const base = S.exams.filter(e => (area === 'todos' || e.area === area) && (!me || e.doc === me));
+  const base = S.exams.filter(e => (area === 'todos' || e.area === area) && (!me || e.doc === me || (role() === 'residente' && patActive(e.pid))));
   const list = base.filter(e => st === 'todos' || (st === 'listos' ? !examPending(e) : examPending(e))).sort(byPriority);
   const q = (UI.exQ || '').toLowerCase(); const shown = list.filter(e => !q || (pat(e.pid).name + pat(e.pid).ci + e.num + e.tests.join(' ')).toLowerCase().includes(q));
   return `<div class="grid g4">${kpi('Solicitados', base.filter(e => e.status === 'solicitado').length)}${kpi('En proceso', base.filter(e => ['muestra', 'proceso'].includes(e.status)).length)}${kpi('Con resultado', base.filter(e => e.status === 'listo').length)}${kpi(me ? 'Resultados sin ver' : 'Listos hoy', me ? base.filter(e => e.status === 'listo' && !e.seen).length : base.filter(e => (e.readyAt || '').startsWith(dAt(0))).length)}</div>
@@ -186,6 +186,7 @@ ACTIONS.catSave = () => {
 // ---------- Ver / trabajar una orden ----------
 ACTIONS.openExam = el => {
   const e = S.exams.find(x => x.id === el.dataset.id); if (!e) return; const p = pat(e.pid);
+  if (!clinVisible(e.pid) && e.doc !== myDoc()) { toast(CLIN_LOCKED_MSG); return; }
   if (e.area === 'imagen' && !canReadImages()) return;
   const worker = canWork(e.area);
   if (isClin() && e.doc === myDoc() && e.status === 'listo' && !e.seen) { e.seen = true; save(); renderSide(); }

@@ -5,7 +5,38 @@
 // "libre": el médico escribe sin campos fijos (título + texto). Se guarda el título en motivo y el texto en actual.
 // "informe": informe médico de redacción libre (título, destinatario y texto); queda en la historia clínica del paciente.
 // "ingreso": la primera historia de una hospitalización o emergencia (motivo, enfermedad actual, examen, diagnóstico y plan).
-const NOTE_TYPES = { consulta: 'Consulta', ingreso: 'Historia de ingreso', evolucion: 'Evolución', operatoria: 'Nota operatoria', libre: 'Nota libre', informe: 'Informe médico' };
+const NOTE_TYPES = { consulta: 'Consulta', ingreso: 'Historia de ingreso', evolucion: 'Evolución', operatoria: 'Nota operatoria', libre: 'Nota libre', informe: 'Informe médico', anestesia: 'Informe de anestesia' };
+// Informe de anestesia: lo redacta el anestesiólogo (o Administración a su nombre). Se guarda estructurado (n.anes) y como texto.
+const canAnesReport = () => can('anest.informe') || role() === 'admin';
+const ANES_TIPOS = ['General balanceada', 'General endovenosa total (TIVA)', 'Raquídea (subaracnoidea)', 'Epidural', 'Combinada raquídea-epidural', 'Bloqueo de nervio periférico', 'Sedación', 'Local con sedación'];
+const ANES_DESTINOS = ['Unidad de recuperación (URPA)', 'Hospitalización', 'Terapia intensiva (UCI)', 'Alta ambulatoria'];
+const ANES_TEXT = [['premed', 'Premedicación', 'Ej. Midazolam 2 mg EV'], ['induccion', 'Inducción', 'Ej. Propofol 150 mg, fentanilo 100 mcg, rocuronio 40 mg'], ['mantenimiento', 'Mantenimiento', 'Ej. Sevoflurano 2 %, O₂ 50 %'],
+  ['analgesia', 'Analgesia', 'Ej. Ketoprofeno 100 mg EV, bloqueo TAP'], ['reversion', 'Relajación y reversión', 'Ej. Neostigmina 2,5 mg + atropina 1 mg'], ['monitoreo', 'Monitoreo', 'ECG, PANI, SpO₂, capnografía, temperatura'],
+  ['eventos', 'Eventos y complicaciones', 'Sin complicaciones'], ['obs', 'Observaciones e indicaciones postanestésicas', '']];
+function anesText(a) {
+  const L = []; const add = (k, v) => { if (v && String(v).trim()) L.push(k + ': ' + String(v).trim()); };
+  add('Clasificación ASA', a.asa ? a.asa + (a.emerg ? ' E (emergencia)' : '') : ''); add('Tipo de anestesia', a.tipo);
+  add('Vía aérea', [a.mallampati && 'Mallampati ' + a.mallampati, a.dispositivo, a.cormack && 'Cormack-Lehane ' + a.cormack].filter(Boolean).join(' · '));
+  ANES_TEXT.forEach(([k, l]) => add(l, a[k]));
+  add('Líquidos y balance', [a.cristaloides && 'Cristaloides ' + a.cristaloides + ' mL', a.coloides && 'Coloides ' + a.coloides + ' mL', a.hemo && 'Hemoderivados: ' + a.hemo, a.sangrado && 'Sangrado estimado ' + a.sangrado + ' mL', a.diuresis && 'Diuresis ' + a.diuresis + ' mL'].filter(Boolean).join(' · '));
+  add('Tiempos', [a.ia && 'Inicio de anestesia ' + a.ia, a.ic && 'inicio de cirugía ' + a.ic, a.fc && 'fin de cirugía ' + a.fc, a.fa && 'fin de anestesia ' + a.fa].filter(Boolean).join(' · '));
+  add('Aldrete al salir', a.aldrete ? a.aldrete + '/10' : ''); add('Destino', a.destino);
+  return L.join('\n');
+}
+function anesForm(n) {
+  const a = n.anes || {}; const f = (k, l, ph = '', type = 'text', extra = '') => `<div class="field"><label for="an-${k}">${l}</label><input class="input" id="an-${k}" type="${type}" value="${esc(a[k] || '')}" placeholder="${esc(ph)}" ${extra}></div>`;
+  const sel = (k, l, opts) => `<div class="field"><label for="an-${k}">${l}</label><select class="input" id="an-${k}"><option value="">Seleccione…</option>${opts.map(o => `<option ${a[k] === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></div>`;
+  const ta = (k, l, ph) => `<div class="field full"><label for="an-${k}">${l}</label><textarea class="input" id="an-${k}" rows="2" placeholder="${esc(ph)}">${esc(a[k] || '')}</textarea></div>`;
+  return `<div class="form">${f('proc', 'Cirugía o procedimiento *', 'Ej. Colecistectomía laparoscópica')}${sel('tipo', 'Tipo de anestesia *', ANES_TIPOS)}
+    ${sel('asa', 'Clasificación ASA', ['I', 'II', 'III', 'IV', 'V', 'VI'])}<label class="field hstack small" style="align-self:end"><input type="checkbox" id="an-emerg" ${a.emerg ? 'checked' : ''}> Emergencia (E)</label></div>
+  <div><b class="small">Vía aérea</b><div class="form">${sel('mallampati', 'Mallampati', ['I', 'II', 'III', 'IV'])}${f('dispositivo', 'Dispositivo', 'Ej. TOT 7.5 con balón, máscara laríngea 4')}${sel('cormack', 'Cormack-Lehane', ['1', '2', '3', '4'])}</div></div>
+  <div class="form">${ANES_TEXT.slice(0, 6).map(([k, l, ph]) => ta(k, l, ph)).join('')}</div>
+  <div><b class="small">Líquidos y balance</b><div class="form">${f('cristaloides', 'Cristaloides (mL)', '', 'number', 'min="0"')}${f('coloides', 'Coloides (mL)', '', 'number', 'min="0"')}${f('hemo', 'Hemoderivados', 'Ej. 1 concentrado globular')}${f('sangrado', 'Sangrado estimado (mL)', '', 'number', 'min="0"')}${f('diuresis', 'Diuresis (mL)', '', 'number', 'min="0"')}</div></div>
+  <div><b class="small">Tiempos</b><div class="form">${f('ia', 'Inicio de anestesia', '', 'time')}${f('ic', 'Inicio de cirugía', '', 'time')}${f('fc', 'Fin de cirugía', '', 'time')}${f('fa', 'Fin de anestesia', '', 'time')}</div></div>
+  <div class="form">${ta('eventos', 'Eventos y complicaciones', 'Sin complicaciones')}${f('aldrete', 'Aldrete al salir (0 a 10)', '', 'number', 'min="0" max="10"')}${sel('destino', 'Destino', ANES_DESTINOS)}${ta('obs', 'Observaciones e indicaciones postanestésicas', '')}</div>
+  <div class="small muted">Al firmarlo queda en la historia del paciente con su sello de firma electrónica y no se puede modificar.</div>`;
+}
+const ANES_KEYS = ['proc', 'tipo', 'asa', 'mallampati', 'dispositivo', 'cormack', 'cristaloides', 'coloides', 'hemo', 'sangrado', 'diuresis', 'ia', 'ic', 'fc', 'fa', 'aldrete', 'destino', ...ANES_TEXT.map(x => x[0])];
 // Un ingreso sin historia de ingreso firmada empieza por ella; después, evoluciones
 const hasIngreso = admId => S.hc.some(n => n.admId === admId && n.type === 'ingreso' && n.status === 'firmada');
 function clinicalNoteTitle(n) {
@@ -13,7 +44,7 @@ function clinicalNoteTitle(n) {
   return NOTE_TYPES[n.type] || 'Historia clínica';
 }
 const admNoteType = admId => admId && !hasIngreso(admId) ? 'ingreso' : 'evolucion';
-const isFree = t => t === 'libre' || t === 'informe';
+const isFree = t => t === 'libre' || t === 'informe' || t === 'anestesia';
 // Médico que suscribe por defecto: el último que atendió al paciente, o el primero de la lista
 const defaultDoc = pid => ME() || S.hc.filter(n => n.pid === pid && n.doc).sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time))[0]?.doc || S.appts.find(a => a.pid === pid)?.doc || MEDICOS.find(m => !m.resident)?.id;
 const VITALS = [['ta', 'TA', 'mmHg', '120/80'], ['fc', 'FC', 'lpm', '72'], ['fr', 'FR', 'rpm', '16'], ['temp', 'Temp.', '°C', '36,5'], ['sat', 'SatO₂', '%', '98'], ['peso', 'Peso', 'kg', '70'], ['talla', 'Talla', 'cm', '170']];
@@ -50,16 +81,17 @@ ACTIONS.newNote = el => {
   // Sin paciente indicado (p. ej. "Nueva historia" en Mi consulta) se elige primero con el buscador; nunca se toma uno por defecto
   const pid = ds.pid || null;
   const adm = ds.adm || (pid && activeAdmission(pid)?.id) || null;   // si está ingresado, la nota queda ligada a la hospitalización
-  const type = !isClin() ? 'informe' : ds.type || (adm ? admNoteType(adm) : 'consulta');
+  const type = !isClin() ? (ds.type === 'anestesia' ? 'anestesia' : 'informe') : ds.type || (role() === 'anestesiologo' ? 'anestesia' : adm ? admNoteType(adm) : 'consulta');
   ppReset('nt'); UI.ppChanged = UI.ppChanged || {};
   UI.ppChanged.nt = () => { const st = UI.pp.nt; if (!st.pid || st.newPat) return; const n = UI.nt; n.pid = st.pid; n.doc = isClin() ? n.doc : defaultDoc(st.pid);
-    n.admId = activeAdmission(st.pid)?.id || null; if (isClin() && !ds.type) n.type = n.admId ? admNoteType(n.admId) : 'consulta'; refreshSheet(noteForm()); };
+    n.admId = activeAdmission(st.pid)?.id || null; if (isClin() && !ds.type) n.type = role() === 'anestesiologo' ? 'anestesia' : n.admId ? admNoteType(n.admId) : 'consulta'; refreshSheet(noteForm()); };
   UI.nt = { id: null, pid, doc: pid ? defaultDoc(pid) : ME(), apptId: ds.appt || null, admId: adm, type, motivo: type === 'informe' ? 'Informe médico' : '', to: '', actual: '', vitals: {}, examen: '', dx: [''], plan: '', indicaciones: '', recipe: [], tests: [], urgent: false, pickPatient: !ds.pid };
   openNoteEditor();
 };
 function openNoteEditor() {
   const inf = UI.nt.type === 'informe';
-  openSheet(inf ? (UI.nt.id ? 'Informe médico (borrador)' : 'Nuevo informe médico') : UI.nt.id ? 'Historia clínica (borrador)' : 'Nueva historia clínica', noteForm(),
+  const an = UI.nt.type === 'anestesia';
+  openSheet(an ? (UI.nt.id ? 'Informe de anestesia (borrador)' : 'Nuevo informe de anestesia') : inf ? (UI.nt.id ? 'Informe médico (borrador)' : 'Nuevo informe médico') : UI.nt.id ? 'Historia clínica (borrador)' : 'Nueva historia clínica', noteForm(),
     `<span class="note" id="nt-msg">${inf ? 'Al firmarlo queda guardado en la historia clínica del paciente y no se puede modificar.' : 'Al firmarla queda bloqueada y los exámenes solicitados llegan al laboratorio o a rayos X.'}</span><button class="btn" data-act="saveNote" data-sign="0">Guardar borrador</button><button class="btn primary" data-act="saveNote" data-sign="1">${inf ? 'Firmar y guardar informe' : 'Firmar historia'}</button>`, { wide: true });
 }
 const allMedNames = () => [...new Set(S.products.filter(p => p.cat === 'Medicamento').map(p => p.name))];
@@ -75,9 +107,10 @@ function noteForm() {
   const head = `${patientBand(p.id, n.admId ? admOf(n.admId)?.bed : '')}${n.pickPatient && !n.id ? `<div class="between"><span class="small muted">Paciente elegido</span><button class="btn ghost sm" data-act="ntChangePat">Cambiar de paciente</button></div>` : ''}
   ${n.admId && admOf(n.admId) ? `<div class="banner">Queda en el ingreso ${esc(admOf(n.admId).num)} (${esc(admOf(n.admId).bed)}) de ${admArea(admOf(n.admId)) === 'emerg' ? 'Emergencias' : 'Hospitalización'}.</div>` : ''}
   <div class="card" style="display:grid;gap:6px"><div class="between"><div><b style="font-size:17px">${esc(p.name)}</b><div class="small muted">${esc(p.code)} · ${esc(p.ci)} · ${ageTxt(p)} · ${p.sex === 'F' ? 'Femenino' : p.sex === 'M' ? 'Masculino' : 'sexo no registrado'}${p.blood ? ' · ' + esc(p.blood) : ''}</div></div>
-    <div class="seg" role="group" aria-label="Tipo de nota">${Object.entries(NOTE_TYPES).filter(([k]) => isClin() || k === 'informe').map(([k, t]) => `<button data-act="ntType" data-k="${k}" aria-pressed="${n.type === k}">${t}</button>`).join('')}</div></div>
+    <div class="seg" role="group" aria-label="Tipo de nota">${Object.entries(NOTE_TYPES).filter(([k]) => k === 'anestesia' ? canAnesReport() : (isClin() || k === 'informe')).map(([k, t]) => `<button data-act="ntType" data-k="${k}" aria-pressed="${n.type === k}">${t}</button>`).join('')}</div></div>
     ${p.allergies.length ? `<div class="banner allergy"><b>⚠ Alergias:</b>&nbsp;${esc(p.allergies.join(', '))}</div>` : '<div class="small muted">Sin alergias conocidas.</div>'}
     <div class="small muted">Antecedentes: ${esc([...p.conditions, ...p.surgeries].join(', ') || 'ninguno registrado')} · Medicación habitual: ${esc(p.meds.join(', ') || 'ninguna')}</div></div>`;
+  if (n.type === 'anestesia') return head + (isClin() ? '' : `<div class="field"><label for="nt-doc">Anestesiólogo que suscribe</label><select class="input" id="nt-doc">${anesthDocs().map(m => `<option value="${m.id}" ${m.id === n.doc ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</select></div>`) + anesForm(n);
   if (n.type === 'informe') return head + `<div class="form">
     <div class="field"><label for="nt-title">Título</label><input class="input" id="nt-title" value="${esc(n.motivo || '')}" placeholder="Informe médico"></div>
     <div class="field"><label for="nt-to">Dirigido a (opcional)</label><input class="input" id="nt-to" value="${esc(n.to || '')}" placeholder="Ej. A quien pueda interesar, seguro, empleador"></div>
@@ -107,6 +140,8 @@ function noteForm() {
 }
 function readNote() {
   const n = UI.nt; const g = id => document.getElementById(id);
+  if (g('an-proc')) { const a = n.anes = {}; ANES_KEYS.forEach(k => { a[k] = (g('an-' + k)?.value || '').trim(); }); a.emerg = !!g('an-emerg')?.checked;
+    n.motivo = a.proc ? 'Anestesia · ' + a.proc : 'Informe de anestesia'; n.actual = anesText(a); if (g('nt-doc')) n.doc = g('nt-doc').value; return n; }
   if (g('nt-free')) { n.motivo = g('nt-title').value; n.actual = g('nt-free').value; if (g('nt-to')) n.to = g('nt-to').value; if (g('nt-doc')) n.doc = g('nt-doc').value; return n; }
   if (!n.pid || !g('nt-motivo')) return n;
   n.motivo = g('nt-motivo').value; n.actual = g('nt-actual').value; n.examen = g('nt-examen').value; n.plan = g('nt-plan').value; n.indicaciones = g('nt-ind').value; n.urgent = g('nt-urg').checked;
@@ -138,13 +173,14 @@ ACTIONS.saveNote = el => {
   if (UI.nt?.id && S.hc.some(n => n.id === UI.nt.id && n.status === 'firmada')) { toast('La historia firmada solo admite adendas.'); return; }
   const n = readNote(); const sign = el.dataset.sign === '1'; const msg = document.getElementById('nt-msg');
   if (!n.pid) { msg.textContent = 'Primero elija el paciente.'; return; }
+  if (n.type === 'anestesia' && sign && (!n.anes?.proc || !n.anes?.tipo)) { msg.textContent = 'Para firmar, indique la cirugía o el procedimiento y el tipo de anestesia.'; return; }
   if (isFree(n.type)) { if (!n.actual.trim()) { msg.textContent = n.type === 'informe' ? 'Redacte el contenido del informe antes de guardarlo.' : 'Escribe la nota antes de guardarla.'; return; } }
   else {
     if (sign && !n.motivo.trim()) { msg.textContent = `Para firmar, escriba al menos el ${n.type === 'ingreso' ? 'motivo de ingreso' : n.type === 'operatoria' ? 'nombre de la cirugía' : 'motivo de consulta'}.`; return; }
     if (sign && !n.dx.some(d => d.trim())) { msg.textContent = 'Para firmar, indica al menos un diagnóstico.'; return; }
   }
   if (sign && typeof credsBlockSign === 'function' && credsBlockSign()) return;
-  const now = nowStamp(); const data = { pid: n.pid, apptId: n.apptId, admId: n.admId || null, type: n.type, motivo: n.motivo.trim(), actual: n.actual.trim(), vitals: n.vitals, examen: n.examen.trim(), dx: n.dx.map(d => d.trim()).filter(Boolean), plan: n.plan.trim(), indicaciones: n.indicaciones.trim(), recipe: n.recipe.filter(r => r.med), tests: n.tests, urgent: n.urgent, to: (n.to || '').trim(), doc: n.doc || ME() };
+  const now = nowStamp(); const data = { anes: n.type === 'anestesia' ? n.anes || null : undefined, pid: n.pid, apptId: n.apptId, admId: n.admId || null, type: n.type, motivo: n.motivo.trim(), actual: n.actual.trim(), vitals: n.vitals, examen: n.examen.trim(), dx: n.dx.map(d => d.trim()).filter(Boolean), plan: n.plan.trim(), indicaciones: n.indicaciones.trim(), recipe: n.recipe.filter(r => r.med), tests: n.tests, urgent: n.urgent, to: (n.to || '').trim(), doc: n.doc || ME() };
   let rec = n.id && S.hc.find(x => x.id === n.id);
   if (!rec) { rec = { id: uid('hc'), date: dAt(0), time: now.slice(11), status: 'borrador', addenda: [], by: actor() }; S.hc.unshift(rec); }
   Object.assign(rec, data);
@@ -160,6 +196,7 @@ ACTIONS.saveNote = el => {
 ACTIONS.openNote = el => {
   if (!can('pac.historia') && !can('hosp.clinico')) { toast('No tiene acceso a la historia clínica'); return; }
   const n = S.hc.find(x => x.id === el.dataset.id); if (!n) return;
+  if (!clinVisible(n.pid) && n.doc !== myDoc()) { toast(CLIN_LOCKED_MSG); return; }
   if (n.consultId) { const c = consultOf(n.consultId); if (c && consultAccessible(c)) { closeSheet(); go('consultas', c.id); } return; }
   if (n.status === 'borrador') {
     if (n.doc !== ME() && role() !== 'admin') { toast('Solo el autor puede editar un borrador'); return; }
