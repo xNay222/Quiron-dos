@@ -30,7 +30,7 @@ const zoneOf = a => admArea(a) === 'emerg' ? 'emerg' : isUciBed(a.bed) ? 'uci' :
 const zoneBeds = z => BEDS.filter(b => z === 'emerg' ? b.area === 'emerg' : b.area === 'hosp' && (z === 'uci') === (b.type === 'UCI')).length;
 const zoneAdms = z => S.admissions.filter(a => a.status === 'ingresado' && zoneOf(a) === z).sort((x, y) => x.bed.localeCompare(y.bed, 'es', { numeric: true }));
 function occupiedRows(z) {
-  return zoneAdms(z).map(a => { const p = pat(a.pid); const late = nurseDue([a.id]).filter(i => indState(i).k === 'late').length;
+  return zoneAdms(z).map(a => { const p = pat(a.pid) || { name: 'Paciente no disponible', allergies: [] }; const late = nurseDue([a.id]).filter(i => indState(i).k === 'late').length;
     const pend = pendingMedOrders().filter(o => o.admId === a.id).length;
     return `<button class="row" data-go="${areaRoute(a)}" data-param="${a.id}"><span class="avatar" style="border-radius:10px;width:auto;min-width:44px;padding:0 6px;font-size:12px">${esc(a.bed)}</span>
       <div class="grow"><div class="t">${esc(p.name)}</div><div class="s">Día ${dayNumber(a)} · ${esc(a.dx)} · ${esc(med(a.doc)?.name || '')}</div></div>
