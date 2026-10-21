@@ -24,7 +24,7 @@ const NUBE_COMPARTIDAS = new Set(['fondos_mov']);
 const NUBE_LOCAL = new Set(['session', 'users', 'savedAt', 'audit', 'backups', 'backupKey', 'backupCfg', 'user', ...Object.keys(NUBE_TABLAS)]);
 const NUBE_TASA = new Set(['rate', 'rateDate', 'rateSource', 'rates', 'rateEUR', 'ratesEUR']);
 
-const NUBE = { on: false, sb: null, me: null, acceso: {}, snap: {}, timer: null, busy: false, again: false, auditN: 0, renderT: null, urls: new Map() };
+const NUBE = { on: false, loaded: false, sb: null, me: null, acceso: {}, snap: {}, timer: null, busy: false, again: false, auditN: 0, renderT: null, urls: new Map() };
 try {
   const forced = localStorage.getItem('quiron-nube') === '1';   // para probar contra la nube desde este computador
   NUBE.on = typeof location !== 'undefined' && /^https?:$/.test(location.protocol) && (forced || (location.protocol === 'https:' && NUBE_CFG.hosts.some(h => h.test(location.hostname))));
@@ -105,15 +105,17 @@ async function nubeLoad() {
   }
   NUBE.auditN = base.audit.length;
   S = base; migrate();
+  NUBE.loaded = true;   // desde aquí se puede guardar: S ya son los datos reales de la nube
 }
 
 // ---------------------------------------------------------------- Guardado (solo lo que cambió)
 function nubeSave() {
-  if (!NUBE.me) return true;
+  if (!NUBE.me || !NUBE.loaded) return true;   // antes de cargar, S no son datos reales (nunca se suben)
   clearTimeout(NUBE.timer); NUBE.timer = setTimeout(nubePush, 400);
   return true;
 }
 async function nubePush() {
+  if (!NUBE.loaded || !NUBE.me) return;   // nunca se sube nada que no venga de la nube
   if (NUBE.busy) { NUBE.again = true; return; }
   NUBE.busy = true; const sb = NUBE.sb; const errors = [];
   try {
@@ -138,6 +140,8 @@ async function nubePush() {
       }
     }
     for (const [t, ids] of Object.entries(dels)) {
+      const total = Object.keys(NUBE.snap[t] || {}).length;
+      if (ids.length > 10 && ids.length > total / 2) { errors.push(t + ': se intentó borrar ' + ids.length + ' de ' + total + ' (detenido)'); nubeErr('Freno de borrado masivo: ' + t + ' ' + ids.length + '/' + total, 'nubePush'); continue; }
       if (!nubeCan(t, 'escriben')) { ids.forEach(id => delete NUBE.snap[t][id]); continue; }
       const { error } = await sb.from(t).update({ borrado: true }).in('id', ids);
       if (error) errors.push(t + ': ' + error.message); else ids.forEach(id => delete NUBE.snap[t][id]);
@@ -258,7 +262,7 @@ function nubeInstall() {
   };
   ACTIONS.authInvite = () => auMsg('Abra el enlace de invitación que le envió la administración.');
   ACTIONS.authForgot = () => auMsg('Pida a la administración un enlace nuevo para crear su contraseña (Usuarios › su nombre).');
-  ACTIONS.logout = async () => { const u = meUser(); if (u) { log('Cierre de sesión', u.email); await nubePush(); } await NUBE.sb.auth.signOut(); NUBE.me = null; S = nubeBlank(); showAuth('login'); };
+  ACTIONS.logout = async () => { const u = meUser(); if (u) { log('Cierre de sesión', u.email); await nubePush(); } await NUBE.sb.auth.signOut(); NUBE.loaded = false; NUBE.me = null; S = nubeBlank(); showAuth('login'); };
   ACTIONS.myPassSave = async () => {
     const u = meUser(); const m = document.getElementById('mc-msg');
     const chk = await NUBE.sb.auth.signInWithPassword({ email: u.email, password: val('mc-old') });
@@ -340,6 +344,6 @@ ACTIONS.nubeImportDo = async el => {
   document.querySelectorAll('[data-act="close"]').forEach(b => b.disabled = false); UI.nubeImp = null; render();
 };
 
-if (NUBE.on) { nubeInstall();
+if (NUBE.on) { S = nubeBlank(); nubeInstall();
   const aj = VIEWS.ajustes; VIEWS.ajustes = () => { const h = aj(), i = h.indexOf('</div></div>') + 12; return i > 11 ? h.slice(0, i) + nubeImportCard() + h.slice(i) : nubeImportCard() + h; };   // justo debajo del título
 }
