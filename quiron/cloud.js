@@ -46,7 +46,10 @@ const nubeMsg = e => { const m = String(e?.message || e || ''); return /fetch|ne
 // ---------------------------------------------------------------- Arranque
 async function nubeBoot() {
   try { await nubeLib(); } catch (e) { showAuth('login', e.message); return; }
-  NUBE.sb = window.supabase.createClient(NUBE_CFG.url, NUBE_CFG.key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+  // lock sin bloqueo: en el iPhone (app agregada a la pantalla de inicio) el candado interno de Supabase puede quedarse
+  // esperando al volver de segundo plano, y entonces nada carga. Con una sola pestaña no hace falta ese candado.
+  NUBE.sb = window.supabase.createClient(NUBE_CFG.url, NUBE_CFG.key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, lock: (name, timeout, fn) => fn() } });
+  nubeErrFlush();
   const kind = /type=(invite|recovery)/.exec(location.hash || '')?.[1];   // llegó desde un enlace de invitación o de nueva contraseña
   const { data: { session } } = await NUBE.sb.auth.getSession();
   if (!session) { S = nubeBlank(); showAuth('login'); return; }
@@ -64,10 +67,12 @@ const nubeUser = p => ({ ...(p.datos || {}), id: p.id, name: p.nombre, email: p.
 
 async function nubeEnter() {
   const box = document.getElementById('auth'); if (box) { box.hidden = false; box.innerHTML = '<div class="auth-page" role="main" style="display:grid;place-items:center;min-height:100vh"><div class="small muted">Cargando los datos de la clínica…</div></div>'; }
-  try { await nubeLoad(); } catch (e) { showAuth('login', 'No se pudieron cargar los datos: ' + nubeMsg(e)); return; }
+  const t0 = Date.now();
+  try { await nubeLoad(); } catch (e) { nubeErr('Carga de datos: ' + nubeMsg(e), 'nubeLoad'); showAuth('login', 'No se pudieron cargar los datos: ' + nubeMsg(e)); return; }
+  if (Date.now() - t0 > 15000) nubeErr('Carga lenta: ' + Math.round((Date.now() - t0) / 1000) + ' s', 'nubeLoad');
   const u = S.users.find(x => x.id === NUBE.me.id); applyUser(u); idleMark(true);
   nubeRealtime();
-  enterApp(); render();
+  enterApp(); render(); nubeErrFlush();
 }
 
 // ---------------------------------------------------------------- Carga
@@ -209,6 +214,25 @@ const nubeFn = async (name, body) => {
   if (error) { let m = error.message; try { m = (await error.context.json()).error || m; } catch (e) {} throw new Error(m); }
   return data;
 };
+// ---------------------------------------------------------------- Registro de errores (tabla "errores", solo la lee Administración)
+// Mensaje técnico, archivo:línea, pantalla y navegador; nunca datos de pacientes. Como máximo 15 por sesión y sin repetir.
+const NUBE_ERR = { queue: [], seen: new Set(), sent: 0 };
+function nubeErr(msg, where = '') {
+  msg = String(msg || 'error').slice(0, 500); const k = msg + where; if (NUBE_ERR.seen.has(k) || NUBE_ERR.sent + NUBE_ERR.queue.length >= 15) return; NUBE_ERR.seen.add(k);
+  NUBE_ERR.queue.push({ mensaje: msg, donde: String(where).slice(0, 200), ruta: (typeof route === 'string' ? route : '') + (window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone ? ' · app instalada' : ''), navegador: navigator.userAgent.slice(0, 300) });
+  nubeErrFlush();
+}
+async function nubeErrFlush() {
+  if (!NUBE.sb || !NUBE.me || !NUBE_ERR.queue.length) return;
+  const rows = NUBE_ERR.queue.splice(0).map(r => ({ ...r, usuario: NUBE.me.id }));
+  try { await NUBE.sb.from('errores').insert(rows); NUBE_ERR.sent += rows.length; } catch (e) {}
+}
+if (NUBE.on) {
+  addEventListener('error', e => nubeErr(e.message, (e.filename || '').split('/').pop() + ':' + e.lineno));
+  addEventListener('unhandledrejection', e => nubeErr('Promesa: ' + (e.reason?.message || e.reason), (e.reason?.stack || '').split('\n')[1] || ''));
+  // La pantalla se queda en blanco si se dibuja sin sesión: queda registrado para saber cuándo pasa
+  setTimeout(() => { const r0 = render; render = function () { if (!S?.session?.uid && document.querySelector('.app') && !document.querySelector('.app').hidden) nubeErr('Pantalla sin sesión', 'render'); return r0.apply(this, arguments); }; }, 0);
+}
 function nubeInstall() {
   save = nubeSave;
   storeFile = nubeStore;
