@@ -1572,6 +1572,21 @@ html.motion-off *,html.motion-off *::before,html.motion-off *::after{animation:n
 :root[data-theme="verde"]{--busy:#e9d58b}
 @keyframes busyPulse{50%{opacity:.6}}
 html.motion-off .is-busy,html.motion-lite .is-busy{animation:none}
+/* Mensajes de error: se quedan hasta tocar "Entendido" */
+.toast.toast-error{display:flex;width:max-content;align-items:center;gap:12px;border-radius:16px;max-width:min(92vw,560px);box-shadow:inset 0 0 0 2px var(--bad),0 8px 30px rgba(0,0,0,.18)}
+.toast-ok{border:0;border-radius:99px;padding:6px 14px;font:inherit;font-weight:600;background:var(--bad);color:#fff;cursor:pointer;flex:none}
+/* Modo sencillo */
+.simple-tasks{margin-bottom:22px}
+.simple-tasks h2{font-size:24px;margin:0 0 12px}
+.simple-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:12px}
+.simple-task{display:flex;align-items:center;gap:14px;min-height:88px;padding:16px 20px;border:0;border-radius:18px;background:var(--accent-soft);color:var(--fg);font:inherit;font-size:19px;font-weight:600;text-align:left;cursor:pointer}
+.simple-task svg{width:30px;height:30px;flex:none;color:var(--accent)}
+.simple-task:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+html.simple body{font-size:17px}
+html.simple .btn,html.simple .nav,html.simple .input,html.simple select.input{font-size:16px}
+html.simple .btn{padding:11px 18px}
+html.simple .field label,html.simple .row .s,html.simple .small{font-size:15px}
+html.simple .head p,html.simple .sec > .small.muted{display:none}
 </style>
 </head>
 <body>

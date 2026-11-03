@@ -274,7 +274,7 @@ function render() {
   renderSide();
   renderTopbar();
   const v = VIEWS[route] || VIEWS.inicio; const main = document.getElementById('main');
-  main.innerHTML = (typeof credsAlert === 'function' ? credsAlert() : '') + v(param);
+  main.innerHTML = (typeof credsAlert === 'function' ? credsAlert() : '') + simpleTasks() + v(param);
   presentContent(main);
   const key = route + '|' + (param || '');
   if (key !== lastView || animNext) {
@@ -477,17 +477,23 @@ function refreshSheet(body, footer) {
   if (b) presentContent(b);
 }
 
+// Mensajes: los de confirmación duran 6 s (tiempo para leerlos con calma); los de error se quedan hasta tocar "Entendido"
 let toastT;
-function toast(msg) {
+const toastIsError = m => /^(no |escrib[ae]|eli[gj][ae]|indi(que|ca) |faltan? |confirme|debe |revise|registre |verifique|suba |antes de|error|primero|seleccione|agreg(ue|a) |solo |todavía no|aún no|ese |esta consulta ya|esta orden aún|este usuario nunca|la hora|el archivo|el navegador bloqueó|su usuario no puede)|no se pudo|no se guardó|no tiene (permiso|acceso)|obligatori|no es válid|no está|debe ser|ya (existe|fue|tiene|hay|se registraron|es de)|no corresponde|demasiado grande|necesita|coincide|solo admite|solo las hace|corresponde a otro|\b(las|los|la) [^.]{1,30} (las|los|la) (programa|agenda|carga|deja|administra)\b/i.test(String(m).trim());
+function toast(msg, { error } = {}) {
+  if (error === undefined) error = toastIsError(msg);
   let t = document.querySelector('.toast');
-  if (!t) { t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status'); document.body.appendChild(t); }
+  if (!t) { t = document.createElement('div'); t.className = 'toast'; document.body.appendChild(t); }
+  t.setAttribute('role', error ? 'alert' : 'status'); t.classList.toggle('toast-error', error);
   const sh = document.querySelector('#layer .scrim:not(.closing):not(.closing-drag) .sheet');
   if (sh) {
     let m = sh.querySelector('.sheet-msg'); if (!m) { m = document.createElement('div'); m.className = 'sheet-msg'; m.setAttribute('role', 'alert'); (sh.querySelector('footer') || sh.querySelector('.body')).before(m); }
     m.textContent = msg; m.classList.remove('pop'); void m.offsetWidth; m.classList.add('pop');
   }
   t.textContent = msg; t.classList.remove('out', 'pop'); void t.offsetWidth; t.classList.add('pop'); clearTimeout(toastT);
-  toastT = setTimeout(() => { t.classList.add('out'); toastT = setTimeout(() => t.remove(), 220); }, 2600);
+  const hide = () => { clearTimeout(toastT); t.classList.add('out'); toastT = setTimeout(() => t.remove(), 220); };
+  if (error) { const ok = document.createElement('button'); ok.type = 'button'; ok.className = 'toast-ok'; ok.textContent = 'Entendido'; ok.addEventListener('click', hide); t.append(ok); return; }
+  toastT = setTimeout(hide, 6000);
 }
 
 async function copyText(text, okMsg) {
@@ -709,6 +715,42 @@ const motionCard = () => { const p = motionPref(); const opts = [['auto', `Autom
   return `<div class="card" style="margin-bottom:16px"><div class="between" style="gap:12px;flex-wrap:wrap"><div><h2 style="margin:0">Animaciones</h2><div class="small muted">Solo para este equipo. "Ligeras" quita los desenfoques y efectos continuos para que las computadoras viejas vayan fluidas.</div><div class="small muted" style="margin-top:4px">Detectado: ${motionWhy()}</div></div>
     <div class="seg" role="group" aria-label="Animaciones">${opts.map(([k, l]) => `<button data-act="setMotion" data-k="${k}" aria-pressed="${p === k}">${l}</button>`).join('')}</div></div></div>`; };
 ACTIONS.setMotion = el => { try { localStorage.setItem(MOTION_KEY, el.dataset.k); } catch (e) {} applyMotion(); render(); toast(el.dataset.k === 'auto' ? 'Animaciones automáticas' : 'Animaciones: ' + el.textContent.toLowerCase()); };
+
+// ---------- Modo sencillo (por equipo): letra más grande, sin frases de ayuda y "¿Qué quiere hacer?" al entrar ----------
+const SIMPLE_KEY = 'quiron-sencillo';
+const simpleOn = () => { try { return localStorage.getItem(SIMPLE_KEY) === '1'; } catch (e) { return false; } };
+function applySimple() { const h = document.documentElement; if (typeof h?.classList?.toggle === 'function') h.classList.toggle('simple', simpleOn()); }
+applySimple();
+// Las tareas de todos los días de cada rol: [texto, 'go' sección | 'act' acción, destino, estado de la pantalla]
+const SIMPLE_SEARCH = ['Buscar un paciente', 'act', 'globalSearch'];
+const SIMPLE_TASKS = {
+  recepcion: [['Agendar una cita', 'act', 'newAppt'], ['Registrar un paciente nuevo', 'act', 'newPatient'], ['Ver las consultas de hoy', 'go', 'consultas'], SIMPLE_SEARCH],
+  enfermeria: [['Mis pacientes y su medicación', 'go', 'hospitalizacion'], ['Registrar una llegada (triaje)', 'act', 'triNew'], ['Emergencias', 'go', 'emergencias'], SIMPLE_SEARCH],
+  enfermeria_plus: [['Mis pacientes y su medicación', 'go', 'hospitalizacion'], ['Registrar una llegada (triaje)', 'act', 'triNew'], ['Cirugías de hoy', 'go', 'quirofano'], SIMPLE_SEARCH],
+  laboratorio: [['Exámenes por hacer', 'go', 'examenes', { exTab: 'pendientes' }], ['Examen para un paciente que llega', 'act', 'newExam'], SIMPLE_SEARCH],
+  imagen: [['Subir una radiografía o estudio', 'act', 'imageUpload'], ['Estudios por hacer', 'go', 'examenes'], SIMPLE_SEARCH],
+  almacen: [['Entregar lo que pidieron', 'go', 'inventario', { invTab: 'ordenes' }], ['Sacar algo sin orden', 'act', 'extraReq'], ['Ver los productos', 'go', 'inventario', { invTab: 'productos' }], ['Cirugías de hoy', 'go', 'quirofano']],
+  medico: [['Nueva consulta', 'act', 'ccNewMenu'], ['Mis pacientes hospitalizados', 'go', 'hospitalizacion'], ['Cirugías de hoy', 'go', 'quirofano'], SIMPLE_SEARCH],
+  residente: [['Nueva consulta', 'act', 'ccNewMenu'], ['Pacientes hospitalizados', 'go', 'hospitalizacion'], ['Emergencias', 'go', 'emergencias'], SIMPLE_SEARCH],
+  anestesiologo: [['Cirugías de hoy', 'go', 'quirofano'], ['Mi consulta', 'go', 'consultorio'], ['Pacientes hospitalizados', 'go', 'hospitalizacion'], SIMPLE_SEARCH],
+};
+const SIMPLE_ICON = { triNew: 'emergencias', newAppt: 'agenda', newPatient: 'pacientes', newExam: 'examenes', imageUpload: 'examenes', extraReq: 'inventario', ccNewMenu: 'consultas', globalSearch: 'buscar' };
+const simpleList = () => (SIMPLE_TASKS[role()] || []).filter(([, kind, to]) => kind === 'go' ? canSee(to) : !!ACTIONS[to] && (to !== 'globalSearch' || canSee('pacientes')));
+// Solo en la primera pantalla del menú y con el modo sencillo activo
+function simpleTasks() {
+  if (!simpleOn() || param || !NAV_ITEMS()[0] || route !== NAV_ITEMS()[0][0]) return '';
+  const list = simpleList(); if (!list.length) return '';
+  const btn = ([label, kind, to], i) => '<button class="simple-task" data-act="simpleTask" data-i="' + i + '">' + icon(ICONS[kind === 'go' ? to : SIMPLE_ICON[to]] ? (kind === 'go' ? to : SIMPLE_ICON[to]) : 'buscar') + '<span>' + esc(label) + '</span></button>';
+  return '<section class="simple-tasks" aria-labelledby="simple-title"><h2 id="simple-title">¿Qué quiere hacer?</h2><div class="simple-grid">' + list.map(btn).join('') + '</div></section>';
+}
+ACTIONS.simpleTask = el => {
+  const t = simpleList()[+el.dataset.i]; if (!t) return; const [, kind, to, state] = t;
+  if (kind === 'go') { Object.assign(UI, state || {}); go(to); return; }
+  ACTIONS[to]({ dataset: {} });
+};
+const simpleCard = () => `<div class="card" style="margin-bottom:16px"><div class="between" style="gap:12px;flex-wrap:wrap"><div><h2 style="margin:0">Modo sencillo</h2><div class="small muted">Letra más grande, menos textos de ayuda y, al entrar, botones grandes con lo que más se hace. Solo en este equipo.</div></div>
+  <div class="seg" role="group" aria-label="Modo sencillo"><button data-act="setSimple" data-k="0" aria-pressed="${!simpleOn()}">Normal</button><button data-act="setSimple" data-k="1" aria-pressed="${simpleOn()}">Sencillo</button></div></div></div>`;
+ACTIONS.setSimple = el => { try { localStorage.setItem(SIMPLE_KEY, el.dataset.k === '1' ? '1' : '0'); } catch (e) {} applySimple(); render(); toast(simpleOn() ? 'Modo sencillo activado en este equipo' : 'Modo normal'); };
 
 // ---------- Ajustes: estado de la IA para leer fotos ----------
 let IA_STATE = 'comprobando';

@@ -195,14 +195,14 @@ const toCSV = rows => rows.map(r => r.map(v => { const s = String(v ?? ''); retu
 const appearanceCard = () => `<div class="card" style="margin-bottom:16px"><div class="between" style="gap:12px;flex-wrap:wrap"><div><h2 style="margin:0">Apariencia</h2><div class="small muted">Esmeralda (predeterminado), Día (fondo blanco) o Noche (fondo negro). Se guarda en este equipo.</div></div>
     ${themeSeg('setTheme')}</div></div>`;
 const personalSettings = () => { const u = meUser();
-  return header('Ajustes', 'Apariencia y rendimiento en este equipo, y su cuenta') + appearanceCard() + motionCard() +
+  return header('Ajustes', 'Apariencia y rendimiento en este equipo, y su cuenta') + appearanceCard() + simpleCard() + motionCard() +
   `<div class="card"><div class="between" style="gap:12px;flex-wrap:wrap"><div><h2 style="margin:0">Mi cuenta</h2><div class="small muted">${esc(u?.name || '')} · ${esc(roleLabel(role()))}. Contraseña${CREDS_REQUIRED.includes(role()) ? ', datos profesionales' : ''} y cierre de sesión.</div></div>
     <button class="btn" data-act="switchUser">Abrir mi cuenta</button></div></div>`; };
 VIEWS.ajustes = () => {
   if (!can('*')) return personalSettings();
   const c = S.backupCfg; const th = getTheme(); const cl = S.clinic;
   return header('Ajustes', 'Apariencia, tasa, datos de la clínica, respaldos e historial') +
-  appearanceCard() + `
+  appearanceCard() + simpleCard() + `
   ${motionCard()}
   ${iaCard()}
   <div class="grid g2">
@@ -261,7 +261,7 @@ async function fetchBCV() {
 }
 async function autoRate(manual) {
   try { const j = await fetchBCV(); const changed = applyRate(); save();
-    if (manual || changed) { render(); toast(changed ? `Tasa BCV: ${fmt(S.rate, 'VES')} (fecha valor ${fdate(S.rateDate)})` : `La tasa ya está al día: ${fmt(S.rate, 'VES')}`); }
+    if (manual || changed) { render(); if (manual || can('*')) toast(changed ? `Tasa BCV: ${fmt(S.rate, 'VES')} (fecha valor ${fdate(S.rateDate)})` : `La tasa ya está al día: ${fmt(S.rate, 'VES')}`); }
     return j;
   } catch (e) { if (applyRate()) { save(); render(); } if (manual) throw e; }
 }

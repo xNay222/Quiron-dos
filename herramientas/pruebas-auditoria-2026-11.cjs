@@ -57,4 +57,16 @@ assert.ok(cloud.includes("nubeAll('contadores'")); checks.push('Nube: la numerac
 const app = fs.readFileSync(path.join(dir,'app.js'),'utf8'); assert.ok(app.lastIndexOf('(function start()') > app.indexOf('const motionCard')); checks.push('Arranque al final de app.js');
 const csp = JSON.parse(fs.readFileSync(path.join(dir,'vercel.json'),'utf8')).headers[0].headers[0].value;
 assert.ok(!/https:\/\/(unpkg\.com|cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com)[ ;]/.test(csp)); checks.push('Seguridad: scripts externos limitados a las librerías que se usan');
+test('Mensajes: los errores se quedan hasta "Entendido"; las confirmaciones se van solas', `
+  for (const m of ['Escriba el motivo de consulta.','No se pudo subir el documento.','Elige la fecha','Indique el examen.','La cita la agenda recepción o el médico que recibe al paciente.','Los kits de cirugía los administra Administración','Un cambio no se guardó en la nube porque su usuario no tiene permiso para modificarlo.','Ese examen ya existe','La tasa debe ser mayor que cero']) assert.ok(toastIsError(m), m);
+  for (const m of ['Guardado','Faltante cerrado','Registrado','Paciente guardado','Informe redactado a partir de sus respuestas. Revíselo antes de firmar.','Tratamiento anterior copiado. Revise dosis y duración.','Alta registrada · Administración hará la cuenta']) assert.ok(!toastIsError(m), m);`);
+test('Modo sencillo: "¿Qué quiere hacer?" con tareas que existen y que cada rol puede usar', `
+  localStorage.setItem(SIMPLE_KEY,'1'); assert.equal(simpleOn(),true); const saved=S.session;
+  for (const r of Object.keys(ROLES)) { if (r==='admin') continue; S.session={uid:'u-'+r,role:r,doc:DOC_ROLES.includes(r)?S.doctors[0].id:null,name:'P'};
+    route=NAV_ITEMS()[0][0]; param=null; const h=simpleTasks(); const list=simpleList();
+    assert.ok(list.length>=3, r+' tiene tareas'); assert.ok(h.includes('¿Qué quiere hacer?'));
+    for (const [label,kind,to] of list) assert.ok(kind==='go'?canSee(to):!!ACTIONS[to], r+' '+label);
+    route=NAV_ITEMS()[1][0]; assert.equal(simpleTasks(),'','solo en la primera pantalla'); }
+  S.session={uid:'u-l',role:'laboratorio',doc:null,name:'L'}; route='examenes'; window.scrollTo=()=>{}; ACTIONS.simpleTask({dataset:{i:'0'}}); assert.equal(UI.exTab,'pendientes');
+  S.session=saved; localStorage.setItem(SIMPLE_KEY,'0'); assert.equal(simpleTasks(),''); assert.ok(VIEWS.ajustes().includes('Modo sencillo'));`);
 console.log(checks.map(n=>'OK '+n).join('\n'));console.log(checks.length+' grupos de pruebas correctos.');
