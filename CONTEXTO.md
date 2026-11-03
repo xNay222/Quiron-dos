@@ -262,8 +262,8 @@ Descartado: estilo "Tablero de turno" (clínico sobrio). Trabajo con Codex para 
 4. Tarjeta "Seguridad" para Administración: intentos de entrada fallidos, cuentas desactivadas que intentan entrar, picos de uso de la IA.
 
 ## Interfaz Cristal (03/11/2026)
-- Única interfaz: clara, azul y blanco, con vidrio (aproximación web, backdrop-filter). Estilos en quiron/cristal.css (va después del <style> de index.html).
-  html.cristal + data-theme="light" como base. Sin selector de temas (getTheme() siempre 'cristal').
+- Única interfaz: cristal ahumado con texto blanco sobre la foto nítida del quirófano, acento azul (aproximación web, backdrop-filter). Estilos en quiron/cristal.css (va después del <style> de index.html).
+  html.cristal + data-theme="dark" como base. Píldora de secciones arriba (top-tabs), dock estrecho a la izquierda, saludo y gráfico semanal en Inicio. Sin selector de temas (getTheme() siempre 'cristal').
 - La interfaz anterior (Esmeralda, Día, Noche) está en la etiqueta de git `interfaz-v1`.
 - Menú: dock vertical flotante en computadora (iconos; el nombre sale en el title), barra flotante abajo en el teléfono.
   Tarjetas con material blanco denso; el vidrio más transparente solo en lo que flota.

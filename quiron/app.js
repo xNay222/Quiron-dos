@@ -132,7 +132,10 @@ function shellNav(n, cls = '') {
 function renderTopbar() {
   const bar = document.getElementById('global-topbar');
   const who = S.session?.name || ROLES[role()].name;
-  bar.innerHTML = `<button class="global-search-button" id="global-search-button" data-act="globalSearch" aria-label="Buscar paciente" title="Buscar paciente Ctrl K" aria-keyshortcuts="Control+k Meta+k /">${icon('buscar')}<span>Buscar paciente</span><kbd>Ctrl K</kbd></button>${THEMES.length > 1 ? '<button class="shell-icon-button" id="theme-button" data-act="rotateTheme"></button>' : ''}<button class="shell-icon-button shell-avatar" data-act="switchUser" aria-label="Mi cuenta: ${esc(who)}" title="Mi cuenta">${esc(initials(who.replace(/^Dra?\. /, '')))}</button>`;
+  // Píldora central con las secciones principales del rol (las de todos los días; el dock tiene todas)
+  const tabs = NAV_ITEMS().filter(n => !['ajustes', 'tutorial'].includes(n[0])).slice(0, 4);
+  const top = `<nav class="top-tabs" aria-label="Secciones principales">${tabs.map(n => `<button class="top-tab" data-go="${n[0]}" ${route === n[0] ? 'aria-current="page"' : ''}>${icon(n[0])}<span>${esc(n[1])}</span></button>`).join('')}</nav>`;
+  bar.innerHTML = top + `<button class="global-search-button" id="global-search-button" data-act="globalSearch" aria-label="Buscar paciente" title="Buscar paciente Ctrl K" aria-keyshortcuts="Control+k Meta+k /">${icon('buscar')}<span>Buscar paciente</span><kbd>Ctrl K</kbd></button>${THEMES.length > 1 ? '<button class="shell-icon-button" id="theme-button" data-act="rotateTheme"></button>' : ''}<button class="shell-icon-button shell-avatar" data-act="switchUser" aria-label="Mi cuenta: ${esc(who)}" title="Mi cuenta">${esc(initials(who.replace(/^Dra?\. /, '')))}</button>`;
   updateThemeButton();
 }
 function updateThemeButton() {
@@ -629,8 +632,8 @@ async function localAI() {
 const THEME_KEY = 'quiron-theme';
 // Una sola interfaz: Cristal (la anterior, con Esmeralda, Día y Noche, quedó guardada en la etiqueta de git interfaz-v1)
 function getTheme() { return 'cristal'; }
-// Cristal: la base clara (data-theme="light") con la capa de vidrio y el fondo de cristal.css
-function applyTheme(t) { const h = document.documentElement; h.classList?.toggle?.('cristal', t === 'cristal'); if (t === 'auto') h.removeAttribute('data-theme'); else h.setAttribute('data-theme', t === 'cristal' ? 'light' : t); if (t === 'cristal') cristalPhoto(); }
+// Cristal: la base oscura (data-theme="dark") con el vidrio ahumado y la foto de fondo de cristal.css
+function applyTheme(t) { const h = document.documentElement; h.classList?.toggle?.('cristal', t === 'cristal'); if (t === 'auto') h.removeAttribute('data-theme'); else h.setAttribute('data-theme', t === 'cristal' ? 'dark' : t); if (t === 'cristal') cristalPhoto(); }
 // Si hay una foto de la clínica en quiron/fondo-cristal.jpg, el tema Cristal la usa de fondo (si no, el paisaje dibujado)
 function cristalPhoto() { if (cristalPhoto.done || typeof Image !== 'function') return; cristalPhoto.done = true; const im = new Image(); im.onload = () => document.documentElement.style.setProperty('--cr-photo', 'url(fondo-cristal.jpg)'); im.src = 'fondo-cristal.jpg'; }
 const THEMES = [['cristal', 'Cristal']];   // Esmeralda: negro con verde, como el diseño de referencia

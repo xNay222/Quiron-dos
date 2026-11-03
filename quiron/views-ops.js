@@ -37,6 +37,19 @@ function occupiedRows(z) {
       <div class="hstack" style="flex:none;justify-content:flex-end">${p.allergies.length ? `<span class="pill allergy">Alergias: ${esc(p.allergies.join(', '))}</span>` : ''}${late ? `<span class="pill bad">${late} dosis atrasada${late > 1 ? 's' : ''}</span>` : ''}${pend ? '<span class="pill warn">Medicación por despachar</span>' : ''}</div></button>`; }).join('');
 }
 const listJoin = xs => xs.length < 2 ? xs.join('') : xs.slice(0, -1).join(', ') + ' y ' + xs.at(-1);
+// Atenciones de los últimos 7 días (consultas y cirugías no canceladas), con hoy resaltado, y la guardia de hoy al lado
+function weekChart(g) {
+  const days = [...Array(7)].map((_, i) => dAt(i - 6));
+  const counts = days.map(d => S.appts.filter(a => a.date === d && isActive(a)).length);
+  const max = Math.max(1, ...counts); const total = counts.reduce((s, n) => s + n, 0);
+  const bars = days.map((d, i) => { const wd = new Date(d + 'T00:00').toLocaleDateString('es-VE', { weekday: 'short' }).replace('.', '');
+    return `<div class="wk-col${i === 6 ? ' is-today' : ''}"><span class="wk-n">${counts[i]}</span><div class="wk-bar" style="height:${Math.max(6, Math.round(counts[i] / max * 100))}%"></div><span class="wk-d">${i === 6 ? 'hoy' : esc(wd)}</span></div>`; }).join('');
+  return `<div class="wk-row"><section class="card wk-card" aria-label="Atenciones de la semana"><div class="between"><div><h2 style="margin:0">Atenciones de la semana</h2><div class="small muted">${total} consultas y cirugías en 7 días</div></div><button class="btn sm" data-go="agenda">Ver agenda</button></div>
+    <div class="wk-chart" role="img" aria-label="${days.map((d, i) => fdate(d) + ': ' + counts[i]).join(', ')}">${bars}</div></section>
+    <section class="card wk-duty" aria-label="Guardia de hoy"><h2 style="margin:0 0 12px">Guardia de hoy</h2>
+      <div class="wk-person"><span class="avatar">${g.doc ? initials((med(g.doc)?.name || '').replace(/^Dra?\. /, '')) : '?'}</span><div><div class="small muted">Médico</div><b>${esc(med(g.doc)?.name || 'Sin asignar')}</b></div></div>
+      <div class="wk-person"><span class="avatar">${g.nurse ? initials(g.nurse) : '?'}</span><div><div class="small muted">Enfermera</div><b>${esc(g.nurse || 'Sin asignar')}</b></div></div></section></div>`;
+}
 VIEWS.inicio = () => {
   const today = dAt(0); const now = nowMin(); const hour = new Date().getHours();
   const occ = z => zoneAdms(z).length; const anyIn = occ('hosp') + occ('uci') + occ('emerg');
@@ -71,7 +84,7 @@ VIEWS.inicio = () => {
   if (due) medParts.push(hi(`${due} dosis atrasada${due > 1 ? 's' : ''}${lateBeds.length ? ` en ${listJoin(lateBeds)}` : ''}`, 'bad'));
   if (orders) medParts.push(hi(`${orders} solicitud${orders > 1 ? 'es' : ''} de medicación por despachar`, 'bad'));
   const medTxt = medParts.length ? ` Hay ${listJoin(medParts)}.` : anyIn ? ' La medicación está al día.' : '';
-  const tile = (go, label, value, sub, cls = '') => `<button class="card kpi tile ${cls}" data-go="${go}"><div class="lab">${label}</div><div class="val">${value}</div><div class="sub">${sub}</div></button>`;
+  const tile = (go, label, value, sub, cls = '') => `<button class="card kpi tile ${cls}" data-go="${go}"><span class="tile-ic" aria-hidden="true">${icon(label === 'UCI' ? 'emergencias' : go)}</span><div class="lab">${label}</div><div class="val">${value}</div><div class="sub">${sub}</div></button>`;
   const hosp = occupiedRows('hosp'), uci = occupiedRows('uci'), emerg = occupiedRows('emerg');
   const qxRow = (x, state) => { const p = pat(x.pid); const k = surgeryChecks(x); const st = state === 'live' ? `<span class="pill bad"><span class="dot pulse"></span>En curso · hasta ${qxEnd(x)}</span>` : state === 'late' ? '<span class="pill warn">Sin registrar</span>' : `<span class="pill info">${x.time} · ${inMin(toMin(x.time) - now)}</span>`;
     return `<button class="row" data-go="quirofano"><div style="min-width:58px;text-align:center"><div class="t" style="font-variant-numeric:tabular-nums">${x.time}</div><div class="s">a ${qxEnd(x)}</div></div>
@@ -79,14 +92,15 @@ VIEWS.inicio = () => {
       <div class="hstack" style="flex:none;justify-content:flex-end">${k.consent !== 'firmado' ? '<span class="pill bad">Consentimiento</span>' : ''}${k.preop !== 'listo' ? '<span class="pill bad">Preoperatorio</span>' : ''}${st}</div></button>`; };
   const block = (title, sub, body, go) => body ? `<section class="sec"><div class="between" style="margin-bottom:10px"><h3 style="margin:0">${title} <span class="muted small" style="font-weight:400">${sub}</span></h3>${go ? `<button class="btn ghost sm" data-go="${go}">Ver todo</button>` : ''}</div><div class="list">${body}</div></section>` : '';
   const past = S.appts.filter(x => x.date === today && x.kind === 'cirugia' && x.done).sort((x, y) => x.time.localeCompare(y.time));
-  return `<section class="today-intro"><div class="small muted">${fday(today).replace(/^./, c => c.toUpperCase())} · así está la clínica ahora</div><h1>${hour < 12 ? 'Buenos días' : hour < 19 ? 'Buenas tardes' : 'Buenas noches'}. ${qxTxt}. ${bedTxt}.${medTxt}</h1></section>` +
+  const firstName = (S.session?.name || '').replace(/^Dra?\.\s*/, '').split(/\s+/)[0];
+  return `<section class="today-intro"><h1>${hour < 12 ? 'Buenos días' : hour < 19 ? 'Buenas tardes' : 'Buenas noches'}${firstName ? ', ' + esc(firstName) : ''}</h1><p class="today-sentence">${fday(today).replace(/^./, c => c.toUpperCase())}. ${qxTxt}. ${bedTxt}.${medTxt}</p></section>` +
   `<div class="grid g4 today-kpis">
     ${tile('quirofano', 'Quirófano', live.length ? 'En uso' : 'Libre', live.length ? `${esc(live[0].proc)} · hasta ${qxEnd(live[0])}` : next.length ? `próxima a las ${next[0].time}` : 'sin más cirugías hoy', live.length ? 'alert' : '')}
     ${tile('hospitalizacion', 'Hospitalización', `${occ('hosp')}<span class="of">/${zoneBeds('hosp')}</span>`, occ('hosp') ? 'camas ocupadas' : 'todas las camas libres')}
     ${tile('hospitalizacion', 'UCI', `${occ('uci')}<span class="of">/${zoneBeds('uci')}</span>`, occ('uci') ? 'camas ocupadas' : 'camas libres', occ('uci') ? 'alert' : '')}
     ${tile('emergencias', 'Emergencias', `${occ('emerg')}<span class="of">/${zoneBeds('emerg')}</span>`, occ('emerg') ? 'camas ocupadas' : 'sin pacientes', occ('emerg') ? 'alert' : '')}
   </div>
-  <div class="small muted" style="margin:12px 2px 0">Guardia: <b style="color:var(--fg)">${esc(med(g.doc)?.name || 'sin médico asignado')}</b> · Enfermera: <b style="color:var(--fg)">${esc(g.nurse || 'sin asignar')}</b></div>
+  ${weekChart(g)}
   ${dailySummaryCard()}
   <section class="today-feed card sec" aria-label="Hoy en la clínica"><div class="between feed-heading"><h2>Hoy en la clínica</h2><span class="small muted" title="Se actualiza sola cada minuto">Actualizado ${new Date().toTimeString().slice(0, 5)}</span></div>
   <div class="timeline">
