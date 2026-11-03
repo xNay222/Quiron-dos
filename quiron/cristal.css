@@ -158,3 +158,7 @@ html.cristal.motion-lite[data-theme] body::before{filter:blur(14px) saturate(1.2
 html.cristal.motion-lite.cristal[data-theme]{--cr-panel:rgba(46,52,64,.40);--cr-float:rgba(46,52,64,.46);--cr-sheet:rgba(30,34,42,.86);--card:var(--cr-panel);--lg-bg:var(--cr-float);--lg-bg-strong:var(--cr-sheet)}
 html.cristal.motion-lite[data-theme] .card,html.cristal.motion-lite[data-theme] .list,html.cristal.motion-lite[data-theme] .tablewrap,html.cristal.motion-lite[data-theme] .bedgrid > *,html.cristal.motion-lite[data-theme] .ds-card,html.cristal.motion-lite[data-theme] .today-feed{background:var(--cr-sheen),var(--cr-panel)}
 html.cristal.motion-lite[data-theme] .card .card,html.cristal.motion-lite[data-theme] .card .kpi,html.cristal.motion-lite[data-theme] .ds-card .ds-stat,html.cristal.motion-lite[data-theme] .card .list{background:var(--cr-panel-in)}
+
+/* "Hoy en la clínica": sus filas no tenían margen lateral (estaban pensadas sin caja); dentro del cristal sí lo necesitan */
+html.cristal[data-theme] .today-feed .list > .row{padding:14px 18px;gap:14px}
+@media(max-width:600px){html.cristal[data-theme] .today-feed .list > .row{padding:12px 14px}}
