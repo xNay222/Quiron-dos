@@ -635,7 +635,8 @@ function getTheme() { return 'cristal'; }
 // Cristal: la base oscura (data-theme="dark") con el vidrio ahumado y la foto de fondo de cristal.css
 function applyTheme(t) { const h = document.documentElement; h.classList?.toggle?.('cristal', t === 'cristal'); if (t === 'auto') h.removeAttribute('data-theme'); else h.setAttribute('data-theme', t === 'cristal' ? 'dark' : t); if (t === 'cristal') cristalPhoto(); }
 // Si hay una foto de la clínica en quiron/fondo-cristal.jpg, el tema Cristal la usa de fondo (si no, el paisaje dibujado)
-function cristalPhoto() { if (cristalPhoto.done || typeof Image !== 'function') return; cristalPhoto.done = true; const im = new Image(); im.onload = () => document.documentElement.style.setProperty('--cr-photo', 'url(fondo-cristal.jpg)'); im.src = 'fondo-cristal.jpg'; }
+function cristalPhoto() { if (cristalPhoto.done || typeof Image !== 'function') return; cristalPhoto.done = true; const file = window.matchMedia?.('(max-width: 1100px)').matches ? 'fondo-cristal-1280.jpg' : 'fondo-cristal.jpg';   // en teléfono y tablet, la versión liviana
+  const im = new Image(); im.onload = () => document.documentElement.style.setProperty('--cr-photo', 'url(' + file + ')'); im.src = file; }
 const THEMES = [['cristal', 'Cristal']];   // Esmeralda: negro con verde, como el diseño de referencia
 function setTheme(t) { try { localStorage.setItem(THEME_KEY, t); } catch (e) {}
   if (!matchMedia('(prefers-reduced-motion: reduce)').matches) { const h = document.documentElement; h.classList.add('theme-fade'); clearTimeout(setTheme.t); setTheme.t = setTimeout(() => h.classList.remove('theme-fade'), 400); }

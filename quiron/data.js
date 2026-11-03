@@ -220,16 +220,18 @@ function save() {
     const cur = +(localStorage.getItem(REV_KEY) || 0);
     if (cur > STORE.rev) { STORE.stale = true; STORE.error = 'Los datos se modificaron en otra pestaña o ventana. Para no sobrescribir esos cambios, este no se guardó. Recargue la página.'; sysNotice(); return false; }
     // Datos y revisión forman una misma operación. Si falla la revisión, restaure el JSON anterior.
-    const previousRaw = localStorage.getItem(KEY);
+    // La copia anterior se recuerda en memoria: leerla del navegador en cada guardado costaba tanto como escribirla
+    const previousRaw = typeof STORE.lastRaw === "string" ? STORE.lastRaw : localStorage.getItem(KEY);
     const prevSaved = S.savedAt; if (SYNC_READY) S.savedAt = new Date().toISOString();   // marca de tiempo para la sincronización; antes de consultar el servidor (datos de ejemplo de un navegador nuevo) no se marca
-    try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (writeError) { S.savedAt = prevSaved; throw writeError; }
+    const raw = JSON.stringify(S);
+    try { localStorage.setItem(KEY, raw); } catch (writeError) { S.savedAt = prevSaved; throw writeError; }
     try { localStorage.setItem(REV_KEY, String(cur + 1)); }
     catch (revisionError) {
       try { if (previousRaw === null) localStorage.removeItem(KEY); else localStorage.setItem(KEY, previousRaw); }
       catch (_) { STORE.blocked = true; } // no siga escribiendo si el almacenamiento impide restaurar
       throw revisionError;
     }
-    STORE.rev = cur + 1;
+    STORE.rev = cur + 1; STORE.lastRaw = raw;
     if (STORE.error && !STORE.stale) { STORE.error = null; sysNotice(); }
     serverPush();
     return true;
@@ -256,7 +258,7 @@ async function serverPull() {
     try {
       const st = (await fetch(syncUrl(SYNC.file), { cache: 'no-store' }).then(r => r.json())).state;
       const keepSession = S.session; S = st; S.session = keepSession; migrate();
-      localStorage.setItem(KEY, JSON.stringify(S)); STORE.rev = +(localStorage.getItem(REV_KEY) || 0) + 1; localStorage.setItem(REV_KEY, String(STORE.rev));
+      localStorage.setItem(KEY, JSON.stringify(S)); STORE.lastRaw = undefined; STORE.rev = +(localStorage.getItem(REV_KEY) || 0) + 1; localStorage.setItem(REV_KEY, String(STORE.rev));
       SYNC.base = S.savedAt; return true;
     } catch (e) { return false; }
   }

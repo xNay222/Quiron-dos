@@ -9,14 +9,17 @@ html.cristal.cristal[data-theme]{
   --on-accent:#ffffff;
   --cr-fg:#f5f7fa;
   --cr-fg2:rgba(236,241,247,.74);
-  --cr-panel:rgba(38,42,50,.46);        /* cristal de las tarjetas */
-  --cr-panel-in:rgba(255,255,255,.07);  /* sub-tarjeta dentro de un panel */
-  --cr-float:rgba(40,44,52,.38);        /* lo que flota: dock, píldora, botones de la barra */
-  --cr-sheet:rgba(30,34,42,.72);
-  --cr-edge:rgba(255,255,255,.20);
+  --cr-panel:rgba(52,58,70,.26);        /* cristal de las tarjetas: poco tinte, el desenfoque hace el trabajo */
+  --cr-sheen:linear-gradient(140deg,rgba(255,255,255,.17) 0%,rgba(255,255,255,.05) 38%,rgba(255,255,255,.02) 62%,rgba(255,255,255,.08) 100%);
+  --cr-panel-in:rgba(255,255,255,.08);  /* sub-tarjeta dentro de un panel */
+  --cr-float:rgba(56,62,74,.24);        /* lo que flota: dock, píldora, botones de la barra */
+  --cr-sheet:rgba(34,38,46,.62);
+  --cr-edge:rgba(255,255,255,.42);      /* filo superior que capta la luz */
+  --cr-rim:rgba(255,255,255,.16);       /* borde de 1 px alrededor */
   --cr-hair:rgba(255,255,255,.10);
-  --cr-blur:blur(34px) saturate(160%);
-  --cr-shadow:0 1px 1px rgba(0,0,0,.18),0 20px 50px -22px rgba(0,0,0,.6);
+  --cr-blur:blur(24px) saturate(185%) brightness(.92);
+  --cr-shadow:0 1px 1px rgba(0,0,0,.14),0 18px 46px -22px rgba(0,0,0,.55);
+  --cr-glass-ring:inset 0 1px 0 var(--cr-edge),inset 0 0 0 1px var(--cr-rim),inset 0 -1px 0 rgba(255,255,255,.06);
   --fg:var(--cr-fg);
   --fg2:var(--cr-fg2);
   --card:var(--cr-panel);
@@ -32,14 +35,14 @@ html.cristal.cristal[data-theme]{
 /* Fondo: la foto, nítida, con un leve oscurecido abajo y a la izquierda (donde empieza el texto) */
 html.cristal[data-theme] body{background:#1a1f26;color:var(--cr-fg)}
 html.cristal[data-theme] body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
-  background:linear-gradient(180deg,rgba(8,12,18,.30) 0%,rgba(8,12,18,.10) 35%,rgba(8,12,18,.45) 100%),
+  background:linear-gradient(180deg,rgba(8,12,18,.42) 0%,rgba(8,12,18,.28) 35%,rgba(8,12,18,.55) 100%),
     linear-gradient(90deg,rgba(8,12,18,.35) 0%,transparent 55%),
     var(--cr-photo,linear-gradient(160deg,#3d4a5c,#1b222c)) center/cover no-repeat}
 
 /* ---------- Paneles de cristal ahumado ---------- */
 html.cristal[data-theme] .card,html.cristal[data-theme] .list,html.cristal[data-theme] .tablewrap,html.cristal[data-theme] .bedgrid > *,html.cristal[data-theme] .simple-task,html.cristal[data-theme] .today-feed,html.cristal[data-theme] .ds-card{
-  background:var(--cr-panel);-webkit-backdrop-filter:var(--cr-blur);backdrop-filter:var(--cr-blur);
-  border:0;border-radius:24px;box-shadow:inset 0 1px 0 var(--cr-edge),inset 0 0 0 1px var(--cr-hair),var(--cr-shadow)}
+  background:var(--cr-sheen),var(--cr-panel);-webkit-backdrop-filter:var(--cr-blur);backdrop-filter:var(--cr-blur);
+  border:0;border-radius:24px;box-shadow:var(--cr-glass-ring),var(--cr-shadow)}
 /* Dentro de un panel, las sub-tarjetas no vuelven a desenfocar: solo un velo claro */
 html.cristal[data-theme] .card .card,html.cristal[data-theme] .card .kpi,html.cristal[data-theme] .ds-card .ds-stat,html.cristal[data-theme] .card .list{
   background:var(--cr-panel-in);-webkit-backdrop-filter:none;backdrop-filter:none;box-shadow:inset 0 0 0 1px var(--cr-hair);border-radius:16px}
@@ -76,8 +79,8 @@ html.cristal[data-theme] .kpi.tile .sub{grid-column:1/-1}
   html.cristal[data-theme] .app{grid-template-columns:84px minmax(0,1fr)}
   html.cristal[data-theme] .app .side{position:fixed;left:18px;top:0;bottom:0;margin-block:auto;height:fit-content;max-height:calc(100dvh - 120px);z-index:35;
     width:54px;padding:8px 6px;border-radius:22px;gap:2px;align-items:center;overflow-y:auto;scrollbar-width:none;
-    background:var(--cr-float);-webkit-backdrop-filter:var(--cr-blur);backdrop-filter:var(--cr-blur);
-    box-shadow:inset 0 1px 0 var(--cr-edge),inset 0 0 0 1px var(--cr-hair),var(--cr-shadow)}
+    background:var(--cr-sheen),var(--cr-float);-webkit-backdrop-filter:var(--cr-blur);backdrop-filter:var(--cr-blur);
+    box-shadow:var(--cr-glass-ring),var(--cr-shadow)}
   html.cristal[data-theme] .app .side::-webkit-scrollbar{display:none}
   html.cristal[data-theme] .app-content{grid-column:2;min-width:0}
   html.cristal[data-theme] .side .brand,html.cristal[data-theme] .side .nav-group,html.cristal[data-theme] .side .nav-label,html.cristal[data-theme] .side .foot{display:none}
@@ -96,7 +99,7 @@ html.cristal[data-theme] .global-topbar{background:transparent;display:grid;grid
 html.cristal[data-theme] .global-search-button{grid-column:1;grid-row:1;justify-self:start}
 html.cristal[data-theme] .top-tabs{grid-column:2;grid-row:1}
 html.cristal[data-theme] .shell-avatar{grid-column:3;grid-row:1;justify-self:end;background:linear-gradient(140deg,#ff9f43,#ff6b3d);color:#fff;font-weight:700}
-html.cristal[data-theme] .global-search-button,html.cristal[data-theme] .shell-icon-button,html.cristal[data-theme] .top-tabs{background:var(--cr-float);-webkit-backdrop-filter:var(--cr-blur);backdrop-filter:var(--cr-blur);
+html.cristal[data-theme] .global-search-button,html.cristal[data-theme] .shell-icon-button,html.cristal[data-theme] .top-tabs{background:var(--cr-sheen),var(--cr-float);-webkit-backdrop-filter:var(--cr-blur);backdrop-filter:var(--cr-blur);
   box-shadow:inset 0 1px 0 var(--cr-edge),inset 0 0 0 1px var(--cr-hair),var(--cr-shadow);color:var(--cr-fg)}
 html.cristal[data-theme] .top-tabs{display:flex;gap:4px;padding:5px;border-radius:999px}
 html.cristal[data-theme] .top-tab{display:flex;align-items:center;gap:7px;height:36px;padding:0 15px;border:0;border-radius:999px;background:transparent;color:rgba(255,255,255,.82);font:inherit;font-size:14px;font-weight:500;cursor:pointer;white-space:nowrap}
@@ -147,3 +150,11 @@ html.cristal[data-theme] .toast{background:var(--cr-sheet);color:var(--cr-fg)}
 
 /* Avatar de la cuenta: naranja, como el del diseño (va al final para ganar a la cápsula de vidrio) */
 html.cristal[data-theme] .shell-avatar{background:linear-gradient(140deg,#ffad5a,#ff6b3d);color:#fff;font-weight:700;box-shadow:0 6px 18px -6px rgba(255,107,61,.7)}
+
+/* ---------- Modo ligero: cristal sin costo ----------
+   La base quita todo backdrop-filter en html.motion-lite. Aquí se compensa: la foto se desenfoca una sola vez
+   (capa fija, se pinta una vez) y los paneles llevan un poco más de tinte para mantener el contraste. */
+html.cristal.motion-lite[data-theme] body::before{filter:blur(14px) saturate(1.25) brightness(.9);inset:-28px}
+html.cristal.motion-lite.cristal[data-theme]{--cr-panel:rgba(46,52,64,.40);--cr-float:rgba(46,52,64,.46);--cr-sheet:rgba(30,34,42,.86);--card:var(--cr-panel);--lg-bg:var(--cr-float);--lg-bg-strong:var(--cr-sheet)}
+html.cristal.motion-lite[data-theme] .card,html.cristal.motion-lite[data-theme] .list,html.cristal.motion-lite[data-theme] .tablewrap,html.cristal.motion-lite[data-theme] .bedgrid > *,html.cristal.motion-lite[data-theme] .ds-card,html.cristal.motion-lite[data-theme] .today-feed{background:var(--cr-sheen),var(--cr-panel)}
+html.cristal.motion-lite[data-theme] .card .card,html.cristal.motion-lite[data-theme] .card .kpi,html.cristal.motion-lite[data-theme] .ds-card .ds-stat,html.cristal.motion-lite[data-theme] .card .list{background:var(--cr-panel-in)}
