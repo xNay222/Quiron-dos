@@ -74,49 +74,61 @@ html.cristal[data-theme] .kpi.tile .lab{grid-row:1;grid-column:2}
 html.cristal[data-theme] .kpi.tile .val{grid-column:1/-1;margin-top:12px;font-size:30px;font-weight:600;color:#fff}
 html.cristal[data-theme] .kpi.tile .sub{grid-column:1/-1}
 
-/* ---------- Dock: columna estrecha de iconos, flotando a la izquierda (computadora) ---------- */
+/* ---------- Menú lateral de cristal con icono y nombre (computadora) ----------
+   Cada sección se ve con su nombre: con solo iconos la gente se pierde. */
 @media(min-width:1024px){
-  html.cristal[data-theme] .app{grid-template-columns:84px minmax(0,1fr)}
-  html.cristal[data-theme] .app .side{position:fixed;left:18px;top:0;bottom:0;margin-block:auto;height:fit-content;max-height:calc(100dvh - 120px);z-index:35;
-    width:54px;padding:8px 6px;border-radius:22px;gap:2px;align-items:center;overflow-y:auto;scrollbar-width:none;
+  html.cristal[data-theme] .app{grid-template-columns:268px minmax(0,1fr)}
+  html.cristal[data-theme] .app .side{position:fixed;left:16px;top:16px;bottom:16px;height:auto;z-index:35;width:236px;padding:16px 12px 12px;
+    border-radius:26px;gap:2px;display:flex;flex-direction:column;align-items:stretch;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.25) transparent;
     background:var(--cr-sheen),var(--cr-float);-webkit-backdrop-filter:var(--cr-blur);backdrop-filter:var(--cr-blur);
     box-shadow:var(--cr-glass-ring),var(--cr-shadow)}
-  html.cristal[data-theme] .app .side::-webkit-scrollbar{display:none}
   html.cristal[data-theme] .app-content{grid-column:2;min-width:0}
-  html.cristal[data-theme] .side .brand,html.cristal[data-theme] .side .nav-group,html.cristal[data-theme] .side .nav-label,html.cristal[data-theme] .side .foot{display:none}
-  html.cristal[data-theme] .side .sep{width:22px;height:1px;margin:4px auto;background:var(--cr-hair)}
-  html.cristal[data-theme] .side .nav{position:relative;width:42px;height:42px;padding:0;justify-content:center;border-radius:14px;color:rgba(255,255,255,.78)}
-  html.cristal[data-theme] .side .nav svg{width:19px;height:19px}
-  html.cristal[data-theme] .side .nav[aria-current="page"]{background:rgba(255,255,255,.92);color:#121820}
-  html.cristal[data-theme] .side .nav[aria-current="page"] svg{color:#121820;stroke:#121820}
-  html.cristal[data-theme] .side .nav:hover:not([aria-current="page"]){background:rgba(255,255,255,.12);color:#fff}
-  html.cristal[data-theme] .side .nav .count{position:absolute;top:1px;right:1px;margin:0;min-width:16px;font-size:10px;line-height:16px;padding:0 4px}
+  html.cristal[data-theme] .side .brand{padding:2px 8px 14px;display:block}
+  html.cristal[data-theme] .side .brandlogo{width:132px;filter:invert(1) brightness(1.6)}
+  html.cristal[data-theme] .side .nav-group{display:block;padding:14px 10px 6px;font-size:11.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:rgba(255,255,255,.55)}
+  html.cristal[data-theme] .side .sep{height:1px;margin:8px 10px;background:var(--cr-hair)}
+  html.cristal[data-theme] .side .nav{position:relative;display:flex;align-items:center;gap:12px;width:auto;height:42px;padding:0 12px;border-radius:13px;
+    color:rgba(255,255,255,.86);font-size:14.5px;font-weight:500;text-align:left}
+  html.cristal[data-theme] .side .nav svg{width:19px;height:19px;flex:none;opacity:.9}
+  html.cristal[data-theme] .side .nav-label{display:block;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  html.cristal[data-theme] .side .nav-short{display:none}
+  html.cristal[data-theme] .side .nav[aria-current="page"]{background:rgba(255,255,255,.92);color:#121820;box-shadow:0 6px 16px -8px rgba(0,0,0,.5)}
+  html.cristal[data-theme] .side .nav[aria-current="page"] svg{color:#121820;stroke:#121820;opacity:1}
+  html.cristal[data-theme] .side .nav:hover:not([aria-current="page"]){background:rgba(255,255,255,.10);color:#fff}
+  html.cristal[data-theme] .side .nav:focus-visible{outline:2px solid #fff;outline-offset:1px}
+  html.cristal[data-theme] .side .nav .count{position:static;margin-left:auto;min-width:20px;font-size:11.5px;line-height:20px;padding:0 6px;text-align:center}
+  html.cristal[data-theme] .side .nav-more{display:none}
+  html.cristal[data-theme] .side .foot{display:block;margin-top:auto;padding:10px 0 0;border-top:1px solid var(--cr-hair)}
+  html.cristal[data-theme] .side .foot .userbtn{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border:0;border-radius:13px;background:transparent;color:#fff;text-align:left;cursor:pointer}
+  html.cristal[data-theme] .side .foot .userbtn:hover{background:rgba(255,255,255,.10)}
+  html.cristal[data-theme] .side .foot .userbtn .avatar{background:linear-gradient(140deg,#ffad5a,#ff6b3d)!important;color:#fff}
+  html.cristal[data-theme] .side .foot .userbtn span span{color:rgba(255,255,255,.6);font-size:12px}
+  html.cristal[data-theme] .side .foot > div{display:block;padding:8px 10px 0;font-size:12px;color:rgba(255,255,255,.6)}
   html.cristal[data-theme] .main{max-width:1360px}
 }
 
-/* ---------- Barra superior: buscador a la izquierda, píldora de secciones al centro, cuenta a la derecha ---------- */
-html.cristal[data-theme] .global-topbar{background:transparent;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;padding-top:16px}
-html.cristal[data-theme] .global-search-button{grid-column:1;grid-row:1;justify-self:start}
-html.cristal[data-theme] .top-tabs{grid-column:2;grid-row:1}
-html.cristal[data-theme] .shell-avatar{grid-column:3;grid-row:1;justify-self:end;background:linear-gradient(140deg,#ff9f43,#ff6b3d);color:#fff;font-weight:700}
-html.cristal[data-theme] .global-search-button,html.cristal[data-theme] .shell-icon-button,html.cristal[data-theme] .top-tabs{background:var(--cr-sheen),var(--cr-float);-webkit-backdrop-filter:var(--cr-blur);backdrop-filter:var(--cr-blur);
-  box-shadow:inset 0 1px 0 var(--cr-edge),inset 0 0 0 1px var(--cr-hair),var(--cr-shadow);color:var(--cr-fg)}
-html.cristal[data-theme] .top-tabs{display:flex;gap:4px;padding:5px;border-radius:999px}
-html.cristal[data-theme] .top-tab{display:flex;align-items:center;gap:7px;height:36px;padding:0 15px;border:0;border-radius:999px;background:transparent;color:rgba(255,255,255,.82);font:inherit;font-size:14px;font-weight:500;cursor:pointer;white-space:nowrap}
-html.cristal[data-theme] .top-tab svg{width:16px;height:16px}
-html.cristal[data-theme] .top-tab:hover{background:rgba(255,255,255,.10);color:#fff}
-html.cristal[data-theme] .top-tab[aria-current="page"]{background:rgba(255,255,255,.18);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.18)}
-html.cristal[data-theme] .top-tab:focus-visible{outline:2px solid #fff;outline-offset:1px}
-.top-tabs{display:none}
-@media(max-width:1099px){html.cristal[data-theme] .top-tabs{display:none}}
+/* ---------- Barra superior: buscador a la izquierda y la cuenta a la derecha ---------- */
+html.cristal[data-theme] .global-topbar{background:transparent;display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:16px}
+html.cristal[data-theme] .global-search-button,html.cristal[data-theme] .shell-icon-button{background:var(--cr-sheen),var(--cr-float);-webkit-backdrop-filter:var(--cr-blur);backdrop-filter:var(--cr-blur);
+  box-shadow:var(--cr-glass-ring),var(--cr-shadow);color:var(--cr-fg)}
 
-/* ---------- Teléfono: la barra de abajo flota ---------- */
+/* ---------- Teléfono y tablet: barra flotante abajo con icono y nombre, como las apps del iPhone ---------- */
+.nav-short{display:none}
 @media(max-width:1023px){
-  html.cristal[data-theme] .app .side{left:12px;right:12px;bottom:calc(10px + env(safe-area-inset-bottom,0px));width:auto;border-radius:26px;
-    background:var(--cr-sheet);-webkit-backdrop-filter:var(--cr-blur);backdrop-filter:var(--cr-blur);
-    box-shadow:inset 0 1px 0 var(--cr-edge),inset 0 0 0 1px var(--cr-hair),var(--cr-shadow);border:0}
+  html.cristal[data-theme] .app .side{left:10px;right:10px;bottom:calc(8px + env(safe-area-inset-bottom,0px));width:auto;height:auto;min-height:62px;padding:6px 6px;border-radius:24px;
+    gap:2px;justify-content:space-around;background:var(--cr-sheet);-webkit-backdrop-filter:var(--cr-blur);backdrop-filter:var(--cr-blur);
+    box-shadow:var(--cr-glass-ring),var(--cr-shadow);border:0}
+  html.cristal[data-theme] .side .nav{flex:1 1 0;min-width:0;max-width:84px;height:52px;padding:4px 2px 2px;flex-direction:column;justify-content:center;gap:3px;border-radius:16px;color:rgba(255,255,255,.78)}
+  html.cristal[data-theme] .side .nav svg{width:22px;height:22px}
+  html.cristal[data-theme] .side .nav .nav-label{display:none}
+  html.cristal[data-theme] .side .nav .nav-short{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10.5px;font-weight:600;line-height:1.1;letter-spacing:-.01em}
   html.cristal[data-theme] .side .nav[aria-current="page"]{color:#fff;background:rgba(255,255,255,.16)}
-  html.cristal[data-theme] .global-topbar{grid-template-columns:auto 1fr auto}
+  html.cristal[data-theme] .side .nav[aria-current="page"] svg{color:#7fb0ff;stroke:#7fb0ff}
+  html.cristal[data-theme] .side .nav .count{position:absolute;top:2px;right:calc(50% - 20px);margin:0;font-size:10px;line-height:15px;min-width:15px;padding:0 4px}
+  /* iPhone: con letra de menos de 16 px, Safari acerca la pantalla al tocar un campo; así no salta */
+  html.cristal[data-theme] .input,html.cristal[data-theme] select,html.cristal[data-theme] textarea{font-size:16px}
+  html.cristal[data-theme] .main{padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}
+  html.cristal[data-theme] *{-webkit-tap-highlight-color:transparent}
 }
 
 /* ---------- Ventanas y mensajes: cristal más denso (llevan formularios) ---------- */
@@ -128,7 +140,7 @@ html.cristal[data-theme] .toast{background:var(--cr-sheet);color:var(--cr-fg)}
 /* ---------- Accesibilidad: menos transparencia o más contraste = superficies opacas ---------- */
 @media (prefers-reduced-transparency:reduce){
   html.cristal.cristal[data-theme]{--cr-panel:#2a2f37;--cr-float:#2a2f37;--cr-sheet:#23272e}
-  html.cristal[data-theme] .card,html.cristal[data-theme] .list,html.cristal[data-theme] .app .side,html.cristal[data-theme] .sheet,html.cristal[data-theme] .global-search-button,html.cristal[data-theme] .shell-icon-button,html.cristal[data-theme] .top-tabs{-webkit-backdrop-filter:none;backdrop-filter:none}
+  html.cristal[data-theme] .card,html.cristal[data-theme] .list,html.cristal[data-theme] .app .side,html.cristal[data-theme] .sheet,html.cristal[data-theme] .global-search-button,html.cristal[data-theme] .shell-icon-button,html.cristal[data-theme] .global-topbar *{-webkit-backdrop-filter:none;backdrop-filter:none}
 }
 @media (prefers-contrast:more){
   html.cristal.cristal[data-theme]{--cr-panel:#1f242b;--cr-float:#1f242b;--cr-sheet:#1a1e24;--cr-hair:rgba(255,255,255,.4);--cr-fg2:#e4e9ef}

@@ -118,24 +118,23 @@ function renderSide() {
       const index = all.slice(0, i).filter(Array.isArray).length;
       return shellNav(n, index >= 5 ? 'nav-extra' + (index < 7 ? ' nav-tablet' : '') : '');
     }).join('') +
-    '<button class="nav nav-more" id="more-sections-button" data-act="moreSections" aria-label="Más secciones" title="Más secciones" aria-haspopup="dialog" aria-expanded="false" aria-controls="more-sections">' + icon('menu') + '</button>' +
+    '<button class="nav nav-more" id="more-sections-button" data-act="moreSections" aria-label="Más secciones" title="Más secciones" aria-haspopup="dialog" aria-expanded="false" aria-controls="more-sections">' + icon('menu') + '<span class="nav-short" aria-hidden="true">Más</span></button>' +
     `<div class="foot"><button class="userbtn" data-act="switchUser"><span class="avatar" style="width:30px;height:30px;font-size:12px">${initials(who.replace(/^Dra?\. /, ''))}</span><span style="min-width:0"><b style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(who)}</b><span>${typeof roleLabel === 'function' ? roleLabel(role()) : ROLES[role()].name} · mi cuenta</span></span></button>
       ${role() === 'admin' ? `<div style="margin-top:8px">Tasa BCV ${fmt(S.rate, 'VES')}</div>` : ''}</div>`;
 }
 
 
 // Estructura común: los destinos y contadores siguen procediendo del menú del rol.
+// Nombres cortos para la barra de abajo del teléfono (caben debajo del icono)
+const NAV_SHORT = { hospitalizacion: 'Hospital', emergencias: 'Emergencia', consultorio: 'Mi consulta', contabilidad: 'Contabilidad', atencion: 'Presupuestos', quirofano: 'Quirófano' };
 function shellNav(n, cls = '') {
   const count = navCount(n[0]);
-  return `<button class="nav ${cls}" data-go="${n[0]}" aria-label="${esc(n[1])}" title="${esc(n[1])}" ${route === n[0] ? 'aria-current="page"' : ''}>${icon(n[0])}<span class="nav-label">${esc(n[1])}</span>${count ? `<span class="count">${count}</span>` : ''}</button>`;
+  return `<button class="nav ${cls}" data-go="${n[0]}" aria-label="${esc(n[1])}" title="${esc(n[1])}" ${route === n[0] ? 'aria-current="page"' : ''}>${icon(n[0])}<span class="nav-label">${esc(n[1])}</span><span class="nav-short" aria-hidden="true">${esc(NAV_SHORT[n[0]] || n[1])}</span>${count ? `<span class="count">${count}</span>` : ''}</button>`;
 }
 function renderTopbar() {
   const bar = document.getElementById('global-topbar');
   const who = S.session?.name || ROLES[role()].name;
-  // Píldora central con las secciones principales del rol (las de todos los días; el dock tiene todas)
-  const tabs = NAV_ITEMS().filter(n => !['ajustes', 'tutorial'].includes(n[0])).slice(0, 4);
-  const top = `<nav class="top-tabs" aria-label="Secciones principales">${tabs.map(n => `<button class="top-tab" data-go="${n[0]}" ${route === n[0] ? 'aria-current="page"' : ''}>${icon(n[0])}<span>${esc(n[1])}</span></button>`).join('')}</nav>`;
-  bar.innerHTML = top + `<button class="global-search-button" id="global-search-button" data-act="globalSearch" aria-label="Buscar paciente" title="Buscar paciente Ctrl K" aria-keyshortcuts="Control+k Meta+k /">${icon('buscar')}<span>Buscar paciente</span><kbd>Ctrl K</kbd></button>${THEMES.length > 1 ? '<button class="shell-icon-button" id="theme-button" data-act="rotateTheme"></button>' : ''}<button class="shell-icon-button shell-avatar" data-act="switchUser" aria-label="Mi cuenta: ${esc(who)}" title="Mi cuenta">${esc(initials(who.replace(/^Dra?\. /, '')))}</button>`;
+  bar.innerHTML = `<button class="global-search-button" id="global-search-button" data-act="globalSearch" aria-label="Buscar paciente" title="Buscar paciente Ctrl K" aria-keyshortcuts="Control+k Meta+k /">${icon('buscar')}<span>Buscar paciente</span><kbd>Ctrl K</kbd></button>${THEMES.length > 1 ? '<button class="shell-icon-button" id="theme-button" data-act="rotateTheme"></button>' : ''}<button class="shell-icon-button shell-avatar" data-act="switchUser" aria-label="Mi cuenta: ${esc(who)}" title="Mi cuenta">${esc(initials(who.replace(/^Dra?\. /, '')))}</button>`;
   updateThemeButton();
 }
 function updateThemeButton() {
