@@ -253,3 +253,10 @@ Descartado: estilo "Tablero de turno" (clínico sobrio). Trabajo con Codex para 
   - Inicio sin avisos de secciones que el rol no tiene; contadores del menú del anestesiólogo solo lo suyo; arranque al final de app.js; CSP limitada a las librerías usadas.
 - Pruebas: herramientas/pruebas-auditoria-2026-11.cjs.
 - Pendiente del usuario: activar la facturación de la clave de Gemini (plan gratuito puede usar los datos enviados).
+
+## Pendiente: seguridad (lista del video, 03/11/2026)
+6 de 10 completos. Faltan (el usuario los dejó para después):
+1. Límite de uso por usuario en la función `ia` (p. ej. 30 fotos/hora) y en `usuarios` (invitaciones).
+2. Control en la base de datos: tamaño máximo por registro (data jsonb) y formato mínimo válido.
+3. Errores genéricos en las funciones (el detalle técnico solo a la tabla `errores`).
+4. Tarjeta "Seguridad" para Administración: intentos de entrada fallidos, cuentas desactivadas que intentan entrar, picos de uso de la IA.
