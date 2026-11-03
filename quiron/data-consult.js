@@ -722,10 +722,12 @@ const CONSULT = (() => {
       return [good.join(', '), bad.length ? 'sin ' + listNi(bad) : ''].filter(Boolean).join('; ');
     };
     const out = [];
-    const section = (name, lines) => out.push(name + '\n' + (lines.filter(Boolean).join('\n') || 'No documentado.'));
+    // Las secciones esenciales siempre aparecen; las demás, si no tienen datos, se nombran juntas al final (sin «No documentado» repetido)
+    const ALWAYS = new Set(['Identificación', 'Motivo', 'Impresión diagnóstica']), empty = [];
+    const section = (name, lines) => { const t = lines.filter(Boolean).join('\n'); if (t) out.push(name + '\n' + t); else if (ALWAYS.has(name)) out.push(name + '\nNo documentado.'); else empty.push(name); };
     section('Identificación', [(data.patient.initials || 'Paciente') + ' · ' + (data.patient.age == null ? 'Edad no documentada' : data.patient.age + ' años') + ' · ' + (fdt(data.date) || 'Fecha no documentada') + ' ' + (data.time || '') + ' (Caracas)', (types[data.type] || 'Tipo no documentado') + ' · ' + (data.specialty || 'Especialidad no documentada') + ' · ' + (data.modality || 'Modalidad no documentada')]);
     section('Motivo', data.reasons.map(r => (r.main ? 'Principal: ' : 'Secundario: ') + r.label));
-    section(data.mode === 'quick' ? 'Evolución' : 'Enfermedad actual', data.reasons.map(r => r.label + '. ' + ([answersText(r.answers)].concat(r.ipss ? 'IPSS: ' + display(r.ipss) : [], filled(r.characterization) ? Object.entries(r.characterization).filter(([, v]) => filled(v)).map(([k, v]) => (charNames[k] || k) + ': ' + (typeof v === 'string' && !/^\d/.test(v) ? low(fdt(v)) : fdt(display(v)))).join('; ') : []).filter(Boolean).join('. ') || 'No documentado') + '.'));
+    section(data.mode === 'quick' ? 'Evolución' : 'Enfermedad actual', data.reasons.map(r => (t => t ? r.label + '. ' + t + '.' : '')([answersText(r.answers)].concat(r.ipss ? 'IPSS: ' + display(r.ipss) : [], filled(r.characterization) ? Object.entries(r.characterization).filter(([, v]) => filled(v)).map(([k, v]) => (charNames[k] || k) + ': ' + (typeof v === 'string' && !/^\d/.test(v) ? low(fdt(v)) : fdt(display(v)))).join('; ') : []).filter(Boolean).join('. '))));
     const h = data.history;
     const pend = x => /pendiente de confirmar|migrado/i.test(x?.note || '');
     const hx = (title, list, fmt) => list.length ? title + ': ' + list.map(fmt).filter(Boolean).join('; ') : '';
@@ -744,6 +746,7 @@ const CONSULT = (() => {
     section('Conducta y seguimiento', Object.entries(data.plan || {}).filter(([k, x]) => filled(x) && k !== 'controlTime').map(([k, x]) => (LBL[k] || k) + ': ' + (k === 'nextControl' ? fdt(x) + (filled(data.plan.controlTime) ? ' a las ' + data.plan.controlTime : '') : display(x))));
     const omissions = Object.entries(data.steps || {}).filter(([, v]) => ['no aplica', 'no evaluado'].includes(v)).map(([i, v]) => (steps[i] || i) + ': ' + v);
     if (omissions.length) section('Evaluación documentada', omissions);
+    if (empty.length) out.push('No registrado en esta consulta\n' + empty.join(', ') + '.');
     return clinicalText(out.join('\n\n'));
   }
   function receiveReport(c, text, sourceHash, source, at) {

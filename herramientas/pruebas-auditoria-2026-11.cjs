@@ -69,4 +69,27 @@ test('Modo sencillo: "¿Qué quiere hacer?" con tareas que existen y que cada ro
     route=NAV_ITEMS()[1][0]; assert.equal(simpleTasks(),'','solo en la primera pantalla'); }
   S.session={uid:'u-l',role:'laboratorio',doc:null,name:'L'}; route='examenes'; window.scrollTo=()=>{}; ACTIONS.simpleTask({dataset:{i:'0'}}); assert.equal(UI.exTab,'pendientes');
   S.session=saved; localStorage.setItem(SIMPLE_KEY,'0'); assert.equal(simpleTasks(),''); assert.ok(VIEWS.ajustes().includes('Modo sencillo'));`);
+test('Consulta: motivos y diagnósticos por palabras de uso diario y catálogo CIE-10', `
+  const c=CONSULT.newConsult({id:'cq',pid:S.patients[0].id,doc:S.doctors[0].id}); S.consults.push(c);
+  const reasons=q=>[...consultReasonOptions(c,q).matchAll(/data-act="ccReasonAdd"[^>]*>([^<]+)/g)].map(m=>m[1]);
+  assert.ok(reasons('dolor de cabeza').includes('Cefalea')); assert.ok(reasons('dolor de pecho').includes('Dolor torácico'));
+  assert.ok(!reasons('tos').includes('Vómitos'),'«tos» ya no trae «vómitos»'); assert.ok(reasons('falta de aire').includes('Dificultad respiratoria'));
+  S.session={uid:'u-m',role:'medico',doc:S.doctors[0].id,name:'M'}; route='consultas'; param='cq';
+  for (const [q,code] of [['faringitis','J02.9'],['HTA','I10'],['dolor de cabeza','R51'],['J02','J02.9']]) assert.ok(guidedDxOptions(q).includes(code), q);
+  ${as('admin')}`);
+test('Consulta: avisos en su pantalla (certeza y sustancia) y «Desconocido» solo marcado si se eligió', `
+  const p=S.patients.find(x=>!(x.history?.allergies?.items||[]).length); const c=CONSULT.newConsult({id:'cr',pid:p.id,doc:S.doctors[0].id}); S.consults.push(c);
+  S.session={uid:'u-m',role:'medico',doc:S.doctors[0].id,name:'M'}; route='consultas'; param='cr'; c.guide={started:true,current:'history-allergies',omissions:{},history:{}};
+  p.history.allergies={status:'desconocido',items:[]};
+  const step=k=>GUIDE.steps(c,p).find(s=>s.key===k);
+  assert.ok(!guidedQuestionBody(c,step('history-allergies')).includes('aria-pressed="true"'),'nada marcado sin elegir');
+  p.history.allergies.status='conocidas'; GUIDE.init(c).allergyReviewed=true;
+  assert.ok(GUIDE.requirements(c,p,step('history-allergies')).some(m=>/sustancia/.test(m)));
+  c.dx=[{label:'Faringitis aguda',priority:'principal',certainty:''}];
+  assert.ok(GUIDE.requirements(c,p,step('dx')).some(m=>/Certeza/.test(m))); c.dx[0].certainty='presuntivo'; assert.equal(GUIDE.requirements(c,p,step('dx')).length,0);
+  ${as('admin')}`);
+test('Informe: sin «No documentado» repetido; lo que falta se nombra junto al final', `
+  const p=S.patients[0]; const c=CONSULT.newConsult({id:'cs',pid:p.id,doc:S.doctors[0].id}); c.reasons=[CONSULT.newReason('dolor_de_garganta','Dolor de garganta',true)]; c.dx=[{label:'Faringitis',priority:'principal',certainty:'presuntivo'}];
+  const t=CONSULT.report(CONSULT.clean(c,p)); assert.ok(t.includes('No registrado en esta consulta')); assert.ok(t.includes('Signos vitales')); assert.ok((t.match(/No documentado/g)||[]).length<=1, t);
+  assert.ok(t.includes('Impresión diagnóstica\\nFaringitis'));`);
 console.log(checks.map(n=>'OK '+n).join('\n'));console.log(checks.length+' grupos de pruebas correctos.');

@@ -125,7 +125,7 @@ ACTIONS.guideNext = () => {
   const c = guidedCurrent();
   if (!c || !guidedEditable(c)) return;
   const s = guidedStep(c);
-  if (['examGroup', 'vitalsGroup', 'allergiesGroup', 'evolutionChecklist', 'reasonSearch'].includes(s.type) && guidedRequirements(c, s).length ||
+  if (['examGroup', 'vitalsGroup', 'allergiesGroup', 'evolutionChecklist', 'reasonSearch', 'dxSearch'].includes(s.type) && guidedRequirements(c, s).length ||
     c.kind === 'evolution' && s.key === 'ev-state' && guidedRequirements(c, s).length) {
     if (s.type === 'examGroup') GUIDE.init(c).examValidation = true;
     guidedRefreshBody(c);
@@ -310,7 +310,7 @@ function guidedChoices(c, key, options, multi = false, advance = true) {
   return '<div class="guide-options' + (options.length === 11 ? ' guide-scale' : '') + '" role="group">' +
     options.map(o => {
       const [v, label] = Array.isArray(o) ? o : [o, o];
-      const selected = multi ? (value || []).includes(v) : value === v;
+      const selected = (multi ? (value || []).includes(v) : value === v) && !(key === 'history.allergies.status' && v === 'desconocido' && !GUIDE.init(c).allergyReviewed);
       return ccButton('guideAnswer', esc(label), ccAttrs(key) +
         ' data-value="' + esc(JSON.stringify(v)) + '" data-multi="' + multi +
         '" data-advance="' + advance + '" aria-pressed="' + selected + '"');
@@ -1666,7 +1666,9 @@ function guidedDxOptions(query) {
   const q = (query || '').trim(), c = guidedCurrent();
   if (!q) return '<p class="small muted">Escriba el diagnóstico y pulse Agregar (o Enter). Puede agregar varios.</p>';
   const dup = !!c && guidedDxIndex(c, { label: q }) >= 0;
-  return dup ? '<p class="small muted">Ese diagnóstico ya está agregado.</p>' : ccButton('guideDxFree', 'Agregar diagnóstico: ' + esc(q), '', 'primary');
+  const found = CONSULT.diagnoses.map((d, i) => [d, i]).filter(([d]) => searchMatch(q, d.label + ' ' + (d.code || '') + ' ' + (d.synonyms || []).join(' '))).slice(0, 6);
+  return found.map(([d, i]) => ccButton('guideDxPick', esc(d.label) + (d.code ? ' <span class="small muted">' + esc(d.code) + '</span>' : ''), 'data-i="' + i + '" aria-pressed="' + (!!c && guidedDxIndex(c, d) >= 0) + '"')).join('') +
+    (dup ? '<p class="small muted">Ese diagnóstico ya está agregado.</p>' : ccButton('guideDxFree', (found.length ? 'Escribirlo tal cual: ' : 'Agregar diagnóstico: ') + esc(q), '', found.length ? '' : 'primary'));
 }
 
 ACTIONS.guideDxSearch = el => {
@@ -1893,7 +1895,7 @@ function guidedReviewBody(c) {
     ['Motivo', 'reasons', c.reasons.map(r => r.label + (r.main ? ' · Principal' : '')).join('; ')],
     ...c.reasons.map((r, i) => [r.label, guidedSteps(c).find(s => s.reason === i)?.key || 'reasons',
       CONSULT.clean(c, pat(c.pid)).reasons[i]?.answers.map(a => a.label + ': ' + guidedDisplay(a.value)).join('; ')]),
-    ['Antecedentes del paciente', 'history', Object.keys(GUIDE.historyGroups).map(k => GUIDE.historyGroups[k] + ': ' + guidedHistorySummary(c, k)).join('; ')],
+    ['Antecedentes del paciente', 'history', ['allergies', ...guidedHistoryGroupsFor(c)].map(k => GUIDE.historyGroups[k] + ': ' + guidedHistorySummary(c, k)).join('; ')],   // gineco solo mujeres; pediátricos solo menores
     ...(c.mode === 'complete' ? [['Revisión por sistemas', 'ros', guidedDisplay(c.ros)]] : []),
     ['Diagnóstico', 'dx', c.dx.map(CONSULT.diagnosisText).join('; ')],
     ['Exámenes', c.mode === 'quick' ? 'indications' : 'orders', c.orders.map(o => o.label + ' · solicitado').concat(

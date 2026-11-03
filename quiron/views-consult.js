@@ -442,9 +442,22 @@ function consultReasons(c, questions = false, only = null, questionIds = null) {
   }).join('');
   return '<div class="stack">' + search + rows + '</div>';
 }
+// Palabras con que los pacientes y médicos nombran cada motivo (para que la plantilla con sus preguntas de alarma se use)
+const REASON_WORDS = { cefalea: 'dolor de cabeza jaqueca migraña', dolor_toracico: 'dolor de pecho opresión en el pecho precordialgia', dificultad_respiratoria: 'falta de aire ahogo disnea',
+  dolor_abdominal: 'dolor de barriga dolor de estómago panza abdominalgia cólico', ardor_al_orinar: 'disuria dolor al orinar infección urinaria', sangre_en_orina: 'hematuria orina con sangre',
+  dolor_de_garganta: 'odinofagia amigdalitis faringitis', dolor_lumbar: 'dolor de espalda lumbalgia lumbago dolor de cintura', fiebre: 'calentura febril temperatura alta',
+  mareos: 'mareado mareada', vertigo: 'todo da vueltas', diarrea: 'evacuaciones líquidas soltura', vomitos: 'vómito devolver', nauseas: 'náusea ganas de vomitar',
+  hipertension_arterial: 'presión alta tensión alta hta', palpitaciones: 'taquicardia corazón acelerado', sincope: 'desmayo pérdida de conocimiento', desmayos: 'desmayo',
+  estrenimiento: 'constipación no evacúa', reflujo: 'acidez agruras pirosis', prurito: 'picazón comezón picor', erupciones: 'ronchas sarpullido brote', edemas: 'hinchazón piernas hinchadas',
+  dolor_articular: 'dolor de rodilla dolor de hombro artralgia', dolor_muscular: 'mialgia dolor de cuerpo', fatiga: 'cansancio agotamiento', congestion_nasal: 'nariz tapada mocos rinorrea',
+  control_postoperatorio: 'postoperatorio después de la cirugía', revision_de_resultados: 'resultados exámenes laboratorio', dolor_cervical: 'dolor de cuello cervicalgia' };
+// Coincidencia por palabras: cada palabra buscada (salvo «de», «la»…) debe ser el comienzo de alguna palabra del texto
+const SEARCH_STOP = new Set(['de', 'del', 'la', 'el', 'los', 'las', 'en', 'al', 'y', 'con', 'por', 'a']);
+const searchWords = s => normQ(s).split(/[^a-z0-9ñ.]+/).filter(Boolean);
+const searchMatch = (q, text) => { const qs = searchWords(q).filter(w => !SEARCH_STOP.has(w)); if (!qs.length) return false; const ws = searchWords(text); return qs.every(w => ws.some(x => x.startsWith(w))); };
 function consultReasonOptions(c, q) {
   const ordered = c.mode === 'quick' ? CONSULT.reasons.filter(r => r.group === 'Rápida').concat(CONSULT.reasons.filter(r => r.group !== 'Rápida')) : CONSULT.reasons;
-  const matches = ordered.filter(r => r.key !== 'otro_motivo' && r.label !== 'Otro' && normQ(r.label + ' ' + r.group).includes(normQ(q)) );
+  const matches = ordered.filter(r => r.key !== 'otro_motivo' && r.label !== 'Otro' && (!q || searchMatch(q, r.label + ' ' + r.group + ' ' + (REASON_WORDS[r.key] || ''))));
   // "Otro motivo" siempre al final de la lista, aunque no se haya buscado nada
   const other = CONSULT.reasons.find(r => r.key === 'otro_motivo');
   const unique = [...new Map(matches.map(r => [r.key, r])).values()].slice(0, q ? 25 : 12).concat(other ? [other] : []);

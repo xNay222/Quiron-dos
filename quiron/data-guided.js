@@ -346,6 +346,8 @@ const GUIDE = (() => {
     if (s.key === 'context-specialty' && (!c.doc || !c.specialty?.trim())) missing.push('Médico y especialidad');
     if (s.type === 'reasonSearch' && !c.reasons.length) missing.push('Motivo principal');
     if (s.type === 'allergiesGroup' && p.history.allergies.status === 'desconocido' && !init(c).allergyReviewed) missing.push('Confirme el estado de alergias, incluso si sigue desconocido');
+    if (s.type === 'allergiesGroup' && p.history.allergies.status === 'conocidas' && !(p.history.allergies.items || []).length && !init(c).allergyDraft?.substance) missing.push('Elija o escriba la sustancia (o cambie a «Niega» o «Desconocido»)');
+    if (s.type === 'dxSearch' && c.kind !== 'evolution') c.dx.filter(d => d.label && !d.certainty).forEach(d => missing.push('Certeza de «' + d.label + '»'));
     if (s.type === 'vitalsGroup') missing.push(...c.vitals.flatMap(CONSULT.validateVitals));
     if (s.type === 'examGroup') Object.entries(c.exam).forEach(([region, e]) => {
       if (e.state === 'normal' && !e.confirmed?.length) missing.push('Ítems confirmados normales en ' + region);

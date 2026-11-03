@@ -1362,11 +1362,14 @@ async function test(name, fn) {
     assert.equal(c.dx.length, 2);
     assert.equal(c.dx[0].priority, 'principal');
     assert.equal(c.dx[1].priority, 'secundario');
-    assert.ok(guidedDxOptions('').includes('Escriba el diagnóstico'));   // el médico escribe el diagnóstico (sin sugerencias)
+    assert.ok(guidedDxOptions('').includes('Escriba el diagnóstico'));   // sin texto: solo la indicación
     assert.ok(guidedSelected(c, 'dx', 'label').includes('data-act="guideDxMain"'));
     const catalog = CONSULT.diagnoses.find(d => d.synonyms?.length && d.code);
-    assert.ok(guidedDxOptions(catalog.synonyms[0]).includes('Agregar diagnóstico'));
-    assert.ok(guidedDxOptions(catalog.code).includes('Agregar diagnóstico'));
+    // el catálogo se sugiere por sinónimo o código CIE-10, y siempre se puede escribir tal cual
+    assert.ok(guidedDxOptions(catalog.synonyms[0]).includes('data-act="guideDxPick"'));
+    assert.ok(guidedDxOptions(catalog.code).includes(catalog.code));
+    assert.ok(guidedDxOptions(catalog.synonyms[0]).includes('Escribirlo tal cual'));
+    assert.ok(guidedDxOptions('diagnóstico inventado xyz').includes('Agregar diagnóstico'));
     const certainty = c.dx[1].certainty;
     ACTIONS.guideDxMain({ dataset: { i: '1' } });
     assert.equal(c.dx[0].priority, 'secundario');
