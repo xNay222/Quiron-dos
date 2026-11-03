@@ -1,0 +1,106 @@
+/* Interfaz "Cristal": clara, azul y blanco, sobre una foto de quirófano aclarada y desenfocada.
+   Se apoya en la base clara de la app (data-theme="light") y la ajusta aquí.
+   Aproximación web del vidrio de Apple (backdrop-filter): no es Liquid Glass oficial.
+   Capas: vidrio más transparente solo en lo que flota (menú, barra superior, mensajes);
+   el contenido (tarjetas, listas, tablas, ventanas) usa un material blanco denso para que los datos clínicos se lean bien. */
+
+html.cristal.cristal[data-theme]{
+  --accent:#0a66d8;            /* azul: 5,4:1 sobre el blanco de las tarjetas (texto de botones y enlaces) */
+  --accent-soft:rgba(10,102,216,.12);
+  --on-accent:#ffffff;
+  --cr-fg:#0e1a24;             /* texto principal: 15,8:1 sobre el material de contenido */
+  --cr-fg2:#4a5b69;            /* texto secundario: 6,6:1 */
+  --cr-glass:rgba(255,255,255,.46);
+  --cr-glass-strong:rgba(255,255,255,.66);
+  --cr-content:rgba(255,255,255,.78);
+  --cr-content-hi:rgba(250,252,255,.90);
+  --cr-edge:rgba(255,255,255,.9);
+  --cr-hair:rgba(14,26,36,.08);
+  --cr-blur:blur(28px) saturate(170%);
+  --cr-blur-content:blur(24px) saturate(150%);
+  --cr-shadow:0 1px 2px rgba(20,40,70,.06),0 16px 44px -18px rgba(20,40,70,.30);
+  --fg:var(--cr-fg);
+  --fg2:var(--cr-fg2);
+  --card:var(--cr-content);
+  --line:var(--cr-hair);
+  --lg-bg:var(--cr-glass);
+  --lg-bg-strong:var(--cr-glass-strong);
+  --lg-edge:var(--cr-edge);
+  --lg-line:var(--cr-hair);
+  --lg-blur:var(--cr-blur);
+}
+
+/* Fondo: la foto (quiron/fondo-cristal.jpg) en una capa fija, aclarada con un velo blanco azulado y desenfocada,
+   para que el texto oscuro se lea igual de bien encima. Sin foto queda solo el degradado claro. */
+html.cristal[data-theme] body{
+  background:radial-gradient(90% 70% at 80% 0%,#dbe9fb 0%,transparent 60%),radial-gradient(80% 60% at 0% 100%,#e6eef6 0%,transparent 60%),#eef3f8;
+  background-attachment:fixed;color:var(--cr-fg)}
+html.cristal[data-theme] body::before{content:"";position:fixed;inset:-16px;z-index:-1;pointer-events:none;
+  background:linear-gradient(100deg,rgba(242,247,252,.86) 0%,rgba(236,243,250,.70) 50%,rgba(228,238,248,.55) 100%),var(--cr-photo,none) center/cover no-repeat;
+  filter:blur(6px) saturate(1.05)}
+
+/* ---------- Contenido: material blanco denso ---------- */
+html.cristal[data-theme] .card,html.cristal[data-theme] .list,html.cristal[data-theme] .tablewrap,html.cristal[data-theme] .kpi,html.cristal[data-theme] .bedgrid > *,html.cristal[data-theme] .simple-task,html.cristal[data-theme] .today-feed,html.cristal[data-theme] .ds-card{
+  background:var(--cr-content);-webkit-backdrop-filter:var(--cr-blur-content);backdrop-filter:var(--cr-blur-content);
+  border:0;box-shadow:inset 0 1px 0 var(--cr-edge),inset 0 0 0 1px var(--cr-hair),var(--cr-shadow)}
+html.cristal[data-theme] .card{border-radius:22px}
+html.cristal[data-theme] .list .row:hover{background:rgba(10,102,216,.05)}
+html.cristal[data-theme] .input,html.cristal[data-theme] select.input,html.cristal[data-theme] textarea.input{background:rgba(255,255,255,.85);box-shadow:inset 0 0 0 1px rgba(14,26,36,.14);color:var(--cr-fg)}
+html.cristal[data-theme] .input:focus{box-shadow:inset 0 0 0 1.5px var(--accent),0 0 0 4px var(--accent-soft)}
+html.cristal[data-theme] .input::placeholder{color:#6b7b88}
+html.cristal[data-theme] .head h1{letter-spacing:-.03em}
+html.cristal[data-theme] .simple-task{background:color-mix(in srgb,var(--accent) 9%,var(--cr-content))}
+html.cristal[data-theme] .btn.primary{background:var(--accent);color:var(--on-accent)}
+
+/* ---------- Menú: dock vertical que flota a la izquierda (computadora) ---------- */
+@media(min-width:1024px){
+  html.cristal[data-theme] .app{grid-template-columns:104px minmax(0,1fr)}
+  html.cristal[data-theme] .app .side{position:fixed;left:16px;top:0;bottom:0;margin-block:auto;height:fit-content;max-height:calc(100dvh - 32px);z-index:35;
+    width:76px;padding:14px 10px;border-radius:30px;gap:4px;align-items:center;overflow-y:auto;scrollbar-width:none;
+    background:var(--cr-glass);-webkit-backdrop-filter:var(--cr-blur);backdrop-filter:var(--cr-blur);
+    box-shadow:inset 0 1px 0 var(--cr-edge),inset 0 0 0 1px var(--cr-hair),var(--cr-shadow)}
+  html.cristal[data-theme] .app .side::-webkit-scrollbar{display:none}
+  html.cristal[data-theme] .app-content{grid-column:2;min-width:0}
+  html.cristal[data-theme] .side .brand{padding:2px 0 10px;display:grid;place-items:center}
+  html.cristal[data-theme] .side .brandlogo{content:url(icon.svg);width:44px;height:44px;border-radius:14px;filter:none}
+  html.cristal[data-theme] .side .nav-group,html.cristal[data-theme] .side .nav-label,html.cristal[data-theme] .side .foot > div{display:none}
+  html.cristal[data-theme] .side .sep{width:28px;height:1px;margin:6px auto;background:var(--cr-hair)}
+  html.cristal[data-theme] .side .nav{position:relative;width:52px;height:52px;padding:0;justify-content:center;border-radius:18px;color:var(--cr-fg2)}
+  html.cristal[data-theme] .side .nav svg{width:24px;height:24px}
+  html.cristal[data-theme] .side .nav[aria-current="page"]{background:var(--accent);color:#fff;box-shadow:0 8px 20px -8px rgba(10,102,216,.7)}
+  html.cristal[data-theme] .side .nav[aria-current="page"] svg{color:#fff;stroke:#fff;opacity:1}
+  html.cristal[data-theme] .side .nav:hover:not([aria-current="page"]){background:rgba(14,26,36,.06);color:var(--cr-fg)}
+  html.cristal[data-theme] .side .nav .count{position:absolute;top:4px;right:4px;margin:0;min-width:18px;font-size:11px;line-height:18px;padding:0 5px}
+  html.cristal[data-theme] .side .foot{margin-top:6px;padding:0;border:0}
+  html.cristal[data-theme] .side .userbtn{width:52px;height:52px;padding:0;justify-content:center;border-radius:18px}
+  html.cristal[data-theme] .side .userbtn > span:last-child{display:none}
+  html.cristal[data-theme] .main{max-width:1320px}
+}
+
+/* ---------- Barra superior: cápsulas de vidrio que flotan ---------- */
+html.cristal[data-theme] .global-topbar{background:transparent}
+html.cristal[data-theme] .global-search-button,html.cristal[data-theme] .shell-icon-button{background:var(--cr-glass-strong);-webkit-backdrop-filter:var(--cr-blur);backdrop-filter:var(--cr-blur);
+  box-shadow:inset 0 1px 0 var(--cr-edge),inset 0 0 0 1px var(--cr-hair),var(--cr-shadow);color:var(--cr-fg)}
+
+/* ---------- Teléfono: la barra de abajo también flota ---------- */
+@media(max-width:1023px){
+  html.cristal[data-theme] .app .side{left:12px;right:12px;bottom:calc(10px + env(safe-area-inset-bottom,0px));width:auto;border-radius:28px;
+    background:var(--cr-glass-strong);-webkit-backdrop-filter:var(--cr-blur);backdrop-filter:var(--cr-blur);
+    box-shadow:inset 0 1px 0 var(--cr-edge),inset 0 0 0 1px var(--cr-hair),var(--cr-shadow);border:0}
+  html.cristal[data-theme] .side .nav[aria-current="page"]{color:var(--accent)}
+}
+
+/* ---------- Ventanas y mensajes ---------- */
+html.cristal[data-theme] .sheet{background:var(--cr-content-hi);-webkit-backdrop-filter:var(--cr-blur);backdrop-filter:var(--cr-blur);
+  box-shadow:inset 0 1px 0 var(--cr-edge),inset 0 0 0 1px var(--cr-hair),0 30px 90px -24px rgba(20,40,70,.45)}
+html.cristal[data-theme] .scrim{background:rgba(20,34,50,.28)}
+html.cristal[data-theme] .toast{background:var(--cr-glass-strong);color:var(--cr-fg)}
+
+/* ---------- Accesibilidad: menos transparencia o más contraste = superficies opacas ---------- */
+@media (prefers-reduced-transparency:reduce){
+  html.cristal.cristal[data-theme]{--cr-glass:#f4f7fb;--cr-glass-strong:#f4f7fb;--cr-content:#ffffff;--cr-content-hi:#ffffff}
+  html.cristal[data-theme] .card,html.cristal[data-theme] .list,html.cristal[data-theme] .app .side,html.cristal[data-theme] .sheet,html.cristal[data-theme] .global-search-button,html.cristal[data-theme] .shell-icon-button{-webkit-backdrop-filter:none;backdrop-filter:none}
+}
+@media (prefers-contrast:more){
+  html.cristal.cristal[data-theme]{--cr-content:#ffffff;--cr-glass:#ffffff;--cr-glass-strong:#ffffff;--cr-hair:rgba(14,26,36,.35);--cr-fg2:#2c3a46}
+}

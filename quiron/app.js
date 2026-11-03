@@ -24,6 +24,7 @@ const ICONS = {
   moon: '<path d="M21 13A9 9 0 0 1 11 3a9 9 0 1 0 10 10Z"/>',
   leaf: '<path d="M20 3C8 2 3 8 5 15s15 8 15-12ZM4 21 15 10"/>',
   buscar: '<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',
+  cristal: '<path d="M6.5 3.5h11l3.5 5.5-9 11.5L3 9z"/><path d="M3 9h18M9.5 3.5 8 9l4 11.5M14.5 3.5 16 9l-4 11.5"/>',
 };
 const icon = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[k]}</svg>`;
 
@@ -131,17 +132,17 @@ function shellNav(n, cls = '') {
 function renderTopbar() {
   const bar = document.getElementById('global-topbar');
   const who = S.session?.name || ROLES[role()].name;
-  bar.innerHTML = `<button class="global-search-button" id="global-search-button" data-act="globalSearch" aria-label="Buscar paciente" title="Buscar paciente Ctrl K" aria-keyshortcuts="Control+k Meta+k /">${icon('buscar')}<span>Buscar paciente</span><kbd>Ctrl K</kbd></button><button class="shell-icon-button" id="theme-button" data-act="rotateTheme"></button><button class="shell-icon-button shell-avatar" data-act="switchUser" aria-label="Mi cuenta: ${esc(who)}" title="Mi cuenta">${esc(initials(who.replace(/^Dra?\. /, '')))}</button>`;
+  bar.innerHTML = `<button class="global-search-button" id="global-search-button" data-act="globalSearch" aria-label="Buscar paciente" title="Buscar paciente Ctrl K" aria-keyshortcuts="Control+k Meta+k /">${icon('buscar')}<span>Buscar paciente</span><kbd>Ctrl K</kbd></button>${THEMES.length > 1 ? '<button class="shell-icon-button" id="theme-button" data-act="rotateTheme"></button>' : ''}<button class="shell-icon-button shell-avatar" data-act="switchUser" aria-label="Mi cuenta: ${esc(who)}" title="Mi cuenta">${esc(initials(who.replace(/^Dra?\. /, '')))}</button>`;
   updateThemeButton();
 }
 function updateThemeButton() {
   const button = document.getElementById('theme-button'); if (!button) return;
   const index = Math.max(0, THEMES.findIndex(([key]) => key === getTheme()));
-  button.innerHTML = icon(['sun', 'moon', 'leaf'][index]);
+  button.innerHTML = icon(['sun', 'moon', 'leaf', 'cristal'][index] || 'leaf');
   button.setAttribute('aria-label', 'Tema: ' + THEMES[index][1] + ' (cambiar)');
-  button.title = 'Tema: ' + THEMES[index][1] + ' · Cambiar a ' + THEMES[(index + 1) % 3][1];
+  button.title = 'Tema: ' + THEMES[index][1] + ' · Cambiar a ' + THEMES[(index + 1) % THEMES.length][1];
 }
-ACTIONS.rotateTheme = () => setTheme(THEMES[(Math.max(0, THEMES.findIndex(([key]) => key === getTheme())) + 1) % 3][0]);
+ACTIONS.rotateTheme = () => setTheme(THEMES[(Math.max(0, THEMES.findIndex(([key]) => key === getTheme())) + 1) % THEMES.length][0]);
 const mobileSectionCount = () => matchMedia('(min-width:600px)').matches ? 7 : 5;
 // "Más" en teléfono y tableta: las secciones que no caben en la barra, por grupos y en cuadrícula de iconos grandes
 function moreSectionsHTML() {
@@ -232,7 +233,7 @@ ACTIONS.switchUserDemo = () => {
     <h3 class="small muted" style="margin:6px 0 0">Enfermería</h3><div class="list">${opt('enfermeria', null, 'Enfermería', 'Registra las aplicaciones de medicación en hospitalización')}</div>
     <h3 class="small muted" style="margin:6px 0 0">Almacén</h3><div class="list">${opt('almacen', null, 'Almacén', 'Inventario, compras y despacho de medicación a hospitalización')}</div>
     <h3 class="small muted" style="margin:6px 0 0">Exámenes</h3><div class="list">${opt('laboratorio', null, 'Laboratorio', 'Recibe órdenes y sube resultados')}${opt('imagen', null, 'Rayos X e imagen', 'Recibe órdenes y sube estudios e informes')}</div>
-    <div class="between"><span class="small muted">Apariencia</span>${themeSeg('setTheme')}</div>`);
+    ${THEMES.length > 1 ? `<div class="between"><span class="small muted">Apariencia</span>${themeSeg('setTheme')}</div>` : ''}`);
 };
 ACTIONS.setUser = el => {
   S.session = { role: el.dataset.r, doc: el.dataset.doc || null }; save(); closeSheet();
@@ -626,14 +627,18 @@ async function localAI() {
 
 // Modo día / noche, recordado en este navegador
 const THEME_KEY = 'quiron-theme';
-function getTheme() { try { return localStorage.getItem(THEME_KEY) || 'verde'; } catch (e) { return 'verde'; } }   // Esmeralda por defecto; Día y Noche son opcionales
-function applyTheme(t) { if (t === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', t); }
-const THEMES = [['verde', 'Esmeralda'], ['light', 'Día'], ['dark', 'Noche']];   // Esmeralda: negro con verde, como el diseño de referencia
+// Una sola interfaz: Cristal (la anterior, con Esmeralda, Día y Noche, quedó guardada en la etiqueta de git interfaz-v1)
+function getTheme() { return 'cristal'; }
+// Cristal: la base clara (data-theme="light") con la capa de vidrio y el fondo de cristal.css
+function applyTheme(t) { const h = document.documentElement; h.classList?.toggle?.('cristal', t === 'cristal'); if (t === 'auto') h.removeAttribute('data-theme'); else h.setAttribute('data-theme', t === 'cristal' ? 'light' : t); if (t === 'cristal') cristalPhoto(); }
+// Si hay una foto de la clínica en quiron/fondo-cristal.jpg, el tema Cristal la usa de fondo (si no, el paisaje dibujado)
+function cristalPhoto() { if (cristalPhoto.done || typeof Image !== 'function') return; cristalPhoto.done = true; const im = new Image(); im.onload = () => document.documentElement.style.setProperty('--cr-photo', 'url(fondo-cristal.jpg)'); im.src = 'fondo-cristal.jpg'; }
+const THEMES = [['cristal', 'Cristal']];   // Esmeralda: negro con verde, como el diseño de referencia
 function setTheme(t) { try { localStorage.setItem(THEME_KEY, t); } catch (e) {}
   if (!matchMedia('(prefers-reduced-motion: reduce)').matches) { const h = document.documentElement; h.classList.add('theme-fade'); clearTimeout(setTheme.t); setTheme.t = setTimeout(() => h.classList.remove('theme-fade'), 400); }
   applyTheme(t); updateThemeButton();
   document.querySelectorAll('[data-act="setTheme"],[data-act="authTheme"]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.k === t))); toast(`Tema ${(THEMES.find(x => x[0] === t) || ['', 'del dispositivo'])[1]} activado`); }
-const themeSeg = (act = 'setTheme') => `<div class="seg" role="group" aria-label="Apariencia">${THEMES.map(([k, t]) => `<button data-act="${act}" data-k="${k}" aria-pressed="${getTheme() === k}">${t}</button>`).join('')}</div>`;
+const themeSeg = (act = 'setTheme') => THEMES.length < 2 ? '' : `<div class="seg" role="group" aria-label="Apariencia">${THEMES.map(([k, t]) => `<button data-act="${act}" data-k="${k}" aria-pressed="${getTheme() === k}">${t}</button>`).join('')}</div>`;
 applyTheme(getTheme());
 
 // Abrir con una copia de la carpeta "copias de seguridad" (servidor local): http://localhost:8082/?cargar=<archivo>.json

@@ -192,7 +192,7 @@ const toCSV = rows => rows.map(r => r.map(v => { const s = String(v ?? ''); retu
 
 // ---------- Ajustes ----------
 // Ajustes personales (todos los roles): apariencia, animaciones y su cuenta. Lo de la clínica es solo de Administración.
-const appearanceCard = () => `<div class="card" style="margin-bottom:16px"><div class="between" style="gap:12px;flex-wrap:wrap"><div><h2 style="margin:0">Apariencia</h2><div class="small muted">Esmeralda (predeterminado), Día (fondo blanco) o Noche (fondo negro). Se guarda en este equipo.</div></div>
+const appearanceCard = () => THEMES.length < 2 ? '' : `<div class="card" style="margin-bottom:16px"><div class="between" style="gap:12px;flex-wrap:wrap"><div><h2 style="margin:0">Apariencia</h2><div class="small muted">Esmeralda (predeterminado), Día (fondo blanco) o Noche (fondo negro). Se guarda en este equipo.</div></div>
     ${themeSeg('setTheme')}</div></div>`;
 const personalSettings = () => { const u = meUser();
   return header('Ajustes', 'Apariencia y rendimiento en este equipo, y su cuenta') + appearanceCard() + simpleCard() + motionCard() +
