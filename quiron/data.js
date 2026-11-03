@@ -305,6 +305,9 @@ const byId = (arr, id) => arr.find(x => x.id === id);
 const prod = id => byId(S.products, id);
 const svc = id => byId(S.services, id);
 const pat = id => byId(S.patients, id);
+// Código QRN del paciente nuevo: nunca repite uno usado (ni de pacientes eliminados) y se comparte entre equipos con S.patSeq (contador del servidor)
+const codeNum = c => +String(c || '').replace(/\D/g, '') || 0;
+const nextPatCode = () => { const n = Math.max(100, (S.patSeq || 0) - 1, ...S.patients.map(p => codeNum(p.code)), ...(S.deletedPatients || []).map(d => codeNum(d.code))) + 1; S.patSeq = n + 1; return 'QRN-' + String(n).padStart(6, '0'); };
 const med = id => byId(MEDICOS, id);
 const sup = id => byId(S.suppliers, id);
 const metodo = id => byId(METODOS, id);

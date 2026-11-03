@@ -241,3 +241,15 @@ Descartado: estilo "Tablero de turno" (clínico sobrio). Trabajo con Codex para 
 - Arreglo en cloud.js: S = nubeBlank() en modo nube, NUBE.loaded (no se guarda nada antes de cargar) y freno si un guardado marca como borrada más de la mitad de una tabla.
 - Tabla `errores` (solo Administración): registra errores de cualquier equipo (mensaje, pantalla, navegador). Consultarla primero ante fallos en teléfonos.
 - Se quitó la compatibilidad con Safari antiguo (traducción con esbuild y compat.js): no era la causa, pero el usuario prefirió quitarla.
+
+## Auditoría (02/11/2026)
+- Recorrido automático de los 10 roles (pantallas, botones, ventanas, tutoriales, permisos de la nube). Arreglos:
+  - Alta: el médico da el alta clínica (sin precios); la cuenta la hace Administración en Contabilidad › Por confirmar › "Altas por cobrar" (a.billPending).
+    Antes, en la nube, el médico no veía el presupuesto y cobraba la estancia completa aparte (cobro doble).
+  - Migración 20261102000008_auditoria.sql: enfermería guarda pacientes (triaje); ajustes_por_rol (labCatalog del laboratorio, tplSeeded de médicos);
+    consultas_resumen() para Recepción (sin contenido clínico); política leer_propio (quien escribe ve su propia fila); contadores en tiempo real.
+  - cloud.js: carga los contadores (la numeración ya no vuelve a empezar al recargar), avisa y registra en `errores` lo que el rol no puede guardar (nubeDenied).
+  - Códigos QRN con nextPatCode() (S.patSeq): no se repiten al eliminar pacientes ni entre equipos.
+  - Inicio sin avisos de secciones que el rol no tiene; contadores del menú del anestesiólogo solo lo suyo; arranque al final de app.js; CSP limitada a las librerías usadas.
+- Pruebas: herramientas/pruebas-auditoria-2026-11.cjs.
+- Pendiente del usuario: activar la facturación de la clave de Gemini (plan gratuito puede usar los datos enviados).

@@ -58,7 +58,7 @@ VIEWS.inicio = () => {
     late.length && ['warn', `${late.length} cirugía${late.length > 1 ? 's' : ''} sin registrar como realizada`, 'Ya pasó su hora prevista', 'quirofano'],
     urgentEx && ['warn', `${urgentEx} ${urgentEx > 1 ? 'exámenes urgentes' : 'examen urgente'} sin resultado`, 'Laboratorio y rayos X', 'examenes'],
     a.expired.length && ['warn', `${a.expired.length} lote${a.expired.length > 1 ? 's' : ''} vencido${a.expired.length > 1 ? 's' : ''} por retirar`, 'Inventario', 'inventario'],
-  ].filter(Boolean);
+  ].filter(x => x && canSee(x[3]));   // solo avisos de secciones que este usuario tiene
   // La frase del día: cómo está la clínica ahora mismo, en palabras. Datos en negrita; lo urgente en rojo.
   const hi = (txt, cls = '') => `<b class="today-hi ${cls}">${txt}</b>`;
   const qxTxt = live.length ? `El quirófano está ${hi(`en uso hasta las ${qxEnd(live[0])}`, 'bad')} (${esc(live[0].proc)})`
@@ -238,7 +238,7 @@ ACTIONS.savePatient = () => {
   if (!can('pac.clinico')) { const existing = UI.editingPat && pat(UI.editingPat); ['allergies','conditions','meds','surgeries'].forEach(k => { data[k] = existing?.[k] || []; }); }
   let p;
   if (UI.editingPat) { p = pat(UI.editingPat); if (can('pac.clinico')) CONSULT.applyLegacyClinical(p, data, new Date().toISOString(), S.session?.uid); Object.assign(p, data); log('Ficha de paciente editada', p.name); }
-  else { p = { id: uid('pt'), code: 'QRN-' + String(101 + S.patients.length).padStart(6, '0'), notes: [], consents: [], created: dAt(0), ...data }; S.patients.push(p); log('Paciente registrado', `${p.code} · ${p.name}`); }
+  else { p = { id: uid('pt'), code: nextPatCode(), notes: [], consents: [], created: dAt(0), ...data }; S.patients.push(p); log('Paciente registrado', `${p.code} · ${p.name}`); }
   CONSULT.migratePatient(p);
   save();
   // Recepción no entra al expediente: vuelve a la cita con el paciente nuevo ya elegido

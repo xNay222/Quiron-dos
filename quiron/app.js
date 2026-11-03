@@ -94,12 +94,12 @@ const UI = {}; // estado efímero de las vistas (filtros, búsquedas)
 
 function navCount(k) {
   if (k === 'inventario') { const a = alerts(); return pendingMedOrders().length + (role() === 'almacen' ? 0 : a.low.length + a.expired.length + a.soon.length); }
-  if (k === 'contabilidad') return S.orders.filter(o => o.status === 'por_aprobar').length + (typeof pendingDues === 'function' ? pendingDues().length : 0) + S.budgets.filter(b => ['enviado', 'aceptado'].includes(b.status)).length;
-  const mineOnly = role() === 'medico';   // el médico tratante: solo sus pacientes; residentes y enfermería ven a todos
+  if (k === 'contabilidad') return S.orders.filter(o => o.status === 'por_aprobar').length + (typeof pendingDues === 'function' ? pendingDues().length : 0) + (typeof billPendingAdms === 'function' ? billPendingAdms().length : 0) + S.budgets.filter(b => ['enviado', 'aceptado'].includes(b.status)).length;
+  const mineOnly = role() === 'medico' || role() === 'anestesiologo';   // el médico tratante y el anestesiólogo: solo sus pacientes; residentes y enfermería ven a todos
   if (k === 'quirofano') return S.appts.filter(a => a.kind === 'cirugia' && a.date === dAt(0) && isActive(a) && !a.done && (!mineOnly || a.doc === myDoc() || a.anest === myDoc())).length;
   if ((k === 'hospitalizacion' || k === 'emergencias') && isNurse()) return nurseDue((S.admissions || []).filter(a => a.status === 'ingresado' && AREAS[admArea(a)].route === k).map(a => a.id)).length;
   if (k === 'hospitalizacion' || k === 'emergencias') return (S.admissions || []).filter(a => a.status === 'ingresado' && AREAS[admArea(a)].route === k && (!mineOnly || a.doc === myDoc())).length;
-  if (k === 'agenda') return S.appts.filter(a => a.date === dAt(0) && ['en_espera'].includes(a.status) && (!myDoc() || a.doc === myDoc())).length + (typeof refsToHandle === 'function' ? refsToHandle().length : 0);
+  if (k === 'agenda') return S.appts.filter(a => a.date === dAt(0) && ['en_espera'].includes(a.status) && (!myDoc() || a.doc === myDoc() || a.anest === myDoc())).length + (typeof refsToHandle === 'function' ? refsToHandle().length : 0);
   if (k === 'atencion') return S.budgets.filter(b => budStatus(b) === 'abierto').length;
   if (k === 'historias') return role() === 'admin' ? S.records.filter(r => r.status === 'pendiente').length : 0;
   if (k === 'examenes') return typeof examBadge === 'function' ? examBadge() : 0;
@@ -644,17 +644,6 @@ async function loadFromServerCopy(name) {
     log('Datos cargados desde la copia del servidor', name); save(); clean(); location.reload(); return true;
   } catch (e) { clean(); alert('No se pudieron cargar los datos: ' + e.message); return false; }
 }
-(function start() {
-  const cargar = typeof URLSearchParams === 'function' && location?.search ? new URLSearchParams(location.search).get('cargar') : null;
-  if (cargar) { loadFromServerCopy(cargar); return; }
-  const h = (location.hash || '').slice(1);
-  if (h && VIEWS[h]) route = h;
-  if (typeof NUBE !== 'undefined' && NUBE.on) { nubeBoot(); return; }   // publicada en la nube: datos y acceso desde Supabase (cloud.js)
-  const boot = () => { if (authBoot()) render(); };   // sin sesión válida: pantalla de acceso
-  // Con el servidor local, primero toma los datos más recientes de cualquier equipo; sin él (o en pruebas) arranca de inmediato
-  if (!STORE.blocked && typeof fetch === 'function' && /^https?:$/.test(location?.protocol || '')) serverPull().then(boot, boot); else boot();
-})();
-
 // Menú lateral: el desvanecido de abajo desaparece cuando ya se ve la última opción
 (() => {
   const side = document.getElementById('side');
@@ -728,3 +717,15 @@ const iaCard = () => { const inClaude = !!window.claude?.use; const st = inClaud
   return `<div class="card" style="margin-bottom:16px"><div class="between" style="gap:12px;flex-wrap:wrap"><div><h2 style="margin:0">IA para leer fotos</h2><div class="small muted">Facturas de compra y cajas de medicamentos. ${esc(st)}</div></div>
     ${can('*') && !inClaude ? `<label class="hstack small" style="max-width:420px"><input type="checkbox" data-ch="iaClin" ${iaClinOn() ? 'checked' : ''}> Usarla también con fotos de pacientes (historias y resultados). El plan gratuito de Google puede usar lo enviado para mejorar sus modelos: déjelo apagado salvo que tenga un plan de pago.</label>` : ''}</div></div>`; };
 ACTIONS.iaClin = el => { try { localStorage.setItem(IA_CLIN_KEY, el.checked ? '1' : '0'); } catch (e) {} delete capCache['sample-clin']; log('IA con datos de pacientes', el.checked ? 'activada' : 'desactivada'); save(); toast(el.checked ? 'IA activada también para fotos de pacientes' : 'IA solo para facturas y productos'); };
+
+// Arranque (al final, cuando ya está definido todo lo de arriba)
+(function start() {
+  const cargar = typeof URLSearchParams === 'function' && location?.search ? new URLSearchParams(location.search).get('cargar') : null;
+  if (cargar) { loadFromServerCopy(cargar); return; }
+  const h = (location.hash || '').slice(1);
+  if (h && VIEWS[h]) route = h;
+  if (typeof NUBE !== 'undefined' && NUBE.on) { nubeBoot(); return; }   // publicada en la nube: datos y acceso desde Supabase (cloud.js)
+  const boot = () => { if (authBoot()) render(); };   // sin sesión válida: pantalla de acceso
+  // Con el servidor local, primero toma los datos más recientes de cualquier equipo; sin él (o en pruebas) arranca de inmediato
+  if (!STORE.blocked && typeof fetch === 'function' && /^https?:$/.test(location?.protocol || '')) serverPull().then(boot, boot); else boot();
+})();

@@ -44,7 +44,7 @@ function pickerCommit(key) {
   ppKeepNew(key); const np = st.np;
   if (!np.name?.trim() || !np.ci?.trim()) return { ok: false, msg: 'Escriba el nombre y la cédula del paciente nuevo.' };
   const dup = S.patients.find(p => normDigits(p.ci) === normDigits(np.ci)); if (dup) return { ok: false, msg: `Ya existe ${dup.name} con esa cédula: pulse "Usar este paciente".` };
-  const p = { id: uid('pt'), code: 'QRN-' + String(101 + S.patients.length).padStart(6, '0'), name: np.name.trim(), ci: np.ci.trim(), phone: np.phone || '', birth: np.birth, sex: np.sex, blood: '', address: '', emergency: '', allergies: [], conditions: [], meds: [], surgeries: [], notes: [], consents: [] };
+  const p = { id: uid('pt'), code: nextPatCode(), name: np.name.trim(), ci: np.ci.trim(), phone: np.phone || '', birth: np.birth, sex: np.sex, blood: '', address: '', emergency: '', allergies: [], conditions: [], meds: [], surgeries: [], notes: [], consents: [] };
   p.created = dAt(0);
   S.patients.push(p); log('Paciente registrado', `${p.code} · ${p.name}`); st.pid = p.id; st.newPat = false;
   return { ok: true, pid: p.id, created: true };

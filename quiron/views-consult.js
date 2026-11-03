@@ -268,10 +268,9 @@ ACTIONS.ccCreatePatient = () => {
     toast('Revise los posibles duplicados antes de continuar.');
     return;
   }
-  const seq = Math.max(100, ...S.patients.map(p => +(p.code || '').replace(/\D/g, '') || 0)) + 1;
   const p = {
     id: uid('pt'),
-    code: 'QRN-' + String(seq).padStart(6, '0'),
+    code: nextPatCode(),
     name: d.givenNames.trim() + ' ' + d.familyNames.trim(),
     givenNames: d.givenNames.trim(),
     familyNames: d.familyNames.trim(),

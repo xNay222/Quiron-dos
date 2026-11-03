@@ -23,6 +23,15 @@ const NUBE_COMPARTIDAS = new Set(['fondos_mov']);
 // Lo que nunca va a "ajustes": sesión, usuarios (van a perfiles), historial (tabla aparte) y cosas de este equipo
 const NUBE_LOCAL = new Set(['session', 'users', 'savedAt', 'audit', 'backups', 'backupKey', 'backupCfg', 'user', ...Object.keys(NUBE_TABLAS)]);
 const NUBE_TASA = new Set(['rate', 'rateDate', 'rateSource', 'rates', 'rateEUR', 'ratesEUR']);
+// Ajustes que además de Administración puede cambiar cada rol (las mismas claves que permite la base de datos)
+const NUBE_AJ_ROL = { almacen: ['duty', 'nurseWeek'], laboratorio: ['labCatalog', 'labCatalogMeta'], medico: ['tplSeeded'], residente: ['tplSeeded'], anestesiologo: ['tplSeeded'] };
+// Lo que el rol cambió pero la base de datos no le deja guardar: se avisa (una vez por tabla) y queda en el registro de errores
+const NUBE_DENIED = new Set();
+function nubeDenied(what) {
+  if (NUBE_DENIED.has(what)) return; NUBE_DENIED.add(what);
+  nubeErr('Cambio no guardado por permisos del rol ' + (NUBE.me?.rol || '?') + ': ' + what, 'nubePush');
+  if (typeof toast === 'function') toast('Un cambio no se guardó en la nube porque su usuario no tiene permiso para modificarlo. Avise a Administración.');
+}
 
 const NUBE = { on: false, loaded: false, sb: null, me: null, acceso: {}, snap: {}, timer: null, busy: false, again: false, auditN: 0, renderT: null, urls: new Map() };
 try {
@@ -82,6 +91,15 @@ async function nubeAll(table, build) {
     out.push(...data); if (data.length < 1000) return out;
   }
 }
+// Consultas para Recepción: solo lo que se ve en su lista (función consultas_resumen de la base de datos)
+async function nubeConsultasResumen() {
+  const { data, error } = await NUBE.sb.rpc('consultas_resumen'); if (error) { nubeErr('Consultas de recepción: ' + nubeMsg(error), 'nubeLoad'); return []; }
+  return (data || []).map(r => ({ ...r, reasons: [], dx: [] }));
+}
+// Al cambiar la agenda, Recepción vuelve a pedir el estado de las consultas (no recibe las consultas en tiempo real)
+let nubeResumenT = null;
+function nubeResumenLater() { if (nubeCan('consultas', 'leen')) return; clearTimeout(nubeResumenT);
+  nubeResumenT = setTimeout(async () => { S.consults = await nubeConsultasResumen(); NUBE.snap.consultas = Object.fromEntries(S.consults.map(c => [c.id, JSON.stringify(c)])); nubeRedraw(); }, 1500); }
 async function nubeLoad() {
   const sb = NUBE.sb;
   const acc = await sb.from('acceso').select('*'); if (acc.error) throw acc.error;
@@ -104,7 +122,14 @@ async function nubeLoad() {
     base.audit = (data || []).map(h => ({ at: String(h.en).slice(0, 16).replace('T', ' '), user: h.nombre, action: h.accion, ref: h.ref }));
   }
   NUBE.auditN = base.audit.length;
+  // Numeración (exámenes, cuentas, órdenes, pacientes…): se sigue desde el contador del servidor, nunca desde cero
+  (await nubeAll('contadores', q => q.select('nombre,valor'))).forEach(r => { base[r.nombre] = Math.max(+base[r.nombre] || 0, +r.valor || 0); NUBE.snap.__ajustes[r.nombre] = JSON.stringify(base[r.nombre]); });
+  // Recepción no lee las consultas (tienen datos clínicos): recibe solo paciente, médico, hora y estado
+  if (!nubeCan('consultas', 'leen')) base.consults = await nubeConsultasResumen();
   S = base; migrate();
+  // Lo que este rol no puede guardar queda como "ya guardado" tal como lo dejó la carga; así solo se avisa de los cambios de la persona
+  for (const [col, t] of Object.entries(NUBE_TABLAS)) if (!nubeCan(t, 'escriben')) for (const rec of S[col] || []) if (rec?.id) (NUBE.snap[t] = NUBE.snap[t] || {})[nubeRowId(col, rec)] = JSON.stringify(rec);
+  if (NUBE.me.rol !== 'admin') for (const k of Object.keys(S)) if (!NUBE_LOCAL.has(k) && !NUBE_TASA.has(k) && !/Seq$/.test(k) && !(NUBE_AJ_ROL[NUBE.me.rol] || []).includes(k)) NUBE.snap.__ajustes[k] = JSON.stringify(S[k]);
   NUBE.loaded = true;   // desde aquí se puede guardar: S ya son los datos reales de la nube
 }
 
@@ -133,7 +158,7 @@ async function nubePush() {
     for (const t of Object.keys(NUBE.snap)) { if (t.startsWith('__') || !seen[t]) continue;
       for (const id of Object.keys(NUBE.snap[t])) if (!seen[t].has(id)) (dels[t] = dels[t] || []).push(id); }
     for (const [t, list] of Object.entries(ups)) {
-      if (!nubeCan(t, 'escriben')) { list.forEach(x => { NUBE.snap[t][x.id] = x.s; }); continue; }   // su rol no modifica esta tabla
+      if (!nubeCan(t, 'escriben')) { list.forEach(x => { NUBE.snap[t][x.id] = x.s; }); nubeDenied(t); continue; }   // su rol no modifica esta tabla
       for (let i = 0; i < list.length; i += 300) {
         const part = list.slice(i, i + 300); const { error } = await sb.from(t).upsert(part.map(x => x.row), { onConflict: 'id' });
         if (error) errors.push(t + ': ' + error.message); else part.forEach(x => { NUBE.snap[t][x.id] = x.s; });
@@ -152,7 +177,7 @@ async function nubePush() {
       if (NUBE_LOCAL.has(k) || typeof S[k] === 'function') continue;
       const s = JSON.stringify(S[k]); if (aj[k] === s) continue;
       if (/Seq$/.test(k) && typeof S[k] === 'number') { const { error } = await sb.rpc('subir_contador', { n: k, v: S[k] }); if (!error) aj[k] = s; continue; }
-      if (!admin && !NUBE_TASA.has(k) && !['duty', 'nurseWeek'].includes(k)) { aj[k] = s; continue; }
+      if (!admin && !NUBE_TASA.has(k) && !(NUBE_AJ_ROL[NUBE.me.rol] || []).includes(k)) { aj[k] = s; nubeDenied('ajustes · ' + k); continue; }
       const { error } = await sb.from('ajustes').upsert({ clave: k, valor: S[k] }, { onConflict: 'clave' }); if (error) errors.push('ajustes: ' + error.message); else aj[k] = s;
     }
     // Perfiles (datos profesionales, tutoriales vistos…); el rol y el estado solo los cambia la administración
@@ -178,7 +203,10 @@ async function nubePush() {
 function nubeRealtime() {
   const ch = NUBE.sb.channel('quiron');
   ch.on('postgres_changes', { event: '*', schema: 'public' }, p => {
-    const t = p.table, r = p.new || {}; if (!r.id && t !== 'ajustes') return;
+    const t = p.table, r = p.new || {};
+    if (t === 'contadores') { if (r.nombre && +r.valor > (+S[r.nombre] || 0)) { S[r.nombre] = +r.valor; NUBE.snap.__ajustes[r.nombre] = JSON.stringify(S[r.nombre]); } return; }
+    if (t === 'citas') nubeResumenLater();
+    if (!r.id && t !== 'ajustes') return;
     if (t === 'ajustes') { const s = JSON.stringify(r.valor); if (NUBE.snap.__ajustes[r.clave] === s) return; NUBE.snap.__ajustes[r.clave] = s; S[r.clave] = r.valor; return nubeRedraw(); }
     if (t === 'perfiles') { const u = nubeUser(r); const s = JSON.stringify(u); if (NUBE.snap.__users[u.id] === s) return; NUBE.snap.__users[u.id] = s;
       const i = S.users.findIndex(x => x.id === u.id); if (i < 0) S.users.push(u); else S.users[i] = u; return nubeRedraw(); }

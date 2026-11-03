@@ -242,21 +242,24 @@ function dischargeItems(a, budgetId, chargeMeds) {
 }
 ACTIONS.discharge = el => {
   const a = admOf(el.dataset.id); if (a.status !== 'ingresado') { toast('Este paciente ya fue dado de alta'); return; } if (!canDischarge(a)) return;
-  UI.dc = { id: a.id, budgetId: a.budgetId || '', meds: false, confirm: false, ret: true };   // solo el presupuesto vinculado al ingreso; ninguno por defecto
+  // Los médicos dan el alta clínica; la cuenta (presupuesto, excedentes, medicación) la hace Administración, que es quien ve los presupuestos
+  UI.dc = { id: a.id, budgetId: a.budgetId || '', meds: false, confirm: false, ret: true, clin: !can('*') };   // solo el presupuesto vinculado al ingreso; ninguno por defecto
   openSheet(`Dar de alta · ${pat(a.pid).name}`, dischargeBody(), `<button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="dischargeSave" data-id="${a.id}">Dar de alta</button>`, { wide: true });
 };
 function dischargeBody() {
   const a = admOf(UI.dc.id); const bs = admBudgets(a); const d = dischargeItems(a, UI.dc.budgetId, UI.dc.meds); const t = totalsOf(d.items, 0);
   const pend = S.medOrders.filter(o => o.admId === a.id && ['pendiente', 'parcial'].includes(o.status));
-  return `${patientBand(a.pid, a.bed)}${a.epicrisis ? `<div class="banner"><span>Informe de egreso listo (${esc(a.epicrisis.cond)}). <button class="btn sm" data-act="egresoOpen" data-id="${a.id}">Revisar</button></span></div>` : `<div class="banner warn"><span><b>Falta el informe de egreso (epicrisis).</b> Puede hacerlo ahora o después del alta. <button class="btn sm" data-act="egresoOpen" data-id="${a.id}">Hacer informe de egreso</button></span></div>`}<div class="small muted">${esc(a.num)} · ${d.days} día(s) en ${a.bed}${a.moves?.length ? ` (llegó por ${a.moves[0].from})` : ''}</div>
-  <div class="field"><label for="dc-b">Presupuesto de esta hospitalización</label><select class="input" id="dc-b" data-ch="dcBudget"><option value="">Sin presupuesto: cobrar la estancia completa</option>${bs.map(b => budOption(b, UI.dc.budgetId)).join('')}</select>
+  const head = `${patientBand(a.pid, a.bed)}${a.epicrisis ? `<div class="banner"><span>Informe de egreso listo (${esc(a.epicrisis.cond)}). <button class="btn sm" data-act="egresoOpen" data-id="${a.id}">Revisar</button></span></div>` : `<div class="banner warn"><span><b>Falta el informe de egreso (epicrisis).</b> Puede hacerlo ahora o después del alta. <button class="btn sm" data-act="egresoOpen" data-id="${a.id}">Hacer informe de egreso</button></span></div>`}<div class="small muted">${esc(a.num)} · ${d.days} día(s) en ${a.bed}${a.moves?.length ? ` (llegó por ${a.moves[0].from})` : ''}</div>`;
+  const clinical = `${pend.length ? `<div class="banner warn">${pend.length} solicitud(es) de medicación con entregas pendientes se cerrarán: lo no entregado se cancela.</div>` : ''}
+  ${(u => u.length ? `<label class="hstack small"><input type="checkbox" id="dc-ret" data-ch="dcRet" ${UI.dc.ret ? 'checked' : ''}> Devolver al almacén lo despachado y no aplicado: ${u.map(x => `${esc(prod(x.it.pid)?.name || '?')} ×${x.n}`).join(', ')}</label>` : '')(unusedOfAdm(a.id))}`;
+  if (UI.dc.clin) return head + clinical + '<div class="small muted">Administración hará la cuenta del alta (presupuesto, días adicionales y medicación) desde Contabilidad › Por confirmar.</div>';
+  return head + `<div class="field"><label for="dc-b">Presupuesto de esta hospitalización</label><select class="input" id="dc-b" data-ch="dcBudget"><option value="">Sin presupuesto: cobrar la estancia completa</option>${bs.map(b => budOption(b, UI.dc.budgetId)).join('')}</select>
     <div class="small muted">${a.budgetId ? 'Vinculado al ingresar al paciente.' : 'Este ingreso no se vinculó a ningún presupuesto al ingresar.'}</div></div>
   ${UI.dc.budgetId && UI.dc.budgetId !== a.budgetId ? `<label class="hstack small" style="color:var(--warn)"><input type="checkbox" id="dc-ok" data-ch="dcConfirm" ${UI.dc.confirm ? 'checked' : ''}> Confirmo que el presupuesto ${esc(byId(S.budgets, UI.dc.budgetId)?.num || '')} (${esc(byId(S.budgets, UI.dc.budgetId)?.proc || '')}) corresponde a esta hospitalización</label>` : ''}
   ${d.b ? `<div class="banner">El paquete ${d.b.num} incluye ${d.incl} día(s)${d.b.material ? ' y el material, medicamentos e insumos' : ''}. Solo se cobran los excedentes${d.b.inv ? `, que se agregan a la cuenta ${esc(byId(S.invoices, d.b.inv)?.num || '')}` : ', que se agregan a la cuenta del paquete'}.</div>
     ${d.medLines.length ? `<label class="hstack small"><input type="checkbox" id="dc-m" data-ch="dcMeds" ${UI.dc.meds ? 'checked' : ''}> Cobrar aparte la medicación despachada (${fmt(d.medLines.reduce((s, x) => s + x.price, 0))})</label>` : ''}` : ''}
   <div class="tablewrap"><table><thead><tr><th>Concepto</th><th class="num">Monto</th></tr></thead><tbody>${d.items.map(x => `<tr><td>${esc(x.name)}</td><td class="num">${fmt(x.price)}</td></tr>`).join('') || '<tr><td colspan="2" class="empty">Sin cargos adicionales: todo está incluido en el paquete.</td></tr>'}</tbody><tfoot><tr><td>${d.b ? 'Excedentes a cobrar' : 'Total de la estancia'}</td><td class="num">${fmt(t.total)}</td></tr></tfoot></table></div>
-  ${pend.length ? `<div class="banner warn">${pend.length} solicitud(es) de medicación con entregas pendientes se cerrarán: lo no entregado se cancela.</div>` : ''}
-  ${(u => u.length ? `<label class="hstack small"><input type="checkbox" id="dc-ret" data-ch="dcRet" ${UI.dc.ret ? 'checked' : ''}> Devolver al almacén lo despachado y no aplicado: ${u.map(x => `${esc(prod(x.it.pid)?.name || '?')} ×${x.n}`).join(', ')}</label>` : '')(unusedOfAdm(a.id))}
+  ${UI.dc.bill ? '' : clinical}
   <div class="small muted">La medicación ya se descontó del inventario al despacharse. La factura fiscal es opcional y se emite desde Contabilidad › Cobros.</div>
   ${dcExonBlock(a, d, t)}`;
 }
@@ -279,11 +282,32 @@ ACTIONS.dcMeds = el => { UI.dc.meds = el.checked; dcRedraw(); };
 ACTIONS.dcRet = el => { UI.dc.ret = el.checked; };
 ACTIONS.dischargeSave = el => {
   const a = admOf(el.dataset.id); if (!a || a.status !== 'ingresado') { toast('Este paciente ya fue dado de alta'); closeSheet(); render(); return; } if (!canDischarge(a)) return;
-  if (UI.dc.budgetId && UI.dc.budgetId !== a.budgetId && !UI.dc.confirm) { toast('Confirme que el presupuesto elegido corresponde a esta hospitalización'); return; }
-  dcKeep(); const exon = can('*') && UI.dc.exon && document.getElementById('dc-ex') ? (UI.dc.exonReason || '').trim() : null;
-  if (exon === '') { toast('Escriba el motivo de la exoneración'); document.getElementById('dc-r')?.focus(); return; }
+  const bill = can('*'); let exon = null;
+  if (bill) { const chk = dcBillCheck(a); if (!chk.ok) return; exon = chk.exon; }
   // Lo no aplicado vuelve al almacén antes de calcular la cuenta (así no se cobra ni cuenta como consumo)
   if (UI.dc.ret) unusedOfAdm(a.id).forEach(x => returnUnits(x.o, x.it, x.n, `Devolución al alta · ${pat(a.pid).name}`));
+  S.medOrders.filter(o => o.admId === a.id && o.status === 'pendiente').forEach(o => { o.status = 'rechazada'; o.reason = 'Cancelada por alta del paciente'; });
+  S.medOrders.filter(o => o.admId === a.id && o.status === 'parcial').forEach(o => closeShortfall(o.id, 'Cerrada por alta del paciente'));
+  a.status = 'alta'; a.dischargedAt = nowStamp();
+  if (!bill) {   // alta clínica: la cuenta queda en Contabilidad › Por confirmar
+    a.billPending = true; a.inv = null;
+    log('Alta de hospitalización', `${a.num} · ${pat(a.pid).name} · cuenta pendiente de Administración`); save(); closeSheet(); render();
+    toast('Alta registrada · Administración hará la cuenta'); return;
+  }
+  const { inv, d } = dcCharge(a);
+  log('Alta de hospitalización', `${a.num} · ${pat(a.pid).name}${inv ? ' · cuenta ' + inv.num : ' · sin cargos adicionales'}`); save();
+  const exonMsg = dcExonApply(a, exon); closeSheet(); render();
+  toast((inv ? `Alta registrada · ${d.b ? 'excedentes agregados a' : 'cuenta'} ${inv.num}` : 'Alta registrada · sin cargos adicionales') + exonMsg);
+};
+// Validaciones de la cuenta del alta (presupuesto elegido a mano y motivo de la exoneración)
+function dcBillCheck(a) {
+  if (UI.dc.budgetId && UI.dc.budgetId !== a.budgetId && !UI.dc.confirm) { toast('Confirme que el presupuesto elegido corresponde a esta hospitalización'); return { ok: false }; }
+  dcKeep(); const exon = can('*') && UI.dc.exon && document.getElementById('dc-ex') ? (UI.dc.exonReason || '').trim() : null;
+  if (exon === '') { toast('Escriba el motivo de la exoneración'); document.getElementById('dc-r')?.focus(); return { ok: false }; }
+  return { ok: true, exon };
+}
+// Cuenta del alta: excedentes a la cuenta del paquete o, sin presupuesto, una cuenta por la estancia
+function dcCharge(a) {
   const d = dischargeItems(a, UI.dc.budgetId, UI.dc.meds); let inv = null;
   if (d.b) {
     if (a.budgetId !== d.b.id) log('Presupuesto asociado manualmente al alta', `${a.num} · ${d.b.num} · ${d.b.proc}`);
@@ -299,15 +323,29 @@ ACTIONS.dischargeSave = el => {
     inv = { id: uid('f'), ...n, pid: a.pid, doc: a.doc, date: dAt(0), disc: 0, proc: `${admArea(a) === 'emerg' ? 'Emergencia' : 'Hospitalización'} ${a.num} (${d.days} días) · ${a.dx}`, items: d.items, cost: d.cost, payments: [], status: 'pendiente' };
     S.invoices.unshift(inv);
   }
-  S.medOrders.filter(o => o.admId === a.id && o.status === 'pendiente').forEach(o => { o.status = 'rechazada'; o.reason = 'Cancelada por alta del paciente'; });
-  S.medOrders.filter(o => o.admId === a.id && o.status === 'parcial').forEach(o => closeShortfall(o.id, 'Cerrada por alta del paciente'));
-  a.status = 'alta'; a.dischargedAt = nowStamp(); a.inv = inv?.id || d.b?.inv || null;
-  log('Alta de hospitalización', `${a.num} · ${pat(a.pid).name}${inv ? ' · cuenta ' + inv.num : ' · sin cargos adicionales'}`); save();
-  // Exoneración: la cuenta (la del alta o la del paquete) queda registrada con todo su monto y saldo cero
-  const target = a.inv ? byId(S.invoices, a.inv) : null; let exonMsg = '';
-  if (exon && target && invOpen(target)) { const x = exonerate(target.id, exon); exonMsg = x.ok ? ` · gastos exonerados (${fmt(x.inv.exon.usd)})` : ` · no se pudo exonerar: ${x.msg}`; }
-  closeSheet(); render();
-  toast((inv ? `Alta registrada · ${d.b ? 'excedentes agregados a' : 'cuenta'} ${inv.num}` : 'Alta registrada · sin cargos adicionales') + exonMsg);
+  a.inv = inv?.id || d.b?.inv || null; delete a.billPending;
+  return { inv, d };
+}
+// Exoneración: la cuenta (la del alta o la del paquete) queda registrada con todo su monto y saldo cero
+function dcExonApply(a, exon) {
+  const target = a.inv ? byId(S.invoices, a.inv) : null;
+  if (!exon || !target || !invOpen(target)) return '';
+  const x = exonerate(target.id, exon); return x.ok ? ` · gastos exonerados (${fmt(x.inv.exon.usd)})` : ` · no se pudo exonerar: ${x.msg}`;
+}
+// Altas que dio un médico: Administración hace la cuenta después
+const billPendingAdms = () => (S.admissions || []).filter(a => a.status === 'alta' && a.billPending);
+ACTIONS.dcBill = el => {
+  const a = admOf(el.dataset.id); if (!can('*') || !a?.billPending) return;
+  UI.dc = { id: a.id, budgetId: a.budgetId || '', meds: false, confirm: false, ret: false, bill: true };
+  openSheet(`Cuenta del alta · ${pat(a.pid)?.name || ''}`, dischargeBody(), `<button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="dcBillSave" data-id="${a.id}">Registrar la cuenta</button>`, { wide: true });
+};
+ACTIONS.dcBillSave = el => {
+  const a = admOf(el.dataset.id); if (!can('*') || !a?.billPending) { closeSheet(); render(); return; }
+  const chk = dcBillCheck(a); if (!chk.ok) return;
+  const { inv, d } = dcCharge(a);
+  log('Cuenta del alta', `${a.num} · ${pat(a.pid)?.name || ''}${inv ? ' · cuenta ' + inv.num : ' · sin cargos adicionales'}`); save();
+  const exonMsg = dcExonApply(a, chk.exon); closeSheet(); render();
+  toast((inv ? `Cuenta registrada · ${d.b ? 'excedentes agregados a' : 'cuenta'} ${inv.num}` : 'Cuenta registrada · sin cargos adicionales') + exonMsg);
 };
 
 // ---------- Inventario → pestaña "Órdenes pendientes" (almacén y administrador) ----------
