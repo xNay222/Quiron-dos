@@ -17,7 +17,7 @@ html.cristal.cristal[data-theme]{
   --cr-edge:rgba(255,255,255,.42);      /* filo superior que capta la luz */
   --cr-rim:rgba(255,255,255,.16);       /* borde de 1 px alrededor */
   --cr-hair:rgba(255,255,255,.10);
-  --cr-blur:blur(24px) saturate(185%) brightness(.92);
+  --cr-blur:blur(12px) saturate(165%) brightness(.94);   /* desenfoque suave: la foto se intuye detrás, como en la referencia */
   --cr-shadow:0 1px 1px rgba(0,0,0,.14),0 18px 46px -22px rgba(0,0,0,.55);
   --cr-glass-ring:inset 0 1px 0 var(--cr-edge),inset 0 0 0 1px var(--cr-rim),inset 0 -1px 0 rgba(255,255,255,.06);
   --fg:var(--cr-fg);
@@ -174,3 +174,19 @@ html.cristal.motion-lite[data-theme] .card .card,html.cristal.motion-lite[data-t
 /* "Hoy en la clínica": sus filas no tenían margen lateral (estaban pensadas sin caja); dentro del cristal sí lo necesitan */
 html.cristal[data-theme] .today-feed .list > .row{padding:14px 18px;gap:14px}
 @media(max-width:600px){html.cristal[data-theme] .today-feed .list > .row{padding:12px 14px}}
+
+/* ---------- Entrada de pantallas sin filtro ----------
+   Las animaciones de la base desenfocan el elemento (filter: blur) mientras entra; un elemento con filtro no muestra el
+   cristal (backdrop-filter), así que el panel se veía distinto al principio y cambiaba de golpe al terminar.
+   En Cristal la entrada es solo con opacidad y movimiento: el cristal se ve igual desde el primer instante. */
+@keyframes crIn{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}
+@keyframes crRow{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes crSoft{from{opacity:0}to{opacity:1}}
+@keyframes crSheet{from{opacity:0;transform:translateY(22px) scale(.97)}to{opacity:1;transform:none}}
+html.cristal[data-theme] .main.enter>*,html.cristal[data-theme] .main.enter .grid>*{animation-name:crIn;filter:none}
+html.cristal[data-theme] .main.enter .list>.row,html.cristal[data-theme] .main.enter-soft .list>.row{animation-name:crRow;filter:none}
+html.cristal[data-theme] .main.enter-soft .tablewrap,html.cristal[data-theme] .main.enter-soft .card,html.cristal[data-theme] .main.enter .kpi .val{animation-name:crSoft;filter:none}
+html.cristal[data-theme] .sheet{animation-name:crSheet}
+
+/* Separación entre tarjetas seguidas en una pantalla (p. ej. Ajustes) */
+html.cristal[data-theme] .main > .card + .card{margin-top:16px}
