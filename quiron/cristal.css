@@ -190,3 +190,24 @@ html.cristal[data-theme] .sheet{animation-name:crSheet}
 
 /* Separación entre tarjetas seguidas en una pantalla (p. ej. Ajustes) */
 html.cristal[data-theme] .main > .card + .card{margin-top:16px}
+
+/* ---------- Ventanas: poco desenfoque desde el primer instante ----------
+   La capa oscura entraba con un fundido de opacidad; mientras dura, el navegador no puede desenfocar lo de detrás de la
+   ventana (la ventana se veía «clara») y al terminar aparecía de golpe el desenfoque de la ventana más el de la capa.
+   Ahora: la capa no desenfoca y se oscurece animando su color (no su opacidad); la ventana lleva un desenfoque leve fijo. */
+@keyframes crScrimIn{from{background-color:rgba(6,10,14,0)}to{background-color:rgba(6,10,14,.38)}}
+@keyframes crScrimOut{from{background-color:rgba(6,10,14,.38)}to{background-color:rgba(6,10,14,0)}}
+html.cristal[data-theme] .scrim{-webkit-backdrop-filter:none;backdrop-filter:none;background:rgba(6,10,14,.38);animation:crScrimIn .25s ease both}
+html.cristal[data-theme] .scrim.swap{animation:none}
+html.cristal[data-theme] .scrim.closing,html.cristal[data-theme] .scrim.closing-drag{animation:crScrimOut .22s ease forwards}
+html.cristal[data-theme] .sheet{-webkit-backdrop-filter:blur(8px) saturate(150%);backdrop-filter:blur(8px) saturate(150%)}
+html.cristal[data-theme] .scrim .sheet{animation:crSheet .32s cubic-bezier(.16,1,.3,1) both}
+html.cristal[data-theme] .scrim.swap .sheet{animation:none}
+html.cristal[data-theme] .scrim.closing .sheet{animation:crSheetOut .2s cubic-bezier(.4,0,1,1) forwards}
+@keyframes crSheetOut{to{opacity:0;transform:translateY(16px) scale(.98)}}
+@media(max-width:820px){
+  @keyframes crSheetUp{from{transform:translateY(100%)}to{transform:none}}
+  @keyframes crSheetDown{to{transform:translateY(100%)}}
+  html.cristal[data-theme] .scrim .sheet{animation:crSheetUp .36s cubic-bezier(.32,.72,0,1) both}
+  html.cristal[data-theme] .scrim.closing .sheet{animation:crSheetDown .24s cubic-bezier(.4,0,1,1) forwards}
+}
